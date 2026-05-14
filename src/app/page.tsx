@@ -6,10 +6,17 @@ import { useEffect, useMemo, useState } from "react";
 import { DayCard } from "@/components/DayCard";
 import { mockWeek, type MealKey, type WeekDay } from "@/data/mockWeek";
 import {
+  buttonGhostClass,
   buttonPrimaryClass,
-  buttonSecondaryClass,
-  pageContainerClass,
+  pageActionsClass,
+  pageContentClass,
+  pageHeroClass,
+  pageHeroCopyClass,
+  pageHeroInnerClass,
   pageShellClass,
+  sectionBlockClass,
+  sectionHeaderClass,
+  statusPillClass,
 } from "@/lib/ui";
 import { readSavedWeek, saveWeek } from "@/lib/weekStorage";
 
@@ -98,10 +105,10 @@ export default function Home() {
 
   return (
     <main className={pageShellClass}>
-      <div className={`${pageContainerClass} max-w-6xl gap-10 sm:gap-12`}>
-        <section className="pt-5 sm:pt-8 lg:pt-12">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
+      <div className={pageContentClass}>
+        <section className={pageHeroClass}>
+          <div className={pageHeroInnerClass}>
+            <div className={pageHeroCopyClass}>
               <p className="ui-eyebrow">beCook</p>
               <h1 className="ui-title mt-5 text-5xl sm:text-6xl lg:text-7xl">
                 {weekLabel || "Semana actual"}
@@ -112,21 +119,15 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="flex w-full flex-col gap-3 lg:max-w-[22rem]">
+            <div className={pageActionsClass}>
               <Link href="/import" className={`${buttonPrimaryClass} min-h-14`}>
                 Importar menú
               </Link>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                <Link
-                  href="/shopping-list"
-                  className={`${buttonSecondaryClass} bg-transparent`}
-                >
+                <Link href="/shopping-list" className={buttonGhostClass}>
                   Lista de la compra
                 </Link>
-                <Link
-                  href="/pantry"
-                  className={`${buttonSecondaryClass} bg-transparent`}
-                >
+                <Link href="/pantry" className={buttonGhostClass}>
                   Despensa base
                 </Link>
               </div>
@@ -134,15 +135,15 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="space-y-6 sm:space-y-8">
-          <div className="flex flex-col gap-4 border-t border-[color:var(--color-border)] pt-8 sm:flex-row sm:items-end sm:justify-between">
+        <section className={sectionBlockClass}>
+          <div className={sectionHeaderClass}>
             <div>
               <p className="ui-eyebrow">Plan semanal</p>
               <h2 className="mt-3 max-w-2xl text-3xl font-semibold leading-tight text-[color:var(--color-foreground)] sm:text-4xl">
                 Comidas y cenas, listas para revisar de un vistazo.
               </h2>
             </div>
-            <div className="inline-flex w-fit items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-2 text-sm font-medium text-[color:var(--color-muted-foreground)] shadow-[var(--shadow-card)]">
+            <div className={statusPillClass}>
               Toca cualquier plato para editarlo
             </div>
           </div>

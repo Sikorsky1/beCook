@@ -6,12 +6,18 @@ import { useEffect, useState } from "react";
 
 import { DayCard } from "@/components/DayCard";
 import {
+  buttonGhostClass,
   buttonPrimaryClass,
-  buttonSecondaryClass,
-  navButtonClass,
-  pageContainerClass,
+  cardClass,
+  emptyStateClass,
+  pageActionsClass,
+  pageContentClass,
+  pageHeroClass,
+  pageHeroCopyClass,
+  pageHeroInnerClass,
   pageShellClass,
-  panelClass,
+  sectionBlockClass,
+  sectionHeaderClass,
   textareaClass,
 } from "@/lib/ui";
 import {
@@ -55,7 +61,10 @@ export default function ImportPage() {
 
       if (!response.ok) {
         setImportedMenu(null);
-        setErrorMessage(data.error ?? "No se pudo procesar el menú.");
+        const fallbackMessage = "No se pudo procesar el menú.";
+        setErrorMessage(
+          "error" in data ? data.error ?? fallbackMessage : fallbackMessage,
+        );
         return;
       }
 
@@ -80,126 +89,159 @@ export default function ImportPage() {
 
   return (
     <main className={pageShellClass}>
-      <div className={pageContainerClass}>
-        <section className={panelClass}>
-          <div className="grid gap-0 lg:grid-cols-12">
-            <div className="border-b border-[color:var(--color-border)] px-5 py-5 lg:col-span-7 lg:border-r lg:border-b-0 lg:px-7 lg:py-7">
-              <div className="mb-6 flex items-start justify-between gap-4">
-                <div className="ui-eyebrow">beCook</div>
-                <div className="hidden h-14 w-14 rounded-full border-8 border-[#2563eb] lg:block" />
-              </div>
-
-              <div className="max-w-3xl">
-                <h1 className="ui-title text-4xl sm:text-5xl lg:text-6xl">
-                  ¿Qué menú quieres para esta semana?
-                </h1>
-              </div>
+      <div className={pageContentClass}>
+        <section className={pageHeroClass}>
+          <div className={pageHeroInnerClass}>
+            <div className={pageHeroCopyClass}>
+              <p className="ui-eyebrow">Importar menú</p>
+              <h1 className="ui-title mt-5 text-5xl sm:text-6xl lg:text-7xl">
+                Pega tu semana y deja que beCook la ordene.
+              </h1>
+              <p className="ui-copy mt-5 max-w-2xl text-lg sm:text-xl">
+                Acepta texto libre, listas por día y tablas copiadas desde
+                Excel. Después podrás revisar el resultado antes de aplicarlo.
+              </p>
             </div>
 
-            <div className="grid grid-cols-12 lg:col-span-5">
-              <div className="col-span-8 border-b border-l-0 border-[color:var(--color-border)] bg-[#facc15] px-5 py-4 lg:border-b-0 lg:border-l" />
-              <div className="col-span-4 border-b border-l border-[color:var(--color-border)] bg-[#dc2626] lg:border-b-0" />
-              <div className="col-span-12 grid gap-0 sm:grid-cols-2">
-                <Link href="/" className={`${navButtonClass} border-b border-[color:var(--color-border)] sm:border-r sm:border-b-0`}>
-                  Volver a la semana
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => setMenuText("")}
-                  disabled={!menuText}
-                  className={buttonPrimaryClass}
-                >
-                  Limpiar texto
-                </button>
-              </div>
+            <div className={pageActionsClass}>
+              <Link href="/" className={buttonGhostClass}>
+                Volver a la semana
+              </Link>
+              <button
+                type="button"
+                onClick={() => setMenuText("")}
+                disabled={!menuText}
+                className={buttonGhostClass}
+              >
+                Limpiar texto
+              </button>
             </div>
           </div>
         </section>
 
-        <section className={panelClass}>
-          <div className="grid gap-0 lg:grid-cols-12">
-            <div className="border-b border-[color:var(--color-border)] px-5 py-5 lg:col-span-3 lg:border-r lg:border-b-0 lg:px-7">
-              <div className="flex items-center gap-3 py-1">
-                <div className="h-10 w-10 border-4 border-[#2563eb]" />
-                <div className="flex flex-col gap-2">
-                  <div className="h-1.5 w-16 bg-stone-950" />
-                  <div className="h-1.5 w-10 bg-[#facc15]" />
-                </div>
-              </div>
+        <section className={`${cardClass} space-y-5 p-5 sm:p-7 lg:p-8`}>
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="ui-eyebrow">Paso 1</p>
+              <h2 className="mt-3 text-3xl font-semibold leading-tight text-[color:var(--color-foreground)] sm:text-4xl">
+                Pega el menú tal como lo tienes.
+              </h2>
+              <p className="ui-copy mt-3 max-w-xl text-base sm:text-lg">
+                Puede venir con días y platos, o en columnas tipo Día, Comida y
+                Cena. No hace falta que esté perfecto.
+              </p>
             </div>
 
-            <div className="border-b border-[color:var(--color-border)] p-5 lg:col-span-9 lg:border-b-0 lg:p-7">
-              {hasMounted ? (
-                <textarea
-                  value={menuText}
-                  onChange={(event) => setMenuText(event.target.value)}
-                  placeholder="Pega aquí tu menú semanal"
-                  className={textareaClass}
-                />
-              ) : (
-                <textarea
-                  defaultValue=""
-                  placeholder="Pega aquí tu menú semanal"
-                  className={textareaClass}
-                />
-              )}
-
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                <button
-                  type="button"
-                  onClick={handleProcessMenu}
-                  disabled={isLoading}
-                  className={`${buttonSecondaryClass} border-transparent bg-[#facc15] text-[color:var(--color-foreground)] hover:bg-[#eab308] disabled:cursor-wait disabled:bg-stone-300`}
-                >
-                  {isLoading ? "Procesando menú..." : "Procesar menú"}
-                </button>
-              </div>
-
-              {errorMessage ? (
-                <div className="mt-4 rounded-[calc(var(--radius-control)-0.125rem)] border border-rose-200 bg-[color:var(--color-danger-soft)] px-4 py-3 text-sm leading-6 text-rose-700">
-                  {errorMessage}
-                </div>
-              ) : null}
+            <div className="rounded-[var(--radius-control)] bg-[color:var(--color-surface-muted)] px-4 py-3 text-sm leading-6 text-[color:var(--color-muted-foreground)] lg:max-w-sm">
+              Ejemplo: Lunes · Comida: lentejas · Cena: tortilla. También vale
+              copiar una tabla completa desde una hoja de cálculo.
             </div>
+          </div>
+
+          <div>
+            {hasMounted ? (
+              <textarea
+                value={menuText}
+                onChange={(event) => setMenuText(event.target.value)}
+                placeholder={`Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\tPollo con arroz\tTortilla francesa`}
+                className={`${textareaClass} min-h-[22rem] resize-y bg-[color:var(--color-surface)] text-base leading-7 shadow-none focus:border-[color:var(--color-accent)] sm:text-lg`}
+              />
+            ) : (
+              <textarea
+                defaultValue=""
+                placeholder={`Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\tPollo con arroz\tTortilla francesa`}
+                className={`${textareaClass} min-h-[22rem] resize-y bg-[color:var(--color-surface)] text-base leading-7 shadow-none focus:border-[color:var(--color-accent)] sm:text-lg`}
+              />
+            )}
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm leading-6 text-[color:var(--color-muted-foreground)]">
+                Revisa que estén los siete días antes de procesar si quieres un
+                preview completo.
+              </p>
+              <button
+                type="button"
+                onClick={handleProcessMenu}
+                disabled={isLoading}
+                className={`${buttonPrimaryClass} min-h-14 px-7 disabled:cursor-wait`}
+              >
+                {isLoading ? (
+                  <span className="inline-flex items-center gap-3">
+                    <span className="h-2.5 w-2.5 rounded-full bg-white/80" />
+                    Procesando menú...
+                  </span>
+                ) : (
+                  "Procesar menú"
+                )}
+              </button>
+            </div>
+
+            {isLoading ? (
+              <div className="mt-5 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-accent-soft)] px-4 py-3 text-sm leading-6 text-[color:var(--color-muted-foreground)]">
+                Leyendo el texto y convirtiéndolo en una semana ordenada.
+              </div>
+            ) : null}
+
+            {errorMessage ? (
+              <div className="mt-5 rounded-[var(--radius-control)] border border-rose-200 bg-[color:var(--color-danger-soft)] px-4 py-3 text-sm leading-6 text-rose-700">
+                <p className="font-semibold text-rose-800">
+                  No he podido interpretar el menú todavía.
+                </p>
+                <p className="mt-1">{errorMessage}</p>
+              </div>
+            ) : null}
           </div>
         </section>
 
         {importedMenu ? (
-          <section className={panelClass}>
-            <div className="grid gap-0 lg:grid-cols-12">
-              <div className="border-b border-[color:var(--color-border)] px-5 py-5 lg:col-span-3 lg:border-r lg:border-b-0 lg:px-7">
-                <h2 className="text-3xl font-semibold leading-none text-[color:var(--color-foreground)]">
+          <section className={sectionBlockClass}>
+            <div className={sectionHeaderClass}>
+              <div>
+                <p className="ui-eyebrow">Paso 2</p>
+                <h2 className="mt-3 text-3xl font-semibold leading-tight text-[color:var(--color-foreground)] sm:text-4xl">
                   {importedMenu.week}
                 </h2>
-                <div className="mt-6 flex items-center gap-3">
-                  <div className="h-4 w-16 bg-stone-950" />
-                  <div className="h-4 w-4 rounded-full bg-[#2563eb]" />
-                  <div className="h-4 w-8 bg-[#facc15]" />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleUseWeek}
-                  className={`mt-6 ${buttonPrimaryClass}`}
-                >
-                  Usar esta semana
-                </button>
+                <p className="ui-copy mt-3 max-w-2xl text-base sm:text-lg">
+                  Revisa la interpretación. Si encaja, aplícala como tu semana
+                  actual.
+                </p>
               </div>
 
-              <div className="lg:col-span-9">
-                <div className="grid gap-0 lg:grid-cols-2">
-                  {importedWeekDays?.map((day) => (
-                    <DayCard
-                      key={day.day}
-                      day={day}
-                      isEditable={false}
-                      appearance="home"
-                    />
-                  ))}
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={handleUseWeek}
+                className={`${buttonPrimaryClass} min-h-14 px-7`}
+              >
+                Usar esta semana
+              </button>
+            </div>
+
+            <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
+              {importedWeekDays?.map((day) => (
+                <DayCard
+                  key={day.day}
+                  day={day}
+                  isEditable={false}
+                  appearance="home"
+                />
+              ))}
             </div>
           </section>
-        ) : null}
+        ) : (
+          <section
+            className={`${emptyStateClass} px-5 py-6 text-sm leading-6 text-[color:var(--color-muted-foreground)] sm:px-7`}
+          >
+            <div className="max-w-2xl">
+              <p className="font-semibold text-[color:var(--color-foreground)]">
+                El preview aparecerá aquí.
+              </p>
+              <p className="mt-1">
+                Cuando proceses el texto, verás cada día separado en comida y
+                cena para validar el resultado antes de guardarlo.
+              </p>
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );

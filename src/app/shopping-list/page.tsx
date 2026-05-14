@@ -5,10 +5,18 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { WeekDay } from "@/data/mockWeek";
 import {
-  navButtonClass,
-  pageContainerClass,
+  buttonGhostClass,
+  cardClass,
+  emptyStateClass,
+  pageActionsClass,
+  pageContentClass,
+  pageHeroClass,
+  pageHeroCopyClass,
+  pageHeroInnerClass,
   pageShellClass,
-  panelClass,
+  sectionBlockClass,
+  sectionHeaderClass,
+  statusPillClass,
 } from "@/lib/ui";
 import { pantryHasItem, readPantryBase } from "@/lib/pantryStorage";
 import {
@@ -68,9 +76,12 @@ function readShoppingListCache(): ShoppingListCache | null {
       return null;
     }
 
+    const parsedItems =
+      parsedCache.items as GeneratedShoppingListResponse["items"];
+
     return {
       weekSignature: parsedCache.weekSignature,
-      items: parsedCache.items,
+      items: parsedItems,
       checkedItemIds: parsedCache.checkedItemIds,
     };
   } catch {
@@ -197,8 +208,9 @@ export default function ShoppingListPage() {
 
         if (!response.ok) {
           setGeneratedItems([]);
+          const fallbackMessage = "No se pudo generar la lista de la compra.";
           setErrorMessage(
-            data.error ?? "No se pudo generar la lista de la compra.",
+            "error" in data ? data.error ?? fallbackMessage : fallbackMessage,
           );
           return;
         }
@@ -272,167 +284,180 @@ export default function ShoppingListPage() {
     );
   };
 
+  const totalVisibleItems = shoppingList.reduce(
+    (totalItems, group) => totalItems + group.items.length,
+    0,
+  );
+  const checkedVisibleItems = shoppingList.reduce(
+    (totalItems, group) =>
+      totalItems +
+      group.items.filter((item) => checkedItems.includes(item.id)).length,
+    0,
+  );
+
   return (
     <main className={pageShellClass}>
-      <div className={pageContainerClass}>
-        <section className={panelClass}>
-          <div className="grid gap-0 lg:grid-cols-12">
-            <div className="border-b border-[color:var(--color-border)] px-5 py-5 lg:col-span-7 lg:border-r lg:border-b-0 lg:px-7 lg:py-7">
-              <div className="mb-6 flex items-start justify-between gap-4">
-                <div className="ui-eyebrow">beCook</div>
-                <div className="hidden h-14 w-14 rounded-full border-8 border-[#2563eb] lg:block" />
-              </div>
-
-              <div className="max-w-3xl">
-                <p className="ui-eyebrow">
-                  Lista de la compra
-                </p>
-                <h1 className="ui-title mt-3 text-4xl sm:text-5xl lg:text-6xl">
-                  {weekLabel}
-                </h1>
-              </div>
+      <div className={pageContentClass}>
+        <section className={pageHeroClass}>
+          <div className={pageHeroInnerClass}>
+            <div className={pageHeroCopyClass}>
+              <p className="ui-eyebrow">Lista de la compra</p>
+              <h1 className="ui-title mt-5 text-5xl sm:text-6xl lg:text-7xl">
+                {weekLabel}
+              </h1>
+              <p className="ui-copy mt-5 max-w-2xl text-lg sm:text-xl">
+                Ingredientes agrupados para comprar sin ruido, respetando tu
+                despensa base y lo que ya has marcado.
+              </p>
             </div>
 
-            <div className="grid grid-cols-12 lg:col-span-5">
-              <div className="col-span-8 border-b border-l-0 border-[color:var(--color-border)] bg-[#facc15] px-5 py-4 lg:border-b-0 lg:border-l">
-                <div className="ui-eyebrow text-stone-900">
-                  Compra
-                </div>
-              </div>
-              <div className="col-span-4 border-b border-l border-[color:var(--color-border)] bg-[#dc2626] lg:border-b-0" />
-              <div className="col-span-12 grid gap-0 sm:grid-cols-2">
-                <Link href="/" className={`${navButtonClass} border-b border-[color:var(--color-border)] sm:border-r sm:border-b-0`}>
-                  Volver a la semana
-                </Link>
-                <Link
-                  href="/pantry"
-                  className="flex min-h-14 items-center justify-center bg-[color:var(--color-accent)] px-4 text-center text-sm font-semibold tracking-[-0.02em] text-white transition-colors hover:bg-[color:var(--color-accent-hover)]"
-                >
-                  Despensa base
-                </Link>
-              </div>
+            <div className={pageActionsClass}>
+              <Link href="/" className={buttonGhostClass}>
+                Volver a la semana
+              </Link>
+              <Link href="/pantry" className={buttonGhostClass}>
+                Despensa base
+              </Link>
             </div>
           </div>
         </section>
 
-        <section className={panelClass}>
-          <div className="grid gap-0 lg:grid-cols-12">
-            <div className="border-b border-[color:var(--color-border)] px-5 py-5 lg:col-span-3 lg:border-r lg:border-b-0 lg:px-7">
-              <h2 className="text-3xl font-semibold leading-none text-[color:var(--color-foreground)]">
-                {weekLabel}
+        <section className={sectionBlockClass}>
+          <div className={sectionHeaderClass}>
+            <div>
+              <p className="ui-eyebrow">Compra</p>
+              <h2 className="mt-3 max-w-2xl text-3xl font-semibold leading-tight text-[color:var(--color-foreground)] sm:text-4xl">
+                Lo que necesitas, listo para ir tachando.
               </h2>
-              <div className="mt-6 flex items-center gap-3">
-                <div className="h-4 w-16 bg-stone-950" />
-                <div className="h-4 w-4 rounded-full bg-[#2563eb]" />
-                <div className="h-4 w-8 bg-[#facc15]" />
-              </div>
             </div>
 
-            <div className="lg:col-span-9">
-              <div className="grid gap-0 lg:grid-cols-2">
+            {hasLoadedWeek && weekDays && weekDays.length > 0 ? (
+              <div className={statusPillClass}>
+                {checkedVisibleItems} de {totalVisibleItems} marcados
+              </div>
+            ) : null}
+          </div>
+
           {!hasLoadedWeek ? (
-            <article className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 lg:col-span-2 lg:border-b-0">
-              <h2 className="text-2xl font-semibold text-[color:var(--color-foreground)]">
+            <article className={`${cardClass} p-6 sm:p-7`}>
+              <p className="ui-eyebrow">Preparando</p>
+              <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
                 Cargando tu semana
               </h2>
-              <p className="ui-copy mt-3 max-w-md text-sm">
+              <p className="ui-copy mt-3 max-w-xl text-base">
                 Estamos preparando la lista de la compra con tu menú guardado.
               </p>
             </article>
           ) : !weekDays || weekDays.length === 0 ? (
-            <article className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 lg:col-span-2 lg:border-b-0">
-              <h2 className="text-2xl font-semibold text-[color:var(--color-foreground)]">
+            <article className={emptyStateClass}>
+              <p className="ui-eyebrow">Sin semana</p>
+              <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
                 No hay una semana guardada
               </h2>
-              <p className="ui-copy mt-3 max-w-md text-sm">
+              <p className="ui-copy mt-3 max-w-xl text-base">
                 Vuelve a la semana y guarda o importa un menú para generar tu
                 lista de la compra.
               </p>
             </article>
           ) : isLoadingList ? (
-            <article className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 lg:col-span-2 lg:border-b-0">
-              <h2 className="text-2xl font-semibold text-[color:var(--color-foreground)]">
+            <article className={`${cardClass} p-6 sm:p-7`}>
+              <p className="ui-eyebrow">Generando</p>
+              <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
                 Generando tu lista
               </h2>
-              <p className="ui-copy mt-3 max-w-md text-sm">
+              <p className="ui-copy mt-3 max-w-xl text-base">
                 Estamos calculando los ingredientes de tu semana actual.
               </p>
+              <div className="mt-5 h-2 overflow-hidden rounded-full bg-[color:var(--color-surface-muted)]">
+                <div className="h-full w-1/2 rounded-full bg-[color:var(--color-accent)]" />
+              </div>
             </article>
           ) : errorMessage ? (
-            <article className="border-b border-rose-200 bg-[color:var(--color-danger-soft)] p-6 lg:col-span-2 lg:border-b-0">
-              <h2 className="text-2xl font-semibold text-rose-800">
+            <article className="rounded-[var(--radius-card)] border border-rose-200 bg-[color:var(--color-danger-soft)] p-6 sm:p-7">
+              <p className="ui-eyebrow text-rose-700">Error</p>
+              <h2 className="mt-3 text-2xl font-semibold text-rose-800 sm:text-3xl">
                 No se pudo generar la lista
               </h2>
-              <p className="mt-3 max-w-md text-sm leading-6 text-rose-700">
+              <p className="mt-3 max-w-xl text-base leading-7 text-rose-700">
                 {errorMessage}
               </p>
             </article>
           ) : shoppingList.length > 0 ? (
-            shoppingList.map((group) => (
-              <article
-                key={group.category}
-                className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 sm:p-6 lg:last:border-b-0 [&:nth-child(2n)]:lg:border-l"
-              >
-                <h2 className="text-2xl font-semibold capitalize text-[color:var(--color-foreground)]">
-                  {group.category}
-                </h2>
+            <div className="grid gap-5 lg:grid-cols-2">
+              {shoppingList.map((group) => (
+                <article key={group.category} className={`${cardClass} p-5 sm:p-6`}>
+                  <div className="flex items-baseline justify-between gap-4 border-b border-[color:var(--color-border)] pb-4">
+                    <h2 className="text-2xl font-semibold capitalize text-[color:var(--color-foreground)]">
+                      {group.category}
+                    </h2>
+                    <span className="shrink-0 text-sm font-medium text-[color:var(--color-muted-foreground)]">
+                      {group.items.length}{" "}
+                      {group.items.length === 1 ? "item" : "items"}
+                    </span>
+                  </div>
 
-                <ul className="mt-4 space-y-3">
-                  {group.items.map((item) => (
-                    <li key={item.id}>
-                      <label
-                        className={`flex cursor-pointer items-center justify-between gap-4 rounded-[calc(var(--radius-card)-0.375rem)] border px-4 py-3.5 transition-colors ${
-                          checkedItems.includes(item.id)
-                            ? "border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] text-stone-500 opacity-60"
-                            : "border-[color:var(--color-border)] bg-white text-[color:var(--color-foreground)]"
-                        }`}
-                      >
-                        <span className="flex min-w-0 items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={checkedItems.includes(item.id)}
-                            onChange={() => toggleCheckedItem(item.id)}
-                            className="h-5 w-5 rounded-none border-stone-900 text-stone-900 accent-stone-900"
-                          />
-                          <span
-                            className={`text-sm font-medium sm:text-[15px] ${
-                              checkedItems.includes(item.id)
-                                ? "line-through"
-                                : ""
+                  <ul className="mt-3 divide-y divide-[color:var(--color-border)]">
+                    {group.items.map((item) => {
+                      const isChecked = checkedItems.includes(item.id);
+
+                      return (
+                        <li key={item.id}>
+                          <label
+                            className={`flex min-h-16 cursor-pointer items-center gap-4 py-3 transition-colors ${
+                              isChecked
+                                ? "text-[color:var(--color-muted-foreground)]"
+                                : "text-[color:var(--color-foreground)]"
                             }`}
                           >
-                            {capitalizeIngredientName(item.name)}
-                          </span>
-                        </span>
-                        <span
-                          className={`shrink-0 rounded-full border px-3 py-1 text-sm font-semibold ${
-                            checkedItems.includes(item.id)
-                              ? "border-[color:var(--color-border)] bg-stone-300 text-stone-500"
-                              : "border-transparent bg-[#facc15] text-[color:var(--color-foreground)]"
-                          }`}
-                        >
-                          {item.quantity} {item.unit}
-                        </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            ))
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleCheckedItem(item.id)}
+                              className="h-6 w-6 shrink-0 rounded-md border-[color:var(--color-border-strong)] accent-[color:var(--color-accent)]"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span
+                                className={`block text-base font-medium leading-6 sm:text-lg ${
+                                  isChecked ? "line-through opacity-60" : ""
+                                }`}
+                              >
+                                {capitalizeIngredientName(item.name)}
+                              </span>
+                              {isChecked ? (
+                                <span className="mt-0.5 block text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-muted-foreground)]">
+                                  Comprado
+                                </span>
+                              ) : null}
+                            </span>
+                            <span
+                              className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${
+                                isChecked
+                                  ? "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)]"
+                                  : "bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
+                              }`}
+                            >
+                              {item.quantity} {item.unit}
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </article>
+              ))}
+            </div>
           ) : (
-            <article className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 lg:col-span-2 lg:border-b-0">
-              <h2 className="text-2xl font-semibold text-[color:var(--color-foreground)]">
+            <article className={emptyStateClass}>
+              <p className="ui-eyebrow">Despensa cubierta</p>
+              <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
                 No hace falta comprar nada
               </h2>
-              <p className="ui-copy mt-3 max-w-md text-sm">
+              <p className="ui-copy mt-3 max-w-xl text-base">
                 Todos los ingredientes de esta semana ya están cubiertos con tu
                 despensa base.
               </p>
             </article>
           )}
-              </div>
-            </div>
-          </div>
         </section>
       </div>
     </main>

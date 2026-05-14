@@ -6,10 +6,17 @@ import { useEffect, useState } from "react";
 import type { WeekDay } from "@/data/mockWeek";
 import { pantryBaseItems } from "@/data/mockPantry";
 import {
-  navButtonClass,
-  pageContainerClass,
+  buttonGhostClass,
+  cardClass,
+  pageActionsClass,
+  pageContentClass,
+  pageHeroClass,
+  pageHeroCopyClass,
+  pageHeroInnerClass,
   pageShellClass,
-  panelClass,
+  sectionBlockClass,
+  sectionHeaderClass,
+  statusPillClass,
 } from "@/lib/ui";
 import {
   normalizePantryItemName,
@@ -61,6 +68,9 @@ export default function PantryPage() {
   const [hasLoadedPantry, setHasLoadedPantry] = useState(false);
   const [weekDays, setWeekDays] = useState<WeekDay[] | null>(null);
   const weekLabel = getWeekLabelFromDays(weekDays);
+  const selectedCount = pantryBaseItems.filter((item) =>
+    pantryHasItem(selectedItems, item),
+  ).length;
 
   useEffect(() => {
     // Leemos localStorage solo al montar para evitar diferencias con el HTML inicial.
@@ -100,116 +110,109 @@ export default function PantryPage() {
 
   return (
     <main className={pageShellClass}>
-      <div className={pageContainerClass}>
-        <section className={panelClass}>
-          <div className="grid gap-0 lg:grid-cols-12">
-            <div className="border-b border-[color:var(--color-border)] px-5 py-5 lg:col-span-7 lg:border-r lg:border-b-0 lg:px-7 lg:py-7">
-              <div className="mb-6 flex items-start justify-between gap-4">
-                <div className="ui-eyebrow">beCook</div>
-                <div className="hidden h-14 w-14 rounded-full border-8 border-[#2563eb] lg:block" />
-              </div>
-
-              <div className="max-w-3xl">
-                <p className="ui-eyebrow">
-                  Despensa
-                </p>
-                <h1 className="ui-title mt-3 text-4xl sm:text-5xl lg:text-6xl">
-                  {weekLabel}
-                </h1>
-              </div>
+      <div className={pageContentClass}>
+        <section className={pageHeroClass}>
+          <div className={pageHeroInnerClass}>
+            <div className={pageHeroCopyClass}>
+              <p className="ui-eyebrow">Despensa base</p>
+              <h1 className="ui-title mt-5 text-5xl sm:text-6xl lg:text-7xl">
+                Lo que ya tienes en casa.
+              </h1>
+              <p className="ui-copy mt-5 max-w-2xl text-lg sm:text-xl">
+                Marca tus básicos habituales para que beCook no los añada a la
+                lista de la compra de {weekLabel.toLowerCase()}.
+              </p>
             </div>
 
-            <div className="grid grid-cols-12 lg:col-span-5">
-              <div className="col-span-8 border-b border-l-0 border-[color:var(--color-border)] bg-[#facc15] px-5 py-4 lg:border-b-0 lg:border-l">
-                <div className="ui-eyebrow text-stone-900">
-                  Base
-                </div>
-              </div>
-              <div className="col-span-4 border-b border-l border-[color:var(--color-border)] bg-[#dc2626] lg:border-b-0" />
-              <div className="col-span-12 grid gap-0 sm:grid-cols-2">
-                <Link href="/" className={`${navButtonClass} border-b border-[color:var(--color-border)] sm:border-r sm:border-b-0`}>
-                  Volver a la semana
-                </Link>
-                <Link
-                  href="/shopping-list"
-                  className="flex min-h-14 items-center justify-center bg-[color:var(--color-accent)] px-4 text-center text-sm font-semibold tracking-[-0.02em] text-white transition-colors hover:bg-[color:var(--color-accent-hover)]"
-                >
-                  Lista de la compra
-                </Link>
-              </div>
+            <div className={pageActionsClass}>
+              <Link href="/" className={buttonGhostClass}>
+                Volver a la semana
+              </Link>
+              <Link href="/shopping-list" className={buttonGhostClass}>
+                Lista de la compra
+              </Link>
             </div>
           </div>
         </section>
 
-        <section className={panelClass}>
-          <div className="grid gap-0 lg:grid-cols-12">
-            <div className="border-b border-[color:var(--color-border)] px-5 py-5 lg:col-span-3 lg:border-r lg:border-b-0 lg:px-7">
-              <h2 className="text-3xl font-semibold leading-none text-[color:var(--color-foreground)]">
-                Despensa base
+        <section className={sectionBlockClass}>
+          <div className={sectionHeaderClass}>
+            <div>
+              <p className="ui-eyebrow">Configuración</p>
+              <h2 className="mt-3 max-w-2xl text-3xl font-semibold leading-tight text-[color:var(--color-foreground)] sm:text-4xl">
+                Selecciona tus básicos.
               </h2>
-              <p className="ui-copy mt-4 max-w-xs text-sm">
-                Marca lo que ya tienes en casa.
+              <p className="ui-copy mt-3 max-w-2xl text-base sm:text-lg">
+                Los ingredientes marcados se consideran disponibles y se
+                ocultan automáticamente en la lista de la compra.
               </p>
-              <div className="mt-6 flex items-center gap-3">
-                <div className="h-4 w-16 bg-stone-950" />
-                <div className="h-4 w-4 rounded-full bg-[#2563eb]" />
-                <div className="h-4 w-8 bg-[#facc15]" />
-              </div>
             </div>
 
-            <div className="lg:col-span-9">
-              <div className="grid gap-0 lg:grid-cols-2">
-                {!hasLoadedPantry ? (
-                  <article className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 lg:col-span-2 lg:border-b-0">
-                    <h3 className="text-xl font-semibold text-[color:var(--color-foreground)]">
-                      Cargando tu despensa
-                    </h3>
-                    <p className="ui-copy mt-3 max-w-md text-sm">
-                      Estamos recuperando los ingredientes que ya marcaste como disponibles.
-                    </p>
-                  </article>
-                ) : (
-                  pantryBaseItems.map((item) => {
-                    const isSelected = pantryHasItem(selectedItems, item);
-
-                    return (
-                      <article
-                        key={item}
-                        className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 sm:p-6 lg:last:border-b-0 [&:nth-child(2n)]:lg:border-l"
-                      >
-                        <label
-                          className={`flex cursor-pointer items-center justify-between gap-4 rounded-[calc(var(--radius-card)-0.375rem)] border px-4 py-4 transition-colors ${
-                            isSelected
-                              ? "border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-muted)] text-[color:var(--color-foreground)]"
-                              : "border-[color:var(--color-border)] bg-white text-[color:var(--color-foreground)]"
-                          }`}
-                        >
-                          <span className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleItem(item)}
-                              className="h-5 w-5 rounded-none border-stone-900 accent-stone-900"
-                            />
-                            <span className="text-sm font-medium sm:text-[15px]">
-                              {item}
-                            </span>
-                          </span>
-                          <span
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                              isSelected
-                                ? "border-transparent bg-[#facc15] text-[color:var(--color-foreground)]"
-                                : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)]"
-                            }`}
-                          >
-                            {isSelected ? "Disponible" : "Opcional"}
-                          </span>
-                        </label>
-                      </article>
-                    );
-                  })
-                )}
+            {hasLoadedPantry ? (
+              <div className={statusPillClass}>
+                {selectedCount} de {pantryBaseItems.length} activos
               </div>
+            ) : null}
+          </div>
+
+          <div className={`${cardClass} p-5 sm:p-6 lg:p-7`}>
+            {!hasLoadedPantry ? (
+              <article className="py-2">
+                <p className="ui-eyebrow">Preparando</p>
+                <h3 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
+                  Cargando tu despensa
+                </h3>
+                <p className="ui-copy mt-3 max-w-xl text-base">
+                  Estamos recuperando los ingredientes que ya marcaste como
+                  disponibles.
+                </p>
+              </article>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {pantryBaseItems.map((item) => {
+                  const isSelected = pantryHasItem(selectedItems, item);
+
+                  return (
+                    <label
+                      key={item}
+                      className={`flex min-h-20 cursor-pointer items-center justify-between gap-4 rounded-[var(--radius-control)] border px-4 py-4 transition-colors ${
+                        isSelected
+                          ? "border-[color:var(--color-border-strong)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
+                          : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)] hover:bg-[color:var(--color-surface-muted)]"
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleItem(item)}
+                          className="h-6 w-6 shrink-0 rounded-md border-[color:var(--color-border-strong)] accent-[color:var(--color-accent)]"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-base font-semibold leading-6">
+                            {item}
+                          </span>
+                          <span className="mt-0.5 block text-sm text-[color:var(--color-muted-foreground)]">
+                            {isSelected ? "Se excluirá" : "Puede aparecer"}
+                          </span>
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border-strong)] px-5 py-5 text-sm leading-6 text-[color:var(--color-muted-foreground)] sm:px-7">
+            <div className="max-w-2xl">
+              <p className="font-semibold text-[color:var(--color-foreground)]">
+                Esta selección se guarda automáticamente.
+              </p>
+              <p className="mt-1">
+                La lista de la compra la usará para filtrar básicos como aceite,
+                sal o pimienta sin que tengas que revisarlos cada semana.
+              </p>
             </div>
           </div>
         </section>
