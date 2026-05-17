@@ -1,14 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { AppHeader } from "@/components/AppHeader";
 import type { WeekDay } from "@/data/mockWeek";
 import {
-  buttonGhostClass,
   cardClass,
   emptyStateClass,
-  pageActionsClass,
   pageContentClass,
   pageHeroClass,
   pageHeroCopyClass,
@@ -298,6 +296,8 @@ export default function ShoppingListPage() {
   return (
     <main className={pageShellClass}>
       <div className={pageContentClass}>
+        <AppHeader />
+
         <section className={pageHeroClass}>
           <div className={pageHeroInnerClass}>
             <div className={pageHeroCopyClass}>
@@ -309,15 +309,6 @@ export default function ShoppingListPage() {
                 Ingredientes agrupados para comprar sin ruido, respetando tu
                 despensa base y lo que ya has marcado.
               </p>
-            </div>
-
-            <div className={pageActionsClass}>
-              <Link href="/" className={buttonGhostClass}>
-                Volver a la semana
-              </Link>
-              <Link href="/pantry" className={buttonGhostClass}>
-                Despensa base
-              </Link>
             </div>
           </div>
         </section>

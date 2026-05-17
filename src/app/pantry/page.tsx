@@ -1,14 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { AppHeader } from "@/components/AppHeader";
 import type { WeekDay } from "@/data/mockWeek";
 import { pantryBaseItems } from "@/data/mockPantry";
 import {
-  buttonGhostClass,
   cardClass,
-  pageActionsClass,
   pageContentClass,
   pageHeroClass,
   pageHeroCopyClass,
@@ -111,6 +109,8 @@ export default function PantryPage() {
   return (
     <main className={pageShellClass}>
       <div className={pageContentClass}>
+        <AppHeader />
+
         <section className={pageHeroClass}>
           <div className={pageHeroInnerClass}>
             <div className={pageHeroCopyClass}>
@@ -122,15 +122,6 @@ export default function PantryPage() {
                 Marca tus básicos habituales para que beCook no los añada a la
                 lista de la compra de {weekLabel.toLowerCase()}.
               </p>
-            </div>
-
-            <div className={pageActionsClass}>
-              <Link href="/" className={buttonGhostClass}>
-                Volver a la semana
-              </Link>
-              <Link href="/shopping-list" className={buttonGhostClass}>
-                Lista de la compra
-              </Link>
             </div>
           </div>
         </section>
