@@ -29,13 +29,13 @@ export const panelSectionClass =
   "border-[color:var(--color-border)]";
 
 export const buttonPrimaryClass =
-  "inline-flex min-h-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] border border-transparent bg-[color:var(--color-accent)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--color-accent-hover)] disabled:cursor-not-allowed disabled:bg-stone-300";
+  "inline-flex min-h-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] border border-transparent bg-[color:var(--color-accent)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--color-accent-hover)] disabled:cursor-not-allowed disabled:bg-[color:var(--color-border)] disabled:text-[color:var(--color-muted-foreground)]";
 
 export const buttonSecondaryClass =
-  "inline-flex min-h-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-5 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)] disabled:cursor-not-allowed disabled:text-stone-400";
+  "inline-flex min-h-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-5 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]";
 
 export const buttonGhostClass =
-  "inline-flex min-h-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] border border-[color:var(--color-border)] bg-transparent px-5 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)] disabled:cursor-not-allowed disabled:text-stone-400";
+  "inline-flex min-h-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] border border-[color:var(--color-border)] bg-transparent px-5 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]";
 
 export const navButtonClass =
   "flex min-h-14 items-center justify-center px-4 text-center text-sm font-semibold tracking-[-0.02em] text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)]";

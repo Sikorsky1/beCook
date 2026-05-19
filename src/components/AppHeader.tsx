@@ -28,28 +28,28 @@ const headerActions: HeaderAction[] = [
     label: "Vista semanal",
     Icon: CalendarDays,
     className:
-      "border-[#f1d6d6] bg-[#fef2f2] text-[#e11d48] hover:bg-[#fde8e8] hover:shadow-[0_12px_28px_rgba(225,29,72,0.10)]",
+      "border-[#e8d5b5] bg-[#fff0e3] text-[#e0703c] hover:bg-[#fbe4d5] hover:shadow-[0_12px_28px_rgba(224,112,60,0.12)]",
   },
   {
     href: "/import",
     label: "Importar menú",
     Icon: UploadCloud,
     className:
-      "border-[#c9d8c7] bg-[#eef5ec] text-[#047857] hover:bg-[#e4efdf] hover:shadow-[0_12px_28px_rgba(4,120,87,0.10)]",
+      "border-[#cbd8b8] bg-[#f0f4e7] text-[#55633a] hover:bg-[#e7efd9] hover:shadow-[0_12px_28px_rgba(107,127,74,0.12)]",
   },
   {
     href: "/shopping-list",
     label: "Lista de compra",
     Icon: ShoppingBasket,
     className:
-      "border-[#c9d9e8] bg-[#eff6ff] text-[#2563eb] hover:bg-[#e2eef7] hover:shadow-[0_12px_28px_rgba(37,99,235,0.10)]",
+      "border-[#e9c997] bg-[#fff7e6] text-[#8a4e2a] hover:bg-[#f7ebcf] hover:shadow-[0_12px_28px_rgba(217,184,121,0.16)]",
   },
   {
     href: "/pantry",
     label: "Despensa",
     Icon: Archive,
     className:
-      "border-[#e0d1b6] bg-[#fffbeb] text-[#b45309] hover:bg-[#f8efdc] hover:shadow-[0_12px_28px_rgba(180,83,9,0.10)]",
+      "border-[#e8d5b5] bg-[#f6f0e6] text-[#6b7f4a] hover:bg-[#efe5d1] hover:shadow-[0_12px_28px_rgba(107,127,74,0.12)]",
   },
 ];
 
@@ -65,11 +65,14 @@ function HeaderActionCard({ href, label, Icon, className }: HeaderAction) {
   return (
     <Link
       href={href}
+      prefetch={false}
       aria-label={label}
-      className={`flex aspect-square min-h-[76px] flex-col items-center justify-center gap-2 rounded-2xl border px-2 text-center shadow-[0_8px_22px_rgba(32,28,23,0.035)] transition-all hover:-translate-y-0.5 ${className}`}
+      className={`flex min-h-[58px] flex-col items-center justify-center gap-1.5 rounded-[1.15rem] border px-2.5 py-2 text-center shadow-[0_8px_22px_rgba(32,28,23,0.035)] transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 ${className}`}
     >
-      <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.9} />
-      <span className="text-[0.68rem] font-semibold leading-tight">
+      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/55 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.45),0_6px_14px_rgba(46,42,38,0.055)]">
+        <Icon aria-hidden="true" className="h-4 w-4" strokeWidth={1.95} />
+      </span>
+      <span className="text-[0.8rem] font-semibold leading-tight">
         {label}
       </span>
     </Link>
@@ -81,33 +84,37 @@ export function AppHeader({ sticky = true }: AppHeaderProps) {
   const visibleActions = headerActions.filter(
     (action) => !isCurrentRoute(pathname, action.href),
   );
+  const dividerClass = sticky
+    ? "border-b border-[color:var(--color-border)]"
+    : "";
 
   return (
     <header
-      className={`z-40 border-b border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 py-3 backdrop-blur ${
+      className={`z-40 ${dividerClass} bg-[color:var(--color-background)]/95 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] backdrop-blur ${
         sticky ? "sticky top-0" : ""
       }`}
     >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <Link
           href="/"
+          prefetch={false}
           aria-label="Ir a Vista semanal"
-          className="flex w-fit items-center gap-2.5"
+          className="flex min-h-12 w-fit touch-manipulation items-center gap-3 rounded-xl"
         >
           <Image
-            src="/favicon.ico"
+            src="/becook-header-logo.png"
             alt="beCook"
-            width={28}
-            height={28}
-            className="h-7 w-7 rounded-lg"
+            width={38}
+            height={38}
+            className="h-9 w-9 drop-shadow-[0_8px_14px_rgba(46,42,38,0.18)]"
           />
-          <span className="text-sm font-semibold text-[color:var(--color-foreground)]">
+          <span className="text-base font-semibold text-[color:var(--color-foreground)]">
             beCook
           </span>
         </Link>
 
         <nav
-          className="grid w-full max-w-[22rem] grid-cols-3 gap-2.5 lg:max-w-[18rem]"
+          className="mx-auto grid w-full max-w-[20rem] grid-cols-3 gap-2 lg:mx-0 lg:max-w-[17rem]"
           aria-label="Navegación principal"
         >
           {visibleActions.map((action) => (

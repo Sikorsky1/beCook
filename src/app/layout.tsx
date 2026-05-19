@@ -15,6 +15,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "beCook",
   description: "Planifica tu menu semanal de forma simple.",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+  },
   formatDetection: {
     telephone: false,
     address: false,

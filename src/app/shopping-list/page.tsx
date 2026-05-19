@@ -2,44 +2,26 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { AppHeader } from "@/components/AppHeader";
+import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
+import { Card } from "@/components/ui/Card";
+import { CategoryPill as BaseCategoryPill } from "@/components/ui/CategoryPill";
+import { CheckboxItem } from "@/components/ui/CheckboxItem";
+import { StateMessage } from "@/components/ui/StateMessage";
+import { StatusPill } from "@/components/ui/StatusPill";
 import type { WeekDay } from "@/data/mockWeek";
-import {
-  cardClass,
-  emptyStateClass,
-  pageContentClass,
-  pageHeroClass,
-  pageHeroCopyClass,
-  pageHeroInnerClass,
-  pageShellClass,
-  sectionBlockClass,
-  sectionHeaderClass,
-  statusPillClass,
-} from "@/lib/ui";
+import { pageShellClass } from "@/lib/ui";
 import { pantryHasItem, readPantryBase } from "@/lib/pantryStorage";
 import {
   groupShoppingListItems,
   isGeneratedShoppingListResponse,
   type GeneratedShoppingListResponse,
+  type ShoppingCategoryGroup,
   type ShoppingListItem,
+  type SupermarketCategory,
 } from "@/lib/shoppingList";
 import { readSavedWeek } from "@/lib/weekStorage";
 
 const SHOPPING_LIST_CACHE_KEY = "becook-shopping-list-cache";
-const monthLabels: Record<string, string> = {
-  ene: "enero",
-  feb: "febrero",
-  mar: "marzo",
-  abr: "abril",
-  may: "mayo",
-  jun: "junio",
-  jul: "julio",
-  ago: "agosto",
-  sep: "septiembre",
-  oct: "octubre",
-  nov: "noviembre",
-  dic: "diciembre",
-};
 
 type ShoppingListCache = {
   weekSignature: string;
@@ -106,26 +88,122 @@ function capitalizeIngredientName(name: string) {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-function formatWeekBoundaryDate(dateLabel: string) {
-  const normalizedDate = dateLabel.trim().toLowerCase();
-  const [day, month] = normalizedDate.split(/\s+/);
+type CategoryProgress = {
+  category: SupermarketCategory;
+  checked: number;
+  total: number;
+  isCompleted: boolean;
+};
 
-  if (!day || !month) {
-    return dateLabel;
-  }
+type ShoppingProgressProps = {
+  checkedItemsCount: number;
+  totalItemsCount: number;
+};
 
-  return `${day} ${monthLabels[month] ?? month}`;
+function ShoppingProgress({
+  checkedItemsCount,
+  totalItemsCount,
+}: ShoppingProgressProps) {
+  return (
+    <StatusPill>
+      {checkedItemsCount}/{totalItemsCount} comprados
+    </StatusPill>
+  );
 }
 
-function getWeekLabelFromDays(days: WeekDay[] | null) {
-  if (!days || days.length === 0) {
-    return "Semana actual";
-  }
+type CategoryPillProps = CategoryProgress & {
+  isSelected: boolean;
+  onSelect: () => void;
+};
 
-  const firstDay = days[0];
-  const lastDay = days[days.length - 1];
+function CategoryPill({
+  category,
+  checked,
+  total,
+  isCompleted,
+  isSelected,
+  onSelect,
+}: CategoryPillProps) {
+  return (
+    <BaseCategoryPill
+      isCompleted={isCompleted}
+      isSelected={isSelected}
+      label={category}
+      meta={`${checked}/${total}`}
+      onClick={onSelect}
+    />
+  );
+}
 
-  return `Semana ${formatWeekBoundaryDate(firstDay.date)} - ${formatWeekBoundaryDate(lastDay.date)}`;
+type CategorySelectorProps = {
+  categories: CategoryProgress[];
+  selectedCategory: SupermarketCategory | null;
+  onSelectCategory: (category: SupermarketCategory) => void;
+};
+
+function CategorySelector({
+  categories,
+  selectedCategory,
+  onSelectCategory,
+}: CategorySelectorProps) {
+  const gridColumnsClass =
+    categories.length === 1
+      ? "grid-cols-1"
+      : categories.length === 2 || categories.length === 4
+        ? "grid-cols-2"
+        : "grid-cols-3";
+
+  return (
+    <div
+      className={`grid ${gridColumnsClass} gap-2`}
+      role="tablist"
+      aria-label="Categorías de compra"
+    >
+      {categories.map((categoryProgress) => (
+        <CategoryPill
+          key={categoryProgress.category}
+          {...categoryProgress}
+          isSelected={selectedCategory === categoryProgress.category}
+          onSelect={() => onSelectCategory(categoryProgress.category)}
+        />
+      ))}
+    </div>
+  );
+}
+
+type ShoppingItemsForCategoryProps = {
+  group: ShoppingCategoryGroup;
+  checkedItems: string[];
+  onToggleCheckedItem: (itemId: string) => void;
+};
+
+function ShoppingItemsForCategory({
+  group,
+  checkedItems,
+  onToggleCheckedItem,
+}: ShoppingItemsForCategoryProps) {
+  return (
+    <Card className="overflow-visible">
+      <ul className="divide-y divide-[color:var(--color-border)]">
+        {group.items.map((item) => {
+          const isChecked = checkedItems.includes(item.id);
+
+          return (
+            <li key={item.id}>
+              <CheckboxItem
+                checked={isChecked}
+                label={capitalizeIngredientName(item.name)}
+                onChange={() => onToggleCheckedItem(item.id)}
+                status={isChecked ? "Comprado" : undefined}
+                strikeWhenChecked
+                valueBadge={`${item.quantity} ${item.unit}`}
+              />
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
 }
 
 export default function ShoppingListPage() {
@@ -136,7 +214,8 @@ export default function ShoppingListPage() {
   const [generatedItems, setGeneratedItems] = useState<ShoppingListItem[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const weekLabel = getWeekLabelFromDays(weekDays);
+  const [selectedCategory, setSelectedCategory] =
+    useState<SupermarketCategory | null>(null);
 
   useEffect(() => {
     // La lista lee la despensa al montar, sin depender de localStorage en el primer render.
@@ -274,6 +353,22 @@ export default function ShoppingListPage() {
     return groupShoppingListItems(visibleItems);
   }, [generatedItems, pantryItems]);
 
+  useEffect(() => {
+    const firstCategory = shoppingList[0]?.category ?? null;
+
+    if (shoppingList.length === 0) {
+      setSelectedCategory(null);
+      return;
+    }
+
+    if (
+      !selectedCategory ||
+      !shoppingList.some((group) => group.category === selectedCategory)
+    ) {
+      setSelectedCategory(firstCategory);
+    }
+  }, [selectedCategory, shoppingList]);
+
   const toggleCheckedItem = (itemId: string) => {
     setCheckedItems((currentItems) =>
       currentItems.includes(itemId)
@@ -292,45 +387,48 @@ export default function ShoppingListPage() {
       group.items.filter((item) => checkedItems.includes(item.id)).length,
     0,
   );
+  const categoryProgress = shoppingList.map((group) => {
+    const checkedItemsInCategory = group.items.filter((item) =>
+      checkedItems.includes(item.id),
+    ).length;
+
+    return {
+      category: group.category,
+      checked: checkedItemsInCategory,
+      total: group.items.length,
+      isCompleted:
+        group.items.length > 0 && checkedItemsInCategory === group.items.length,
+    };
+  });
+  const selectedGroup =
+    shoppingList.find((group) => group.category === selectedCategory) ?? null;
 
   return (
-    <main className={pageShellClass}>
-      <div className={pageContentClass}>
-        <AppHeader />
+    <main className={`${pageShellClass} min-h-dvh px-3 py-3 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6`}>
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
+        <StickyPageHeader
+          title="LISTA DE LA COMPRA"
+          action={
+            hasLoadedWeek && weekDays && weekDays.length > 0 ? (
+              <ShoppingProgress
+                checkedItemsCount={checkedVisibleItems}
+                totalItemsCount={totalVisibleItems}
+              />
+            ) : null
+          }
+        >
+          {categoryProgress.length > 0 ? (
+            <CategorySelector
+              categories={categoryProgress}
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+            />
+          ) : null}
+        </StickyPageHeader>
 
-        <section className={pageHeroClass}>
-          <div className={pageHeroInnerClass}>
-            <div className={pageHeroCopyClass}>
-              <p className="ui-eyebrow">Lista de la compra</p>
-              <h1 className="ui-title mt-5 text-5xl sm:text-6xl lg:text-7xl">
-                {weekLabel}
-              </h1>
-              <p className="ui-copy mt-5 max-w-2xl text-lg sm:text-xl">
-                Ingredientes agrupados para comprar sin ruido, respetando tu
-                despensa base y lo que ya has marcado.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className={sectionBlockClass}>
-          <div className={sectionHeaderClass}>
-            <div>
-              <p className="ui-eyebrow">Compra</p>
-              <h2 className="mt-3 max-w-2xl text-3xl font-semibold leading-tight text-[color:var(--color-foreground)] sm:text-4xl">
-                Lo que necesitas, listo para ir tachando.
-              </h2>
-            </div>
-
-            {hasLoadedWeek && weekDays && weekDays.length > 0 ? (
-              <div className={statusPillClass}>
-                {checkedVisibleItems} de {totalVisibleItems} marcados
-              </div>
-            ) : null}
-          </div>
-
+        <section className="pb-[calc(2rem+env(safe-area-inset-bottom))] transition-opacity duration-200 ease-out motion-reduce:transition-none">
           {!hasLoadedWeek ? (
-            <article className={`${cardClass} p-6 sm:p-7`}>
+            <Card className="p-6 sm:p-7">
               <p className="ui-eyebrow">Preparando</p>
               <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
                 Cargando tu semana
@@ -338,20 +436,17 @@ export default function ShoppingListPage() {
               <p className="ui-copy mt-3 max-w-xl text-base">
                 Estamos preparando la lista de la compra con tu menú guardado.
               </p>
-            </article>
+            </Card>
           ) : !weekDays || weekDays.length === 0 ? (
-            <article className={emptyStateClass}>
+            <StateMessage title="No hay una semana guardada." variant="empty">
               <p className="ui-eyebrow">Sin semana</p>
-              <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
-                No hay una semana guardada
-              </h2>
               <p className="ui-copy mt-3 max-w-xl text-base">
                 Vuelve a la semana y guarda o importa un menú para generar tu
                 lista de la compra.
               </p>
-            </article>
+            </StateMessage>
           ) : isLoadingList ? (
-            <article className={`${cardClass} p-6 sm:p-7`}>
+            <Card className="p-6 sm:p-7">
               <p className="ui-eyebrow">Generando</p>
               <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
                 Generando tu lista
@@ -360,94 +455,30 @@ export default function ShoppingListPage() {
                 Estamos calculando los ingredientes de tu semana actual.
               </p>
               <div className="mt-5 h-2 overflow-hidden rounded-full bg-[color:var(--color-surface-muted)]">
-                <div className="h-full w-1/2 rounded-full bg-[color:var(--color-accent)]" />
+                <div className="h-full w-1/2 rounded-full bg-[color:var(--color-accent)] transition-all duration-700 ease-out motion-reduce:transition-none motion-safe:animate-pulse" />
               </div>
-            </article>
+            </Card>
           ) : errorMessage ? (
-            <article className="rounded-[var(--radius-card)] border border-rose-200 bg-[color:var(--color-danger-soft)] p-6 sm:p-7">
-              <p className="ui-eyebrow text-rose-700">Error</p>
-              <h2 className="mt-3 text-2xl font-semibold text-rose-800 sm:text-3xl">
-                No se pudo generar la lista
-              </h2>
-              <p className="mt-3 max-w-xl text-base leading-7 text-rose-700">
-                {errorMessage}
-              </p>
-            </article>
-          ) : shoppingList.length > 0 ? (
-            <div className="grid gap-5 lg:grid-cols-2">
-              {shoppingList.map((group) => (
-                <article key={group.category} className={`${cardClass} p-5 sm:p-6`}>
-                  <div className="flex items-baseline justify-between gap-4 border-b border-[color:var(--color-border)] pb-4">
-                    <h2 className="text-2xl font-semibold capitalize text-[color:var(--color-foreground)]">
-                      {group.category}
-                    </h2>
-                    <span className="shrink-0 text-sm font-medium text-[color:var(--color-muted-foreground)]">
-                      {group.items.length}{" "}
-                      {group.items.length === 1 ? "item" : "items"}
-                    </span>
-                  </div>
-
-                  <ul className="mt-3 divide-y divide-[color:var(--color-border)]">
-                    {group.items.map((item) => {
-                      const isChecked = checkedItems.includes(item.id);
-
-                      return (
-                        <li key={item.id}>
-                          <label
-                            className={`flex min-h-16 cursor-pointer items-center gap-4 py-3 transition-colors ${
-                              isChecked
-                                ? "text-[color:var(--color-muted-foreground)]"
-                                : "text-[color:var(--color-foreground)]"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => toggleCheckedItem(item.id)}
-                              className="h-6 w-6 shrink-0 rounded-md border-[color:var(--color-border-strong)] accent-[color:var(--color-accent)]"
-                            />
-                            <span className="min-w-0 flex-1">
-                              <span
-                                className={`block text-base font-medium leading-6 sm:text-lg ${
-                                  isChecked ? "line-through opacity-60" : ""
-                                }`}
-                              >
-                                {capitalizeIngredientName(item.name)}
-                              </span>
-                              {isChecked ? (
-                                <span className="mt-0.5 block text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-muted-foreground)]">
-                                  Comprado
-                                </span>
-                              ) : null}
-                            </span>
-                            <span
-                              className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${
-                                isChecked
-                                  ? "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)]"
-                                  : "bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
-                              }`}
-                            >
-                              {item.quantity} {item.unit}
-                            </span>
-                          </label>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </article>
-              ))}
-            </div>
+            <StateMessage
+              className="p-6 sm:p-7"
+              title="No se pudo generar la lista."
+              variant="error"
+            >
+              <p className="max-w-xl text-base leading-7">{errorMessage}</p>
+            </StateMessage>
+          ) : selectedGroup ? (
+            <ShoppingItemsForCategory
+              group={selectedGroup}
+              checkedItems={checkedItems}
+              onToggleCheckedItem={toggleCheckedItem}
+            />
           ) : (
-            <article className={emptyStateClass}>
-              <p className="ui-eyebrow">Despensa cubierta</p>
-              <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
-                No hace falta comprar nada
-              </h2>
+            <StateMessage title="No hace falta comprar nada." variant="empty">
               <p className="ui-copy mt-3 max-w-xl text-base">
                 Todos los ingredientes de esta semana ya están cubiertos con tu
                 despensa base.
               </p>
-            </article>
+            </StateMessage>
           )}
         </section>
       </div>

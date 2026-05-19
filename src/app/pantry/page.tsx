@@ -2,70 +2,191 @@
 
 import { useEffect, useState } from "react";
 
-import { AppHeader } from "@/components/AppHeader";
-import type { WeekDay } from "@/data/mockWeek";
+import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
+import { Card } from "@/components/ui/Card";
+import { CategoryPill as BaseCategoryPill } from "@/components/ui/CategoryPill";
+import { CheckboxItem } from "@/components/ui/CheckboxItem";
+import { StateMessage } from "@/components/ui/StateMessage";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { pantryBaseItems } from "@/data/mockPantry";
-import {
-  cardClass,
-  pageContentClass,
-  pageHeroClass,
-  pageHeroCopyClass,
-  pageHeroInnerClass,
-  pageShellClass,
-  sectionBlockClass,
-  sectionHeaderClass,
-  statusPillClass,
-} from "@/lib/ui";
+import { pageShellClass } from "@/lib/ui";
 import {
   normalizePantryItemName,
   pantryHasItem,
   readPantryBase,
   savePantryBase,
 } from "@/lib/pantryStorage";
-import { readSavedWeek } from "@/lib/weekStorage";
 
-const monthLabels: Record<string, string> = {
-  ene: "enero",
-  feb: "febrero",
-  mar: "marzo",
-  abr: "abril",
-  may: "mayo",
-  jun: "junio",
-  jul: "julio",
-  ago: "agosto",
-  sep: "septiembre",
-  oct: "octubre",
-  nov: "noviembre",
-  dic: "diciembre",
+type PantryCategory = "básicos" | "especias" | "salsas" | "aceites y vinagres" | "otros";
+
+type PantryItem = {
+  name: string;
+  category: PantryCategory;
 };
 
-function formatWeekBoundaryDate(dateLabel: string) {
-  const normalizedDate = dateLabel.trim().toLowerCase();
-  const [day, month] = normalizedDate.split(/\s+/);
+type PantryCategoryGroup = {
+  category: PantryCategory;
+  items: PantryItem[];
+};
 
-  if (!day || !month) {
-    return dateLabel;
-  }
+type PantryCategoryProgress = {
+  category: PantryCategory;
+  active: number;
+  total: number;
+  isCompleted: boolean;
+};
 
-  return `${day} ${monthLabels[month] ?? month}`;
+const pantryCategoryOrder: PantryCategory[] = [
+  "básicos",
+  "especias",
+  "salsas",
+  "aceites y vinagres",
+  "otros",
+];
+
+const pantryCategoryByItem = new Map<string, PantryCategory>([
+  [normalizePantryItemName("Sal"), "básicos"],
+  [normalizePantryItemName("Pimienta"), "especias"],
+  [normalizePantryItemName("Ajo en polvo"), "especias"],
+  [normalizePantryItemName("Mostaza"), "salsas"],
+  [normalizePantryItemName("Aceite de oliva"), "aceites y vinagres"],
+  [normalizePantryItemName("Vinagre"), "aceites y vinagres"],
+]);
+
+function getPantryItemCategory(itemName: string): PantryCategory {
+  return pantryCategoryByItem.get(normalizePantryItemName(itemName)) ?? "otros";
 }
 
-function getWeekLabelFromDays(days: WeekDay[] | null) {
-  if (!days || days.length === 0) {
-    return "Semana actual";
-  }
+function groupPantryItems(items: readonly string[]): PantryCategoryGroup[] {
+  return pantryCategoryOrder
+    .map((category) => ({
+      category,
+      items: items
+        .filter((item) => getPantryItemCategory(item) === category)
+        .map((item) => ({
+          name: item,
+          category,
+        })),
+    }))
+    .filter((group) => group.items.length > 0);
+}
 
-  const firstDay = days[0];
-  const lastDay = days[days.length - 1];
+const pantryGroups = groupPantryItems(pantryBaseItems);
 
-  return `Semana ${formatWeekBoundaryDate(firstDay.date)} - ${formatWeekBoundaryDate(lastDay.date)}`;
+type PantryProgressProps = {
+  activeItemsCount: number;
+  totalItemsCount: number;
+};
+
+function PantryProgress({
+  activeItemsCount,
+  totalItemsCount,
+}: PantryProgressProps) {
+  return (
+    <StatusPill>
+      {activeItemsCount}/{totalItemsCount} activos
+    </StatusPill>
+  );
+}
+
+type PantryCategoryPillProps = PantryCategoryProgress & {
+  isSelected: boolean;
+  onSelect: () => void;
+};
+
+function PantryCategoryPill({
+  category,
+  active,
+  total,
+  isCompleted,
+  isSelected,
+  onSelect,
+}: PantryCategoryPillProps) {
+  return (
+    <BaseCategoryPill
+      isCompleted={isCompleted}
+      isSelected={isSelected}
+      label={category}
+      meta={`${active}/${total} activos`}
+      onClick={onSelect}
+    />
+  );
+}
+
+type PantryCategorySelectorProps = {
+  categories: PantryCategoryProgress[];
+  selectedCategory: PantryCategory | null;
+  onSelectCategory: (category: PantryCategory) => void;
+};
+
+function PantryCategorySelector({
+  categories,
+  selectedCategory,
+  onSelectCategory,
+}: PantryCategorySelectorProps) {
+  const gridColumnsClass =
+    categories.length === 1
+      ? "grid-cols-1"
+      : categories.length === 2 || categories.length === 4
+        ? "grid-cols-2"
+        : "grid-cols-3";
+
+  return (
+    <div
+      className={`grid ${gridColumnsClass} gap-2`}
+      role="tablist"
+      aria-label="Categorías de despensa"
+    >
+      {categories.map((categoryProgress) => (
+        <PantryCategoryPill
+          key={categoryProgress.category}
+          {...categoryProgress}
+          isSelected={selectedCategory === categoryProgress.category}
+          onSelect={() => onSelectCategory(categoryProgress.category)}
+        />
+      ))}
+    </div>
+  );
+}
+
+type PantryItemsForCategoryProps = {
+  group: PantryCategoryGroup;
+  selectedItems: string[];
+  onToggleItem: (itemName: string) => void;
+};
+
+function PantryItemsForCategory({
+  group,
+  selectedItems,
+  onToggleItem,
+}: PantryItemsForCategoryProps) {
+  return (
+    <Card className="overflow-hidden">
+      <ul className="divide-y divide-[color:var(--color-border)]">
+        {group.items.map((item) => {
+          const isSelected = pantryHasItem(selectedItems, item.name);
+
+          return (
+            <li key={item.name}>
+              <CheckboxItem
+                checked={isSelected}
+                label={item.name}
+                onChange={() => onToggleItem(item.name)}
+                status={isSelected ? "Activo" : "Inactivo"}
+              />
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
 }
 
 export default function PantryPage() {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [hasLoadedPantry, setHasLoadedPantry] = useState(false);
-  const [weekDays, setWeekDays] = useState<WeekDay[] | null>(null);
-  const weekLabel = getWeekLabelFromDays(weekDays);
+  const [selectedCategory, setSelectedCategory] =
+    useState<PantryCategory | null>(pantryGroups[0]?.category ?? null);
   const selectedCount = pantryBaseItems.filter((item) =>
     pantryHasItem(selectedItems, item),
   ).length;
@@ -78,14 +199,6 @@ export default function PantryPage() {
     }, 0);
 
     return () => window.clearTimeout(loadPantry);
-  }, []);
-
-  useEffect(() => {
-    const loadWeek = window.setTimeout(() => {
-      setWeekDays(readSavedWeek());
-    }, 0);
-
-    return () => window.clearTimeout(loadWeek);
   }, []);
 
   useEffect(() => {
@@ -105,107 +218,66 @@ export default function PantryPage() {
         : [...currentItems, normalizedItemName],
     );
   };
+  const categoryProgress = pantryGroups.map((group) => {
+    const activeItemsInCategory = group.items.filter((item) =>
+      pantryHasItem(selectedItems, item.name),
+    ).length;
+
+    return {
+      category: group.category,
+      active: activeItemsInCategory,
+      total: group.items.length,
+      isCompleted:
+        group.items.length > 0 && activeItemsInCategory === group.items.length,
+    };
+  });
+  const selectedGroup =
+    pantryGroups.find((group) => group.category === selectedCategory) ??
+    pantryGroups[0] ??
+    null;
 
   return (
-    <main className={pageShellClass}>
-      <div className={pageContentClass}>
-        <AppHeader />
+    <main className={`${pageShellClass} px-3 py-3 sm:px-6 sm:py-6`}>
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
+        <StickyPageHeader
+          title="DESPENSA"
+          action={
+            hasLoadedPantry ? (
+              <PantryProgress
+                activeItemsCount={selectedCount}
+                totalItemsCount={pantryBaseItems.length}
+              />
+            ) : null
+          }
+        >
+          {hasLoadedPantry && categoryProgress.length > 0 ? (
+            <PantryCategorySelector
+              categories={categoryProgress}
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+            />
+          ) : null}
+        </StickyPageHeader>
 
-        <section className={pageHeroClass}>
-          <div className={pageHeroInnerClass}>
-            <div className={pageHeroCopyClass}>
-              <p className="ui-eyebrow">Despensa base</p>
-              <h1 className="ui-title mt-5 text-5xl sm:text-6xl lg:text-7xl">
-                Lo que ya tienes en casa.
-              </h1>
-              <p className="ui-copy mt-5 max-w-2xl text-lg sm:text-xl">
-                Marca tus básicos habituales para que beCook no los añada a la
-                lista de la compra de {weekLabel.toLowerCase()}.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className={sectionBlockClass}>
-          <div className={sectionHeaderClass}>
-            <div>
-              <p className="ui-eyebrow">Configuración</p>
-              <h2 className="mt-3 max-w-2xl text-3xl font-semibold leading-tight text-[color:var(--color-foreground)] sm:text-4xl">
-                Selecciona tus básicos.
+        <section className="transition-opacity duration-200 ease-out motion-reduce:transition-none">
+          {!hasLoadedPantry ? (
+            <Card className="p-6 sm:p-7">
+              <p className="ui-eyebrow">Preparando</p>
+              <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
+                Cargando tu despensa
               </h2>
-              <p className="ui-copy mt-3 max-w-2xl text-base sm:text-lg">
-                Los ingredientes marcados se consideran disponibles y se
-                ocultan automáticamente en la lista de la compra.
-              </p>
-            </div>
-
-            {hasLoadedPantry ? (
-              <div className={statusPillClass}>
-                {selectedCount} de {pantryBaseItems.length} activos
-              </div>
-            ) : null}
-          </div>
-
-          <div className={`${cardClass} p-5 sm:p-6 lg:p-7`}>
-            {!hasLoadedPantry ? (
-              <article className="py-2">
-                <p className="ui-eyebrow">Preparando</p>
-                <h3 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
-                  Cargando tu despensa
-                </h3>
-                <p className="ui-copy mt-3 max-w-xl text-base">
-                  Estamos recuperando los ingredientes que ya marcaste como
-                  disponibles.
-                </p>
-              </article>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {pantryBaseItems.map((item) => {
-                  const isSelected = pantryHasItem(selectedItems, item);
-
-                  return (
-                    <label
-                      key={item}
-                      className={`flex min-h-20 cursor-pointer items-center justify-between gap-4 rounded-[var(--radius-control)] border px-4 py-4 transition-colors ${
-                        isSelected
-                          ? "border-[color:var(--color-border-strong)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
-                          : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)] hover:bg-[color:var(--color-surface-muted)]"
-                      }`}
-                    >
-                      <span className="flex min-w-0 items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleItem(item)}
-                          className="h-6 w-6 shrink-0 rounded-md border-[color:var(--color-border-strong)] accent-[color:var(--color-accent)]"
-                        />
-                        <span className="min-w-0">
-                          <span className="block text-base font-semibold leading-6">
-                            {item}
-                          </span>
-                          <span className="mt-0.5 block text-sm text-[color:var(--color-muted-foreground)]">
-                            {isSelected ? "Se excluirá" : "Puede aparecer"}
-                          </span>
-                        </span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border-strong)] px-5 py-5 text-sm leading-6 text-[color:var(--color-muted-foreground)] sm:px-7">
-            <div className="max-w-2xl">
-              <p className="font-semibold text-[color:var(--color-foreground)]">
-                Esta selección se guarda automáticamente.
-              </p>
-              <p className="mt-1">
-                La lista de la compra la usará para filtrar básicos como aceite,
-                sal o pimienta sin que tengas que revisarlos cada semana.
-              </p>
-            </div>
-          </div>
+            </Card>
+          ) : selectedGroup ? (
+            <PantryItemsForCategory
+              group={selectedGroup}
+              selectedItems={selectedItems}
+              onToggleItem={toggleItem}
+            />
+          ) : (
+            <StateMessage title="No hay ingredientes disponibles." variant="empty">
+              No hay ingredientes de despensa disponibles.
+            </StateMessage>
+          )}
         </section>
       </div>
     </main>

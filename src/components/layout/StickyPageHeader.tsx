@@ -1,0 +1,30 @@
+import type { ReactNode } from "react";
+
+import { AppHeader } from "@/components/AppHeader";
+
+type StickyPageHeaderProps = {
+  title: string;
+  action?: ReactNode;
+  children?: ReactNode;
+};
+
+export function StickyPageHeader({
+  title,
+  action,
+  children,
+}: StickyPageHeaderProps) {
+  return (
+    <section className="sticky top-0 z-30 -mx-3 shrink-0 border-b border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 px-3 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] backdrop-blur sm:-mx-6 sm:px-6">
+      <AppHeader sticky={false} />
+
+      <div className="mt-4 border-t border-[color:var(--color-border)] pt-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="ui-eyebrow min-w-0 text-[0.78rem]">{title}</p>
+          {action}
+        </div>
+
+        {children ? <div className="mt-2.5">{children}</div> : null}
+      </div>
+    </section>
+  );
+}

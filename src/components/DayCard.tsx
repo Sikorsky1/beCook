@@ -22,13 +22,13 @@ const mealLabels = [
 ] as const;
 
 const dayAccentClasses: Record<WeekDay["day"], string> = {
-  Lunes: "bg-[#2563eb]",
-  Martes: "bg-[#e35d4f]",
-  Miércoles: "bg-[#d7a71d]",
-  Jueves: "bg-[#2f9d6a]",
-  Viernes: "bg-[#8b5cf6]",
-  Sábado: "bg-[#e87538]",
-  Domingo: "bg-[#0f766e]",
+  Lunes: "bg-[#6b7f4a]",
+  Martes: "bg-[#e0703c]",
+  Miércoles: "bg-[#d9b879]",
+  Jueves: "bg-[#7f925f]",
+  Viernes: "bg-[#8a4e2a]",
+  Sábado: "bg-[#f28c53]",
+  Domingo: "bg-[#55633a]",
 };
 
 export function DayCard({
@@ -228,7 +228,7 @@ export function DayCard({
                   className={
                     isHomeAppearance
                       ? "mt-3 text-lg leading-7 text-[color:var(--color-foreground)] sm:text-xl"
-                      : "mt-2 text-sm leading-6 text-stone-700 sm:text-[15px]"
+                      : "mt-2 text-sm leading-6 text-[color:var(--color-foreground)] sm:text-[15px]"
                   }
                 >
                   {value}
