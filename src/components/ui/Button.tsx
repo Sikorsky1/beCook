@@ -1,8 +1,10 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
+
+import { Button as ShadcnButton } from "@/components/shadcn/ui/button";
 
 type ButtonVariant = "primary" | "secondary" | "soft" | "danger";
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+type ButtonProps = Omit<ComponentProps<typeof ShadcnButton>, "variant"> & {
   children: ReactNode;
   variant?: ButtonVariant;
 };
@@ -26,7 +28,7 @@ export function Button({
   ...props
 }: ButtonProps) {
   return (
-    <button
+    <ShadcnButton
       type={type}
       className={[
         "inline-flex min-h-12 touch-manipulation items-center justify-center gap-2 rounded-2xl border px-5 text-sm font-semibold shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-200 ease-out hover:-translate-y-0.5 focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.18),0_8px_22px_rgba(46,42,38,0.04)] active:translate-y-0 active:scale-[0.98] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:grayscale-[0.15] disabled:active:scale-100 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100",
@@ -36,7 +38,7 @@ export function Button({
       {...props}
     >
       {children}
-    </button>
+    </ShadcnButton>
   );
 }
 

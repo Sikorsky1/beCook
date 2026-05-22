@@ -21,6 +21,16 @@
   --success-soft: #eef3e4;
   --danger: #8a4e2a;
   --danger-soft: #fff0e3;
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --primary: var(--accent);
+  --primary-foreground: #ffffff;
+  --secondary-foreground: var(--secondary-hover);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--danger);
+  --destructive-foreground: #ffffff;
+  --input: var(--border);
+  --ring: var(--focus-ring);
   --radius-card: 1.5rem;
   --radius-control: 1rem;
   --shadow-card: 0 10px 30px rgba(46, 42, 38, 0.055);
@@ -48,6 +58,16 @@
   --color-success-soft: var(--success-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

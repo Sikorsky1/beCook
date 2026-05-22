@@ -106,7 +106,8 @@ export function AppHeader({ sticky = true }: AppHeaderProps) {
             alt="beCook"
             width={38}
             height={38}
-            className="h-9 w-9 drop-shadow-[0_8px_14px_rgba(46,42,38,0.18)]"
+            unoptimized
+            className="h-9 w-9 bg-transparent object-contain [clip-path:inset(1px_round_10px)]"
           />
           <span className="text-base font-semibold text-[color:var(--color-foreground)]">
             beCook
