@@ -6,6 +6,7 @@
     "dev": "next dev --webpack --disable-source-maps",
     "test:supabase": "node --env-file=.env.local scripts/test-supabase-week.ts",
     "test:supabase:save-week": "npx tsx scripts/test-save-week.ts",
+    "test:supabase:read-latest-week": "npx tsx scripts/test-read-latest-week.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
