@@ -10,8 +10,32 @@ import {
 } from "@/components/features/DaySelector";
 import { SelectedDayCard } from "@/components/features/SelectedDayCard";
 import { mockWeek, type MealKey, type WeekDay } from "@/data/mockWeek";
+import type { SupabaseMealSlot, SupabaseWeek } from "@/lib/supabase/weeks";
 import { pageShellClass } from "@/lib/ui";
 import { readSavedWeek, saveWeek } from "@/lib/weekStorage";
+
+const datesByDayName: Record<string, string> = {
+  Lunes: "31 mar",
+  Martes: "1 abr",
+  Miércoles: "2 abr",
+  Jueves: "3 abr",
+  Viernes: "4 abr",
+  Sábado: "5 abr",
+  Domingo: "6 abr",
+};
+
+function supabaseMealSlotToWeekMeal(slot: SupabaseMealSlot) {
+  return slot.status === "free" ? "LIBRE" : slot.dishName;
+}
+
+function supabaseWeekToWeekDays(week: SupabaseWeek): WeekDay[] {
+  return week.days.map((day) => ({
+    day: day.dayName,
+    date: datesByDayName[day.dayName] ?? "",
+    lunch: supabaseMealSlotToWeekMeal(day.lunch),
+    dinner: supabaseMealSlotToWeekMeal(day.dinner),
+  }));
+}
 
 export default function Home() {
   const [weekDays, setWeekDays] = useState<WeekDay[]>(mockWeek.days);
@@ -27,21 +51,59 @@ export default function Home() {
 
   useEffect(() => {
     // Cargamos la semana guardada solo después del primer render para evitar hydration mismatch.
+    let isCancelled = false;
+
     const loadWeek = window.setTimeout(() => {
+      void loadInitialWeek();
+    }, 0);
+
+    async function loadInitialWeek() {
       const savedWeek = readSavedWeek();
 
-      if (!savedWeek) {
+      if (savedWeek) {
+        setWeekDays(savedWeek);
+
+        if (!savedWeek.some((day) => day.day === "Lunes")) {
+          setSelectedDayName(getInitialSelectedDayName(savedWeek));
+        }
+
         return;
       }
 
-      setWeekDays(savedWeek);
+      try {
+        const { getLatestWeekFromSupabase } = await import(
+          "@/lib/supabase/weeks"
+        );
+        const latestWeek = await getLatestWeekFromSupabase();
 
-      if (!savedWeek.some((day) => day.day === "Lunes")) {
-        setSelectedDayName(getInitialSelectedDayName(savedWeek));
+        if (!latestWeek || isCancelled) {
+          return;
+        }
+
+        const restoredWeek = supabaseWeekToWeekDays(latestWeek);
+
+        if (restoredWeek.length === 0) {
+          return;
+        }
+
+        setWeekDays(restoredWeek);
+        saveWeek(restoredWeek);
+
+        if (!restoredWeek.some((day) => day.day === "Lunes")) {
+          setSelectedDayName(getInitialSelectedDayName(restoredWeek));
+        }
+      } catch (error: unknown) {
+        console.warn(
+          "No se pudo recuperar la última semana desde Supabase:",
+          error instanceof Error ? error.message : error,
+        );
       }
-    }, 0);
+    }
 
-    return () => window.clearTimeout(loadWeek);
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(loadWeek);
+    };
   }, []);
 
   const handleMealChange = (
