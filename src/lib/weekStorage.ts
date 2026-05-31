@@ -1,4 +1,5 @@
-import type { WeekDay } from "@/data/mockWeek";
+import type { MealSlot, WeekDay } from "@/data/mockWeek";
+import type { SupabaseWeek } from "@/lib/supabase/weeks";
 
 const WEEK_STORAGE_KEY = "becook-week";
 
@@ -32,4 +33,50 @@ export function saveWeek(weekDays: WeekDay[]) {
   }
 
   window.localStorage.setItem(WEEK_STORAGE_KEY, JSON.stringify(weekDays));
+}
+
+function mealSlotToSupabase(slot: MealSlot) {
+  if (slot === "LIBRE") {
+    return {
+      status: "free" as const,
+      dishName: "",
+    };
+  }
+
+  return {
+    status: "planned" as const,
+    dishName: slot,
+  };
+}
+
+export function weekDaysToSupabaseWeek(weekDays: WeekDay[]): SupabaseWeek {
+  return {
+    days: weekDays.map((day) => ({
+      dayName: day.day,
+      lunch: mealSlotToSupabase(day.lunch),
+      dinner: mealSlotToSupabase(day.dinner),
+    })),
+  };
+}
+
+export function saveWeekWithSupabaseSync(weekDays: WeekDay[]) {
+  saveWeek(weekDays);
+
+  try {
+    const week = weekDaysToSupabaseWeek(weekDays);
+
+    void import("@/lib/supabase/weeks")
+      .then(({ saveWeekToSupabase }) => saveWeekToSupabase(week))
+      .catch((error: unknown) => {
+        console.warn(
+          "No se pudo sincronizar la semana actualizada con Supabase:",
+          error instanceof Error ? error.message : error,
+        );
+      });
+  } catch (error: unknown) {
+    console.warn(
+      "No se pudo sincronizar la semana actualizada con Supabase:",
+      error instanceof Error ? error.message : error,
+    );
+  }
 }

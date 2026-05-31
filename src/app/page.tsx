@@ -12,7 +12,11 @@ import { SelectedDayCard } from "@/components/features/SelectedDayCard";
 import { mockWeek, type MealKey, type WeekDay } from "@/data/mockWeek";
 import type { SupabaseMealSlot, SupabaseWeek } from "@/lib/supabase/weeks";
 import { pageShellClass } from "@/lib/ui";
-import { readSavedWeek, saveWeek } from "@/lib/weekStorage";
+import {
+  readSavedWeek,
+  saveWeek,
+  saveWeekWithSupabaseSync,
+} from "@/lib/weekStorage";
 
 const datesByDayName: Record<string, string> = {
   Lunes: "31 mar",
@@ -121,7 +125,7 @@ export default function Home() {
     );
 
     setWeekDays(updatedWeekDays);
-    saveWeek(updatedWeekDays);
+    saveWeekWithSupabaseSync(updatedWeekDays);
   };
 
   return (

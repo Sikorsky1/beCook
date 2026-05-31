@@ -16,37 +16,12 @@ import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { TextArea } from "@/components/ui/TextArea";
-import type { MealSlot, WeekDay } from "@/data/mockWeek";
 import {
   importedMenuToWeekDays,
   type ImportedMenuResponse,
 } from "@/lib/importMenu";
-import { saveWeekToSupabase, type SupabaseWeek } from "@/lib/supabase/weeks";
 import { pageContentClass, pageShellClass } from "@/lib/ui";
-
-function mealSlotToSupabase(slot: MealSlot) {
-  if (slot === "LIBRE") {
-    return {
-      status: "free" as const,
-      dishName: "",
-    };
-  }
-
-  return {
-    status: "planned" as const,
-    dishName: slot,
-  };
-}
-
-function weekDaysToSupabaseWeek(weekDays: WeekDay[]): SupabaseWeek {
-  return {
-    days: weekDays.map((day) => ({
-      dayName: day.day,
-      lunch: mealSlotToSupabase(day.lunch),
-      dinner: mealSlotToSupabase(day.dinner),
-    })),
-  };
-}
+import { saveWeekWithSupabaseSync } from "@/lib/weekStorage";
 
 export default function ImportPage() {
   const router = useRouter();
@@ -120,16 +95,7 @@ export default function ImportPage() {
     }
 
     console.log("Guardando semana importada:", importedWeekDays.length);
-    window.localStorage.setItem("becook-week", JSON.stringify(importedWeekDays));
-    const week = weekDaysToSupabaseWeek(importedWeekDays);
-
-    void saveWeekToSupabase(week).catch((error: unknown) => {
-      console.warn(
-        "No se pudo sincronizar la semana importada con Supabase:",
-        error instanceof Error ? error.message : error,
-      );
-    });
-
+    saveWeekWithSupabaseSync(importedWeekDays);
     router.push("/");
   };
 
