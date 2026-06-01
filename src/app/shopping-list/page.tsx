@@ -80,6 +80,84 @@ function saveShoppingListCache(cache: ShoppingListCache) {
   );
 }
 
+function getShoppingItemsForSupabase(
+  items: ShoppingListItem[],
+  checkedItemIds: string[],
+) {
+  const checkedItemsSet = new Set(checkedItemIds);
+
+  return items.map((item) => ({
+    name: item.name,
+    quantity: item.quantity,
+    unit: item.unit,
+    category: item.category,
+    checked: checkedItemsSet.has(item.id),
+  }));
+}
+
+async function getLatestWeekIdFromSupabase() {
+  const { supabase } = await import("@/lib/supabase/client");
+
+  if (!supabase) {
+    throw new Error(
+      "Supabase client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.",
+    );
+  }
+
+  const { data: latestWeek, error: latestWeekError } = await supabase
+    .from("weeks")
+    .select("id")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+
+  if (latestWeekError) {
+    throw new Error(`Could not read latest week id: ${latestWeekError.message}`);
+  }
+
+  return latestWeek?.id ?? null;
+}
+
+function syncShoppingListToSupabase(
+  items: ShoppingListItem[],
+  checkedItemIds: string[],
+) {
+  if (items.length === 0) {
+    return;
+  }
+
+  try {
+    const shoppingItems = getShoppingItemsForSupabase(items, checkedItemIds);
+
+    void (async () => {
+      const weekId = await getLatestWeekIdFromSupabase();
+
+      if (!weekId) {
+        console.warn(
+          "No se pudo sincronizar la lista de la compra con Supabase: no hay semana remota.",
+        );
+        return;
+      }
+
+      const { saveShoppingListToSupabase } = await import(
+        "@/lib/supabase/shopping-lists"
+      );
+
+      await saveShoppingListToSupabase(weekId, shoppingItems);
+    })().catch((error: unknown) => {
+      console.warn(
+        "No se pudo sincronizar la lista de la compra con Supabase:",
+        error instanceof Error ? error.message : error,
+      );
+    });
+  } catch (error: unknown) {
+    console.warn(
+      "No se pudo sincronizar la lista de la compra con Supabase:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 function capitalizeIngredientName(name: string) {
   if (!name) {
     return name;
@@ -302,6 +380,7 @@ export default function ShoppingListPage() {
           items: generatedResponse.items,
           checkedItemIds: [],
         });
+        syncShoppingListToSupabase(groupedItems, []);
 
         setGeneratedItems(groupedItems);
         setCheckedItems([]);
@@ -370,11 +449,12 @@ export default function ShoppingListPage() {
   }, [selectedCategory, shoppingList]);
 
   const toggleCheckedItem = (itemId: string) => {
-    setCheckedItems((currentItems) =>
-      currentItems.includes(itemId)
-        ? currentItems.filter((currentItemId) => currentItemId !== itemId)
-        : [...currentItems, itemId],
-    );
+    const nextCheckedItems = checkedItems.includes(itemId)
+      ? checkedItems.filter((currentItemId) => currentItemId !== itemId)
+      : [...checkedItems, itemId];
+
+    setCheckedItems(nextCheckedItems);
+    syncShoppingListToSupabase(generatedItems, nextCheckedItems);
   };
 
   const totalVisibleItems = shoppingList.reduce(

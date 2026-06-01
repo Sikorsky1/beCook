@@ -73,6 +73,36 @@ function groupPantryItems(items: readonly string[]): PantryCategoryGroup[] {
 
 const pantryGroups = groupPantryItems(pantryBaseItems);
 
+function getPantryItemsForSupabase(activeItems: string[]) {
+  return pantryBaseItems.map((itemName) => ({
+    name: itemName,
+    category: getPantryItemCategory(itemName),
+    active: pantryHasItem(activeItems, itemName),
+  }));
+}
+
+function syncPantryToSupabase(activeItems: string[]) {
+  try {
+    const pantryItems = getPantryItemsForSupabase(activeItems);
+
+    void import("@/lib/supabase/pantry")
+      .then(({ replacePantryItemsInSupabase }) =>
+        replacePantryItemsInSupabase(pantryItems),
+      )
+      .catch((error: unknown) => {
+        console.warn(
+          "No se pudo sincronizar la despensa con Supabase:",
+          error instanceof Error ? error.message : error,
+        );
+      });
+  } catch (error: unknown) {
+    console.warn(
+      "No se pudo sincronizar la despensa con Supabase:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 type PantryProgressProps = {
   activeItemsCount: number;
   totalItemsCount: number;
@@ -211,12 +241,12 @@ export default function PantryPage() {
 
   const toggleItem = (itemName: string) => {
     const normalizedItemName = normalizePantryItemName(itemName);
+    const nextSelectedItems = selectedItems.includes(normalizedItemName)
+      ? selectedItems.filter((item) => item !== normalizedItemName)
+      : [...selectedItems, normalizedItemName];
 
-    setSelectedItems((currentItems) =>
-      currentItems.includes(normalizedItemName)
-        ? currentItems.filter((item) => item !== normalizedItemName)
-        : [...currentItems, normalizedItemName],
-    );
+    setSelectedItems(nextSelectedItems);
+    syncPantryToSupabase(nextSelectedItems);
   };
   const categoryProgress = pantryGroups.map((group) => {
     const activeItemsInCategory = group.items.filter((item) =>
