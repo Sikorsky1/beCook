@@ -1,4 +1,4 @@
-import { supabase } from "../src/lib/supabase/client.ts";
+import { supabase } from "../src/lib/supabase/client";
 
 const testTitle = "Test week from beCook";
 

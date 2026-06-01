@@ -38,6 +38,8 @@ export type Allergy =
   | "egg"
   | "other";
 
+export type WeeklyTrainingDays = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
 export type UserProfile = {
   id?: string;
   sex: Sex;
@@ -45,7 +47,7 @@ export type UserProfile = {
   heightCm: number;
   weightKg: number;
   householdSize: number;
-  weeklyTrainingDays: number;
+  weeklyTrainingDays: WeeklyTrainingDays;
   trainingTypes: TrainingType[];
   otherTrainingType?: string;
   goal: Goal;
@@ -132,6 +134,22 @@ function parseRequiredNumber(value: number | null, columnName: string) {
   throw new Error(`Unexpected empty value in profiles.${columnName}.`);
 }
 
+function parseWeeklyTrainingDays(value: number | null): WeeklyTrainingDays {
+  const parsedValue = parseRequiredNumber(value, "weekly_training_days");
+
+  if (
+    Number.isInteger(parsedValue) &&
+    parsedValue >= 0 &&
+    parsedValue <= 7
+  ) {
+    return parsedValue as WeeklyTrainingDays;
+  }
+
+  throw new Error(
+    `Unexpected value in profiles.weekly_training_days: ${parsedValue}.`,
+  );
+}
+
 function parseEnum<T extends string>(
   value: string | null,
   allowedValues: Set<T>,
@@ -171,8 +189,8 @@ function parseStringArray(values: string[] | null) {
 }
 
 function profileToRow(profile: UserProfile) {
-  if (profile.weeklyTrainingDays < 0 || profile.weeklyTrainingDays > 5) {
-    throw new Error("weeklyTrainingDays must be between 0 and 5.");
+  if (profile.weeklyTrainingDays < 0 || profile.weeklyTrainingDays > 7) {
+    throw new Error("weeklyTrainingDays must be between 0 and 7.");
   }
 
   return {
@@ -200,10 +218,7 @@ function rowToProfile(row: ProfileRow): UserProfile {
     heightCm: parseRequiredNumber(row.height_cm, "height_cm"),
     weightKg: parseRequiredNumber(row.weight_kg, "weight_kg"),
     householdSize: parseRequiredNumber(row.household_size, "household_size"),
-    weeklyTrainingDays: parseRequiredNumber(
-      row.weekly_training_days,
-      "weekly_training_days",
-    ),
+    weeklyTrainingDays: parseWeeklyTrainingDays(row.weekly_training_days),
     trainingTypes: parseEnumArray(
       row.training_types,
       trainingTypeValues,

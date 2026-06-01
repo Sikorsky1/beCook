@@ -12,7 +12,7 @@ async function main() {
     heightCm: 178,
     weightKg: 76,
     householdSize: 2,
-    weeklyTrainingDays: 5,
+    weeklyTrainingDays: 7,
     trainingTypes: ["strength", "crossfit", "hyrox", "padel"],
     goal: "sports_performance",
     dietaryRestrictions: ["none"],

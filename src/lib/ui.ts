@@ -1,5 +1,5 @@
 export const pageShellClass =
-  "min-h-screen bg-[color:var(--color-background)] px-4 py-5 text-[color:var(--color-foreground)] sm:px-6 sm:py-8";
+  "min-h-screen bg-[color:var(--color-background)] px-4 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-5 text-[color:var(--color-foreground)] sm:px-6 sm:pb-[calc(7.75rem+env(safe-area-inset-bottom))] sm:pt-8";
 
 export const pageContainerClass =
   "mx-auto flex w-full max-w-7xl flex-col gap-6";
