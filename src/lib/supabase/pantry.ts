@@ -4,8 +4,10 @@ export type PantryCategory =
   | "básicos"
   | "especias"
   | "salsas"
-  | "aceites y vinagres"
+  | "conservas"
+  | "congelados"
   | "otros";
+type LegacyPantryCategory = PantryCategory | "aceites y vinagres";
 
 export type PantryItem = {
   id?: string;
@@ -23,11 +25,13 @@ type PantryItemRow = {
   active: boolean | null;
 };
 
-const pantryCategoryValues = new Set<PantryCategory>([
+const pantryCategoryValues = new Set<LegacyPantryCategory>([
   "básicos",
   "especias",
-  "salsas",
   "aceites y vinagres",
+  "salsas",
+  "conservas",
+  "congelados",
   "otros",
 ]);
 
@@ -50,8 +54,10 @@ function parseRequiredBoolean(value: boolean | null, columnName: string) {
 function parsePantryCategory(value: string | null): PantryCategory {
   const parsedValue = parseRequiredString(value, "pantry_items.category");
 
-  if (pantryCategoryValues.has(parsedValue as PantryCategory)) {
-    return parsedValue as PantryCategory;
+  if (pantryCategoryValues.has(parsedValue as LegacyPantryCategory)) {
+    return parsedValue === "aceites y vinagres"
+      ? "básicos"
+      : (parsedValue as PantryCategory);
   }
 
   throw new Error(`Unexpected value in pantry_items.category: ${parsedValue}.`);

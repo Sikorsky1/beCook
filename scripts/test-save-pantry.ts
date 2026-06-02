@@ -19,7 +19,7 @@ async function main() {
     },
     {
       name: "Aceite de oliva",
-      category: "aceites y vinagres",
+      category: "básicos",
       active: true,
     },
     {

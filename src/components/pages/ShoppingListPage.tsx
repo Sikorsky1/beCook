@@ -254,24 +254,34 @@ type ShoppingItemsForCategoryProps = {
   group: ShoppingCategoryGroup;
   checkedItems: string[];
   onToggleCheckedItem: (itemId: string) => void;
+  pantryItems: string[];
 };
 
 function ShoppingItemsForCategory({
   group,
   checkedItems,
   onToggleCheckedItem,
+  pantryItems,
 }: ShoppingItemsForCategoryProps) {
   return (
     <Card className="overflow-visible">
       <ul className="divide-y divide-[color:var(--color-border)]">
         {group.items.map((item) => {
           const isChecked = checkedItems.includes(item.id);
+          const isAvailableInPantry = pantryHasItem(pantryItems, item.name);
 
           return (
             <li key={item.id}>
               <CheckboxItem
                 checked={isChecked}
                 label={capitalizeIngredientName(item.name)}
+                meta={
+                  isAvailableInPantry ? (
+                    <span className="mt-1.5 inline-flex w-fit rounded-full bg-[color:var(--color-success-soft)] px-2.5 py-1 text-xs font-semibold text-[color:var(--color-muted-foreground)]">
+                      En despensa
+                    </span>
+                  ) : null
+                }
                 onChange={() => onToggleCheckedItem(item.id)}
                 status={isChecked ? "Comprado" : undefined}
                 strikeWhenChecked
@@ -426,12 +436,8 @@ export default function ShoppingListPage() {
   }, [checkedItems, generatedItems, weekDays]);
 
   const shoppingList = useMemo(() => {
-    const visibleItems = generatedItems.filter(
-      (item) => !pantryHasItem(pantryItems, item.name),
-    );
-
-    return groupShoppingListItems(visibleItems);
-  }, [generatedItems, pantryItems]);
+    return groupShoppingListItems(generatedItems);
+  }, [generatedItems]);
 
   useEffect(() => {
     const firstCategory = shoppingList[0]?.category ?? null;
@@ -558,12 +564,12 @@ export default function ShoppingListPage() {
               group={selectedGroup}
               checkedItems={checkedItems}
               onToggleCheckedItem={toggleCheckedItem}
+              pantryItems={pantryItems}
             />
           ) : (
-            <StateMessage title="No hace falta comprar nada." variant="empty">
+            <StateMessage title="No hay lista de la compra." variant="empty">
               <p className="ui-copy mt-3 max-w-xl text-base">
-                Todos los ingredientes de esta semana ya están cubiertos con tu
-                despensa base.
+                Guarda una semana para generar los ingredientes que necesitas.
               </p>
             </StateMessage>
           )}

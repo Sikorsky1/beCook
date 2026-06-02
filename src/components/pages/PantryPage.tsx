@@ -1,33 +1,34 @@
 "use client";
 
+import { Plus, Trash2 } from "lucide-react";
+import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 
 import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
 import { ShoppingTabs } from "@/components/layout/ShoppingTabs";
+import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { CategoryPill as BaseCategoryPill } from "@/components/ui/CategoryPill";
-import { CheckboxItem } from "@/components/ui/CheckboxItem";
+import { IconButton } from "@/components/ui/IconButton";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { pantryBaseItems } from "@/data/mockPantry";
+import { TextInput } from "@/components/ui/TextInput";
 import { pageShellClass } from "@/lib/ui";
 import {
+  capitalizePantryItemName,
   normalizePantryItemName,
   pantryHasItem,
-  readPantryBase,
-  savePantryBase,
+  readPantryItems,
+  savePantryItems,
+  type PantryCategory,
+  type PantryStorageItem,
 } from "@/lib/pantryStorage";
 
-type PantryCategory = "básicos" | "especias" | "salsas" | "aceites y vinagres" | "otros";
-
-type PantryItem = {
-  name: string;
-  category: PantryCategory;
-};
+const PROFILE_STORAGE_KEY = "becook-profile";
 
 type PantryCategoryGroup = {
   category: PantryCategory;
-  items: PantryItem[];
+  items: PantryStorageItem[];
 };
 
 type PantryCategoryProgress = {
@@ -41,54 +42,61 @@ const pantryCategoryOrder: PantryCategory[] = [
   "básicos",
   "especias",
   "salsas",
-  "aceites y vinagres",
+  "conservas",
+  "congelados",
   "otros",
 ];
 
-const pantryCategoryByItem = new Map<string, PantryCategory>([
-  [normalizePantryItemName("Sal"), "básicos"],
-  [normalizePantryItemName("Pimienta"), "especias"],
-  [normalizePantryItemName("Ajo en polvo"), "especias"],
-  [normalizePantryItemName("Mostaza"), "salsas"],
-  [normalizePantryItemName("Aceite de oliva"), "aceites y vinagres"],
-  [normalizePantryItemName("Vinagre"), "aceites y vinagres"],
-]);
-
-function getPantryItemCategory(itemName: string): PantryCategory {
-  return pantryCategoryByItem.get(normalizePantryItemName(itemName)) ?? "otros";
-}
-
-function groupPantryItems(items: readonly string[]): PantryCategoryGroup[] {
-  return pantryCategoryOrder
-    .map((category) => ({
-      category,
-      items: items
-        .filter((item) => getPantryItemCategory(item) === category)
-        .map((item) => ({
-          name: item,
-          category,
-        })),
-    }))
-    .filter((group) => group.items.length > 0);
-}
-
-const pantryGroups = groupPantryItems(pantryBaseItems);
-
-function getPantryItemsForSupabase(activeItems: string[]) {
-  return pantryBaseItems.map((itemName) => ({
-    name: itemName,
-    category: getPantryItemCategory(itemName),
-    active: pantryHasItem(activeItems, itemName),
+function groupPantryItems(items: PantryStorageItem[]): PantryCategoryGroup[] {
+  return pantryCategoryOrder.map((category) => ({
+    category,
+    items: items
+      .filter((item) => item.category === category)
+      .sort((firstItem, secondItem) =>
+        firstItem.name.localeCompare(secondItem.name, "es"),
+      ),
   }));
 }
 
-function syncPantryToSupabase(activeItems: string[]) {
+function getProfileIdFromLocalStorage() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const savedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+
+  if (!savedProfile) {
+    return null;
+  }
+
   try {
-    const pantryItems = getPantryItemsForSupabase(activeItems);
+    const parsedProfile = JSON.parse(savedProfile) as { id?: unknown };
+
+    return typeof parsedProfile.id === "string" && parsedProfile.id
+      ? parsedProfile.id
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function getActivePantryItemNames(items: PantryStorageItem[]) {
+  return items
+    .filter((item) => item.active)
+    .map((item) => normalizePantryItemName(item.name));
+}
+
+function syncPantryToSupabase(items: PantryStorageItem[], profileId: string | null) {
+  try {
+    const pantryItems = items.map((item) => ({
+      name: item.name,
+      category: item.category,
+      active: item.active,
+    }));
 
     void import("@/lib/supabase/pantry")
       .then(({ replacePantryItemsInSupabase }) =>
-        replacePantryItemsInSupabase(pantryItems),
+        replacePantryItemsInSupabase(pantryItems, profileId ?? undefined),
       )
       .catch((error: unknown) => {
         console.warn(
@@ -181,52 +189,171 @@ function PantryCategorySelector({
 }
 
 type PantryItemsForCategoryProps = {
+  draftItemName: string;
+  isAddingItem: boolean;
   group: PantryCategoryGroup;
-  selectedItems: string[];
+  onCancelAddItem: () => void;
+  onDeleteItem: (itemName: string) => void;
+  onDraftItemNameChange: (itemName: string) => void;
+  onShowAddItem: () => void;
+  onSubmitAddItem: (event: FormEvent<HTMLFormElement>) => void;
   onToggleItem: (itemName: string) => void;
 };
 
 function PantryItemsForCategory({
+  draftItemName,
   group,
-  selectedItems,
+  isAddingItem,
+  onCancelAddItem,
+  onDeleteItem,
+  onDraftItemNameChange,
+  onShowAddItem,
+  onSubmitAddItem,
   onToggleItem,
 }: PantryItemsForCategoryProps) {
   return (
     <Card className="overflow-hidden">
-      <ul className="divide-y divide-[color:var(--color-border)]">
-        {group.items.map((item) => {
-          const isSelected = pantryHasItem(selectedItems, item.name);
+      <div className="sticky top-0 z-10 border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-3 sm:px-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold capitalize leading-tight text-[color:var(--color-foreground)]">
+              {group.category}
+            </h2>
+            <p className="mt-0.5 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-muted-foreground)]">
+              {group.items.filter((item) => item.active).length}/
+              {group.items.length} activos
+            </p>
+          </div>
 
-          return (
-            <li key={item.name}>
-              <CheckboxItem
-                checked={isSelected}
-                label={item.name}
-                onChange={() => onToggleItem(item.name)}
-                status={isSelected ? "Activo" : "Inactivo"}
-              />
-            </li>
-          );
-        })}
-      </ul>
+          {!isAddingItem ? (
+            <TertiaryButton
+              onClick={onShowAddItem}
+              className="min-h-10 rounded-full px-3 text-xs sm:px-4"
+            >
+              <Plus aria-hidden="true" className="h-4 w-4" />
+              Añadir
+            </TertiaryButton>
+          ) : null}
+        </div>
+
+        {isAddingItem ? (
+          <form
+            onSubmit={onSubmitAddItem}
+            className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]"
+          >
+            <TextInput
+              value={draftItemName}
+              onChange={(event) => onDraftItemNameChange(event.target.value)}
+              placeholder={`Añadir en ${group.category}`}
+              aria-label={`Añadir artículo en ${group.category}`}
+              className="min-h-10 py-2.5 text-sm"
+              autoFocus
+            />
+            <PrimaryButton
+              type="submit"
+              disabled={!draftItemName.trim()}
+              className="min-h-10 rounded-full px-4 text-xs"
+            >
+              Guardar
+            </PrimaryButton>
+            <TertiaryButton
+              onClick={onCancelAddItem}
+              className="min-h-10 rounded-full px-4 text-xs"
+            >
+              Cancelar
+            </TertiaryButton>
+          </form>
+        ) : null}
+      </div>
+
+      {group.items.length > 0 ? (
+        <ul className="max-h-[min(56dvh,34rem)] overflow-y-auto divide-y divide-[color:var(--color-border)]">
+          {group.items.map((item) => {
+            return (
+              <li key={item.name}>
+                <div
+                  className={`flex min-h-16 items-center gap-3 px-4 py-3 transition-colors sm:gap-4 sm:px-5 ${
+                    item.active
+                      ? "text-[color:var(--color-foreground)]"
+                      : "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)]"
+                  }`}
+                >
+                  <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={item.active}
+                      onChange={() => onToggleItem(item.name)}
+                      className="h-7 w-7 shrink-0 rounded-md border-[color:var(--color-border-strong)] accent-[color:var(--color-accent)] transition-transform duration-150 ease-out focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.16)] active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-base font-medium leading-6 sm:text-lg">
+                        {item.name}
+                      </span>
+                      <span className="mt-0.5 block text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-muted-foreground)]">
+                        {item.active ? "Activo" : "Inactivo"}
+                      </span>
+                    </span>
+                  </label>
+                  <IconButton
+                    aria-label={`Borrar ${item.name}`}
+                    onClick={() => onDeleteItem(item.name)}
+                    className="h-10 w-10 shrink-0"
+                  >
+                    <Trash2 aria-hidden="true" className="h-4 w-4" />
+                  </IconButton>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="px-4 py-5 text-sm font-medium text-[color:var(--color-muted-foreground)] sm:px-5">
+          Aún no hay artículos en esta sección.
+        </div>
+      )}
     </Card>
   );
 }
 
 export default function PantryPage() {
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [pantryItems, setPantryItems] = useState<PantryStorageItem[]>([]);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [hasLoadedPantry, setHasLoadedPantry] = useState(false);
+  const [draftItemName, setDraftItemName] = useState("");
+  const [addingCategory, setAddingCategory] = useState<PantryCategory | null>(
+    null,
+  );
   const [selectedCategory, setSelectedCategory] =
-    useState<PantryCategory | null>(pantryGroups[0]?.category ?? null);
-  const selectedCount = pantryBaseItems.filter((item) =>
-    pantryHasItem(selectedItems, item),
-  ).length;
+    useState<PantryCategory | null>(pantryCategoryOrder[0]);
+  const activePantryItemNames = getActivePantryItemNames(pantryItems);
+  const selectedCount = pantryItems.filter((item) => item.active).length;
 
   useEffect(() => {
     // Leemos localStorage solo al montar para evitar diferencias con el HTML inicial.
     const loadPantry = window.setTimeout(() => {
-      setSelectedItems(readPantryBase());
+      const localProfileId = getProfileIdFromLocalStorage();
+
+      setProfileId(localProfileId);
+      setPantryItems(readPantryItems());
       setHasLoadedPantry(true);
+
+      if (!localProfileId) {
+        void import("@/lib/supabase/profiles")
+          .then(({ getLatestProfileFromSupabase }) =>
+            getLatestProfileFromSupabase(),
+          )
+          .then((latestProfile) => {
+            if (latestProfile?.id) {
+              setProfileId(latestProfile.id);
+            }
+          })
+          .catch((error: unknown) => {
+            console.warn(
+              "No se pudo recuperar el perfil para la despensa:",
+              error instanceof Error ? error.message : error,
+            );
+          });
+      }
     }, 0);
 
     return () => window.clearTimeout(loadPantry);
@@ -237,21 +364,83 @@ export default function PantryPage() {
       return;
     }
 
-    savePantryBase(selectedItems);
-  }, [hasLoadedPantry, selectedItems]);
+    savePantryItems(pantryItems);
+  }, [hasLoadedPantry, pantryItems]);
+
+  const persistPantryItems = (nextPantryItems: PantryStorageItem[]) => {
+    setPantryItems(nextPantryItems);
+    syncPantryToSupabase(nextPantryItems, profileId);
+  };
+
+  const showAddItem = (category: PantryCategory) => {
+    setSelectedCategory(category);
+    setAddingCategory(category);
+    setDraftItemName("");
+  };
+
+  const cancelAddItem = () => {
+    setAddingCategory(null);
+    setDraftItemName("");
+  };
+
+  const addItem = (category: PantryCategory, event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const displayName = capitalizePantryItemName(draftItemName);
+
+    if (!displayName) {
+      return;
+    }
+
+    const normalizedItemName = normalizePantryItemName(displayName);
+
+    if (
+      pantryItems.some(
+        (item) =>
+          item.category === category &&
+          normalizePantryItemName(item.name) === normalizedItemName,
+      )
+    ) {
+      setDraftItemName("");
+      return;
+    }
+
+    persistPantryItems([
+      ...pantryItems,
+      {
+        name: displayName,
+        category,
+        active: true,
+      },
+    ]);
+    setSelectedCategory(category);
+    setAddingCategory(null);
+    setDraftItemName("");
+  };
 
   const toggleItem = (itemName: string) => {
     const normalizedItemName = normalizePantryItemName(itemName);
-    const nextSelectedItems = selectedItems.includes(normalizedItemName)
-      ? selectedItems.filter((item) => item !== normalizedItemName)
-      : [...selectedItems, normalizedItemName];
+    const nextPantryItems = pantryItems.map((item) =>
+      normalizePantryItemName(item.name) === normalizedItemName
+        ? { ...item, active: !item.active }
+        : item,
+    );
 
-    setSelectedItems(nextSelectedItems);
-    syncPantryToSupabase(nextSelectedItems);
+    persistPantryItems(nextPantryItems);
   };
+
+  const deleteItem = (itemName: string) => {
+    const normalizedItemName = normalizePantryItemName(itemName);
+    const nextPantryItems = pantryItems.filter(
+      (item) => normalizePantryItemName(item.name) !== normalizedItemName,
+    );
+
+    persistPantryItems(nextPantryItems);
+  };
+  const pantryGroups = groupPantryItems(pantryItems);
   const categoryProgress = pantryGroups.map((group) => {
     const activeItemsInCategory = group.items.filter((item) =>
-      pantryHasItem(selectedItems, item.name),
+      pantryHasItem(activePantryItemNames, item.name),
     ).length;
 
     return {
@@ -278,7 +467,7 @@ export default function PantryPage() {
             hasLoadedPantry ? (
               <PantryProgress
                 activeItemsCount={selectedCount}
-                totalItemsCount={pantryBaseItems.length}
+                totalItemsCount={pantryItems.length}
               />
             ) : null
           }
@@ -306,8 +495,14 @@ export default function PantryPage() {
             </Card>
           ) : selectedGroup ? (
             <PantryItemsForCategory
+              draftItemName={draftItemName}
               group={selectedGroup}
-              selectedItems={selectedItems}
+              isAddingItem={addingCategory === selectedGroup.category}
+              onCancelAddItem={cancelAddItem}
+              onDeleteItem={deleteItem}
+              onDraftItemNameChange={setDraftItemName}
+              onShowAddItem={() => showAddItem(selectedGroup.category)}
+              onSubmitAddItem={(event) => addItem(selectedGroup.category, event)}
               onToggleItem={toggleItem}
             />
           ) : (

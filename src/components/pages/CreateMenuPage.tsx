@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Eraser } from "lucide-react";
+import { Check, Eraser, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -19,17 +19,88 @@ import {
   importedMenuToWeekDays,
   type ImportedMenuResponse,
 } from "@/lib/importMenu";
+import type { UserProfile } from "@/lib/supabase/profiles";
 import { pageContentClass, pageShellClass } from "@/lib/ui";
 import { saveWeekWithSupabaseSync } from "@/lib/weekStorage";
+
+const PROFILE_STORAGE_KEY = "becook-profile";
+const freeTextPromptMaxLength = 300;
+
+type CreateMenuMode = "import" | "generate";
+
+const menuStyleOptions = [
+  "Saludable y equilibrado",
+  "Alto en proteína",
+  "Pérdida de grasa",
+  "Ganancia muscular",
+  "Mediterráneo",
+  "Rápido y sencillo",
+] as const;
+
+type MenuStyle = (typeof menuStyleOptions)[number];
+
+function isProfile(value: unknown): value is UserProfile {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const profile = value as Partial<UserProfile>;
+
+  return (
+    typeof profile.sex === "string" &&
+    typeof profile.birthDate === "string" &&
+    typeof profile.heightCm === "number" &&
+    typeof profile.weightKg === "number" &&
+    typeof profile.householdSize === "number" &&
+    typeof profile.weeklyTrainingDays === "number" &&
+    Array.isArray(profile.trainingTypes) &&
+    typeof profile.goal === "string" &&
+    Array.isArray(profile.dietaryRestrictions) &&
+    Array.isArray(profile.allergies) &&
+    Array.isArray(profile.dislikedFoods)
+  );
+}
+
+function readSavedProfile() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const savedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+
+  if (!savedProfile) {
+    return null;
+  }
+
+  try {
+    const parsedProfile = JSON.parse(savedProfile);
+
+    return isProfile(parsedProfile) ? parsedProfile : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizePeopleCount(value: number) {
+  return Math.min(Math.max(value, 1), 6);
+}
 
 export default function CreateMenuPage() {
   const router = useRouter();
   const [hasMounted, setHasMounted] = useState(false);
+  const [mode, setMode] = useState<CreateMenuMode>("import");
   const [menuText, setMenuText] = useState("");
   const [importedMenu, setImportedMenu] = useState<ImportedMenuResponse | null>(
     null,
   );
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [peopleCount, setPeopleCount] = useState(2);
+  const [menuStyle, setMenuStyle] = useState<MenuStyle>(
+    "Saludable y equilibrado",
+  );
+  const [freeTextPrompt, setFreeTextPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMode, setLoadingMode] = useState<CreateMenuMode | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedDayName, setSelectedDayName] = useState<DayName>("Lunes");
   const importedWeekDays = importedMenu
@@ -47,10 +118,48 @@ export default function CreateMenuPage() {
 
   useEffect(() => {
     setHasMounted(true);
+
+    let isCancelled = false;
+
+    async function loadProfile() {
+      const savedProfile = readSavedProfile();
+
+      if (savedProfile) {
+        setProfile(savedProfile);
+        setPeopleCount(normalizePeopleCount(savedProfile.householdSize));
+        return;
+      }
+
+      try {
+        const { getLatestProfileFromSupabase } = await import(
+          "@/lib/supabase/profiles"
+        );
+        const latestProfile = await getLatestProfileFromSupabase();
+
+        if (!latestProfile || isCancelled) {
+          return;
+        }
+
+        setProfile(latestProfile);
+        setPeopleCount(normalizePeopleCount(latestProfile.householdSize));
+      } catch (error: unknown) {
+        console.warn(
+          "No se pudo recuperar el perfil para crear menú:",
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
+    void loadProfile();
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   const handleProcessMenu = async () => {
     setIsLoading(true);
+    setLoadingMode("import");
     setErrorMessage("");
 
     try {
@@ -85,6 +194,53 @@ export default function CreateMenuPage() {
       setErrorMessage("Ha fallado la conexión al procesar el menú.");
     } finally {
       setIsLoading(false);
+      setLoadingMode(null);
+    }
+  };
+
+  const handleGenerateMenu = async () => {
+    setIsLoading(true);
+    setLoadingMode("generate");
+    setErrorMessage("");
+
+    try {
+      const response = await fetch("/api/generate-menu", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          profile,
+          peopleCount,
+          menuStyle,
+          freeTextPrompt: freeTextPrompt.trim(),
+        }),
+      });
+
+      const data = (await response.json()) as
+        | ImportedMenuResponse
+        | { error?: string };
+
+      if (!response.ok) {
+        setImportedMenu(null);
+        const fallbackMessage = "No se pudo crear el menú semanal.";
+        setErrorMessage(
+          "error" in data ? data.error ?? fallbackMessage : fallbackMessage,
+        );
+        return;
+      }
+
+      const generatedMenu = data as ImportedMenuResponse;
+      const generatedWeekDays = importedMenuToWeekDays(generatedMenu.days);
+
+      setImportedMenu(generatedMenu);
+      setSelectedDayName(getInitialSelectedDayName(generatedWeekDays));
+    } catch {
+      setImportedMenu(null);
+      setErrorMessage("Ha fallado la conexión al crear el menú.");
+    } finally {
+      setIsLoading(false);
+      setLoadingMode(null);
     }
   };
 
@@ -104,81 +260,227 @@ export default function CreateMenuPage() {
         <section>
           <p className="ui-eyebrow text-[0.78rem]">Crear menú</p>
           <h1 className="mt-2 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
-            Pega tu menú semanal
+            Prepara tu menú semanal
           </h1>
         </section>
 
-        <Card className="p-3.5 sm:p-5">
-          <div className="relative">
-            <IconButton
-              onClick={() => setMenuText("")}
-              disabled={!menuText}
-              aria-label="Limpiar texto"
-              className="absolute right-3 top-3 z-10"
-            >
-              <Eraser aria-hidden="true" className="h-4 w-4" />
-            </IconButton>
-
-            {hasMounted ? (
-              <TextArea
-                value={menuText}
-                onChange={(event) => setMenuText(event.target.value)}
-                placeholder={`Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\tPollo con arroz\tTortilla francesa`}
-                className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg"
-              />
-            ) : (
-              <TextArea
-                defaultValue=""
-                placeholder={`Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\tPollo con arroz\tTortilla francesa`}
-                className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg"
-              />
-            )}
-          </div>
-
-          <PrimaryButton
-            onClick={handleProcessMenu}
-            disabled={isLoading}
-            className="mt-3 w-full disabled:cursor-wait sm:w-auto sm:px-7"
+        <div
+          className="grid grid-cols-2 gap-1.5 rounded-[1rem] border border-[color:var(--color-border)] bg-white p-1.5"
+          role="tablist"
+          aria-label="Modo de creación de menú"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "import"}
+            onClick={() => {
+              setMode("import");
+              setErrorMessage("");
+            }}
+            className={`min-h-11 rounded-[0.8rem] px-3 text-sm font-semibold transition-colors ${
+              mode === "import"
+                ? "bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
+                : "text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-surface-muted)]"
+            }`}
           >
-            {isLoading ? (
-              "Estamos organizando tu menú..."
-            ) : (
-              <>
-                <Check aria-hidden="true" className="h-4 w-4" />
-                Procesar menú
-              </>
-            )}
-          </PrimaryButton>
+            Tengo un menú
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "generate"}
+            onClick={() => {
+              setMode("generate");
+              setErrorMessage("");
+            }}
+            className={`min-h-11 rounded-[0.8rem] px-3 text-sm font-semibold transition-colors ${
+              mode === "generate"
+                ? "bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
+                : "text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-surface-muted)]"
+            }`}
+          >
+            Crear menú con beCook
+          </button>
+        </div>
 
-          {isLoading ? (
-            <StateMessage
-              className="mt-4"
-              title="Estamos preparando tu semana..."
-              variant="loading"
+        {mode === "import" ? (
+          <Card className="p-3.5 sm:p-5">
+            <div className="relative">
+              <IconButton
+                onClick={() => setMenuText("")}
+                disabled={!menuText}
+                aria-label="Limpiar texto"
+                className="absolute right-3 top-3 z-10"
+              >
+                <Eraser aria-hidden="true" className="h-4 w-4" />
+              </IconButton>
+
+              {hasMounted ? (
+                <TextArea
+                  value={menuText}
+                  onChange={(event) => setMenuText(event.target.value)}
+                  placeholder={`Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\tPollo con arroz\tTortilla francesa`}
+                  className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg"
+                />
+              ) : (
+                <TextArea
+                  defaultValue=""
+                  placeholder={`Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\tPollo con arroz\tTortilla francesa`}
+                  className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg"
+                />
+              )}
+            </div>
+
+            <PrimaryButton
+              onClick={handleProcessMenu}
+              disabled={isLoading}
+              className="mt-3 w-full disabled:cursor-wait sm:w-auto sm:px-7"
             >
-              <p>
-                Leemos el menú con calma y lo ordenamos por días para que puedas
-                revisarlo antes de usarlo.
-              </p>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/65">
-                <div className="h-full w-2/3 rounded-full bg-[color:var(--color-warning)] transition-all duration-700 ease-out motion-reduce:transition-none motion-safe:animate-pulse" />
+              {isLoading && loadingMode === "import" ? (
+                "Estamos organizando tu menú..."
+              ) : (
+                <>
+                  <Check aria-hidden="true" className="h-4 w-4" />
+                  Procesar menú
+                </>
+              )}
+            </PrimaryButton>
+          </Card>
+        ) : (
+          <Card className="space-y-4 p-3.5 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border border-[color:var(--color-border)] bg-white px-3 py-2.5">
+              <span className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+                Número de personas
+              </span>
+              <div className="inline-flex items-center gap-2 rounded-full bg-[color:var(--color-surface-muted)] p-1">
+                <button
+                  type="button"
+                  disabled={peopleCount === 1 || isLoading}
+                  onClick={() => setPeopleCount((value) => value - 1)}
+                  aria-label="Reducir personas"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+                >
+                  -
+                </button>
+                <span className="min-w-10 text-center text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+                  {peopleCount}
+                </span>
+                <button
+                  type="button"
+                  disabled={peopleCount === 6 || isLoading}
+                  onClick={() => setPeopleCount((value) => value + 1)}
+                  aria-label="Aumentar personas"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+                >
+                  +
+                </button>
               </div>
-            </StateMessage>
-          ) : null}
+            </div>
 
-          {errorMessage ? (
-            <StateMessage
-              className="mt-4"
-              title="No hemos podido ordenar este menú todavía."
-              variant="error"
+            <fieldset className="space-y-2">
+              <legend className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+                Tipo de menú
+              </legend>
+              <div className="flex flex-wrap gap-1.5">
+                {menuStyleOptions.map((option) => {
+                  const isSelected = menuStyle === option;
+
+                  return (
+                    <label
+                      key={option}
+                      className={`inline-flex min-h-8 cursor-pointer items-center justify-center rounded-full border px-2.5 py-1.5 text-center text-[0.78rem] font-semibold leading-tight transition-colors ${
+                        isSelected
+                          ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
+                          : "border-[color:var(--color-border)] bg-white text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="menuStyle"
+                        checked={isSelected}
+                        disabled={isLoading}
+                        onChange={() => setMenuStyle(option)}
+                        className="sr-only"
+                      />
+                      {option}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <label className="block space-y-2">
+              <span className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+                ¿Qué te apetece esta semana?
+              </span>
+              <TextArea
+                value={freeTextPrompt}
+                maxLength={freeTextPromptMaxLength}
+                onChange={(event) =>
+                  setFreeTextPrompt(
+                    event.target.value.slice(0, freeTextPromptMaxLength),
+                  )
+                }
+                placeholder="Ejemplo: cenas ligeras, comidas fáciles de tupper, algo mediterráneo y sin mucho pescado."
+                className="min-h-28 resize-y bg-white text-sm"
+              />
+              <span className="block text-right text-xs font-medium text-[color:var(--color-muted-foreground)]">
+                {freeTextPrompt.length}/{freeTextPromptMaxLength}
+              </span>
+            </label>
+
+            <PrimaryButton
+              onClick={handleGenerateMenu}
+              disabled={isLoading}
+              className="w-full disabled:cursor-wait sm:w-auto sm:px-7"
             >
-              <p>{errorMessage}</p>
-              <p className="mt-1">
-                Revisa que el texto incluya días y platos, y vuelve a intentarlo.
-              </p>
-            </StateMessage>
-          ) : null}
-        </Card>
+              {isLoading && loadingMode === "generate" ? (
+                "Estamos creando tu semana..."
+              ) : (
+                <>
+                  <Sparkles aria-hidden="true" className="h-4 w-4" />
+                  Crear menú semanal
+                </>
+              )}
+            </PrimaryButton>
+          </Card>
+        )}
+
+        {isLoading ? (
+          <StateMessage
+            className="mt-0"
+            title="Estamos preparando tu semana..."
+            variant="loading"
+          >
+            <p>
+              {loadingMode === "generate"
+                ? "Creamos una propuesta con comidas y cenas para que puedas revisarla antes de usarla."
+                : "Leemos el menú con calma y lo ordenamos por días para que puedas revisarlo antes de usarlo."}
+            </p>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/65">
+              <div className="h-full w-2/3 rounded-full bg-[color:var(--color-warning)] transition-all duration-700 ease-out motion-reduce:transition-none motion-safe:animate-pulse" />
+            </div>
+          </StateMessage>
+        ) : null}
+
+        {errorMessage ? (
+          <StateMessage
+            className="mt-0"
+            title={
+              mode === "generate"
+                ? "No hemos podido crear este menú todavía."
+                : "No hemos podido ordenar este menú todavía."
+            }
+            variant="error"
+          >
+            <p>{errorMessage}</p>
+            <p className="mt-1">
+              {mode === "generate"
+                ? "Vuelve a intentarlo o ajusta un poco las preferencias."
+                : "Revisa que el texto incluya días y platos, y vuelve a intentarlo."}
+            </p>
+          </StateMessage>
+        ) : null}
 
         {importedMenu && importedWeekDays && selectedDay ? (
           <section className="space-y-4 border-t border-[color:var(--color-border)] pt-5 transition-opacity duration-200 ease-out motion-reduce:transition-none sm:space-y-5">
@@ -199,7 +501,9 @@ export default function CreateMenuPage() {
         ) : (
           <StateMessage title="Tu semana aparecerá aquí." variant="empty">
             <p>
-              Pega el menú, procésalo y podrás revisar cada día antes de guardarlo.
+              {mode === "generate"
+                ? "Crea un menú semanal y podrás revisar cada día antes de guardarlo."
+                : "Pega el menú, procésalo y podrás revisar cada día antes de guardarlo."}
             </p>
           </StateMessage>
         )}
