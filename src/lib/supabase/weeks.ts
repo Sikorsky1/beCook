@@ -32,6 +32,10 @@ type WeekDayRow = {
   dinner_dish_name: string | null;
 };
 
+type SaveWeekToSupabaseOptions = {
+  generationRequestId?: string;
+};
+
 const orderedDayNames = [
   "Lunes",
   "Martes",
@@ -73,7 +77,10 @@ function buildMealSlot(
   };
 }
 
-export async function saveWeekToSupabase(week: SupabaseWeek) {
+export async function saveWeekToSupabase(
+  week: SupabaseWeek,
+  options: SaveWeekToSupabaseOptions = {},
+) {
   if (!supabase) {
     throw new Error(
       "Supabase client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.",
@@ -84,21 +91,40 @@ export async function saveWeekToSupabase(week: SupabaseWeek) {
     throw new Error("Cannot save a week without days.");
   }
 
-  const { data: insertedWeek, error: weekError } = await supabase
+  const weekRow = options.generationRequestId
+    ? {
+        title: week.title ?? "",
+        generation_request_id: options.generationRequestId,
+      }
+    : { title: week.title ?? "" };
+  let weekInsert = await supabase
     .from("weeks")
-    .insert({ title: week.title ?? "" })
+    .insert(weekRow)
     .select("id")
     .single();
 
-  if (weekError) {
-    throw new Error(`Could not save week: ${weekError.message}`);
+  if (weekInsert.error && options.generationRequestId) {
+    console.warn(
+      "No se pudo vincular la semana al request de generación en weeks.generation_request_id; se guardará la semana sin ese vínculo:",
+      weekInsert.error.message,
+    );
+
+    weekInsert = await supabase
+      .from("weeks")
+      .insert({ title: week.title ?? "" })
+      .select("id")
+      .single();
   }
 
-  if (!insertedWeek?.id) {
+  if (weekInsert.error) {
+    throw new Error(`Could not save week: ${weekInsert.error.message}`);
+  }
+
+  if (!weekInsert.data?.id) {
     throw new Error("Could not save week: Supabase did not return a week id.");
   }
 
-  const weekId = insertedWeek.id as string;
+  const weekId = weekInsert.data.id as string;
   const weekDays = week.days
     .map((day, index) => ({
       week_id: weekId,

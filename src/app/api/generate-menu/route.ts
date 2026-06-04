@@ -32,6 +32,9 @@ Reglas importantes:
 - Respeta estrictamente alergias y restricciones dietéticas.
 - Evita los alimentos que el usuario no quiere.
 - Ten en cuenta objetivo, actividad física, tipo de menú y número de personas.
+- Ten en cuenta los ingredientes activos de despensa como ingredientes disponibles en casa.
+- Usa ingredientes de despensa cuando encajen de forma natural, sin forzarlos todos.
+- No crees platos raros ni poco realistas solo para usar la despensa.
 - No generes recetas paso a paso.
 - No generes lista de la compra.
 - No calcules calorías exactas.
@@ -45,6 +48,7 @@ type GenerateMenuBody = {
   peopleCount?: unknown;
   menuStyle?: unknown;
   freeTextPrompt?: unknown;
+  pantryItems?: unknown;
 };
 
 function clampPeopleCount(value: unknown) {
@@ -65,17 +69,46 @@ function sanitizeFreeText(value: unknown) {
   return value.trim().slice(0, 300);
 }
 
+function sanitizePantryItems(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const pantryItems = new Set<string>();
+
+  for (const item of value) {
+    if (typeof item !== "string") {
+      continue;
+    }
+
+    const normalizedItem = item.trim().replace(/\s+/g, " ").slice(0, 80);
+
+    if (normalizedItem) {
+      pantryItems.add(normalizedItem);
+    }
+  }
+
+  return Array.from(pantryItems).slice(0, 80);
+}
+
 function buildUserPrompt({
   profile,
+  pantryItems,
   peopleCount,
   menuStyle,
   freeTextPrompt,
 }: {
   profile: unknown;
+  pantryItems: string[];
   peopleCount: number;
   menuStyle: string;
   freeTextPrompt: string;
 }) {
+  const pantryContext =
+    pantryItems.length > 0
+      ? pantryItems.map((item) => `- ${item}`).join("\n")
+      : "No hay ingredientes activos de despensa disponibles.";
+
   return `
 Genera un menú semanal de comidas y cenas con estos datos:
 
@@ -83,8 +116,18 @@ Número de personas: ${peopleCount}
 Tipo de menú: ${menuStyle}
 Preferencia libre del usuario: ${freeTextPrompt || "Sin preferencia adicional."}
 
-Perfil del usuario, si existe:
+Perfil del usuario, si existe. Úsalo explícitamente para adaptar objetivo, actividad física, restricciones alimentarias, alergias y alimentos que no gustan:
 ${profile ? JSON.stringify(profile, null, 2) : "No hay perfil disponible."}
+
+Ingredientes activos en despensa, disponibles en casa:
+${pantryContext}
+
+Instrucciones de adaptación:
+- Respeta siempre alergias, restricciones alimentarias y alimentos no deseados del perfil.
+- Ajusta el estilo del menú al objetivo y al nivel de actividad del perfil.
+- Usa ingredientes de despensa cuando encajen de forma natural en platos realistas.
+- No fuerces todos los ingredientes de despensa ni sacrifiques variedad por usarlos.
+- Mantén comidas y cenas normales, claras y fáciles de reconocer.
 
 Devuelve estrictamente JSON parseable con el shape:
 {
@@ -116,6 +159,7 @@ export async function POST(request: Request) {
     const menuStyle =
       typeof body.menuStyle === "string" ? body.menuStyle.trim() : "";
     const freeTextPrompt = sanitizeFreeText(body.freeTextPrompt);
+    const pantryItems = sanitizePantryItems(body.pantryItems);
 
     if (!peopleCount) {
       return NextResponse.json(
@@ -152,6 +196,7 @@ export async function POST(request: Request) {
           role: "user",
           content: buildUserPrompt({
             profile: body.profile ?? null,
+            pantryItems,
             peopleCount,
             menuStyle,
             freeTextPrompt,

@@ -3,11 +3,12 @@ import { supabase } from "./client";
 export type PantryCategory =
   | "básicos"
   | "especias"
+  | "aceites y vinagres"
   | "salsas"
   | "conservas"
   | "congelados"
   | "otros";
-type LegacyPantryCategory = PantryCategory | "aceites y vinagres";
+type LegacyPantryCategory = PantryCategory;
 
 export type PantryItem = {
   id?: string;
@@ -55,9 +56,7 @@ function parsePantryCategory(value: string | null): PantryCategory {
   const parsedValue = parseRequiredString(value, "pantry_items.category");
 
   if (pantryCategoryValues.has(parsedValue as LegacyPantryCategory)) {
-    return parsedValue === "aceites y vinagres"
-      ? "básicos"
-      : (parsedValue as PantryCategory);
+    return parsedValue as PantryCategory;
   }
 
   throw new Error(`Unexpected value in pantry_items.category: ${parsedValue}.`);

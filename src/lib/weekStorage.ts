@@ -59,14 +59,45 @@ export function weekDaysToSupabaseWeek(weekDays: WeekDay[]): SupabaseWeek {
   };
 }
 
-export function saveWeekWithSupabaseSync(weekDays: WeekDay[]) {
+type SaveWeekWithSupabaseSyncOptions = {
+  generationRequestId?: string | null;
+};
+
+export function saveWeekWithSupabaseSync(
+  weekDays: WeekDay[],
+  options: SaveWeekWithSupabaseSyncOptions = {},
+) {
   saveWeek(weekDays);
 
   try {
     const week = weekDaysToSupabaseWeek(weekDays);
 
     void import("@/lib/supabase/weeks")
-      .then(({ saveWeekToSupabase }) => saveWeekToSupabase(week))
+      .then(async ({ saveWeekToSupabase }) => {
+        const weekId = await saveWeekToSupabase(week, {
+          generationRequestId: options.generationRequestId ?? undefined,
+        });
+
+        if (!options.generationRequestId) {
+          return;
+        }
+
+        try {
+          const { markMenuGenerationRequestApplied } = await import(
+            "@/lib/supabase/menu-generation-requests"
+          );
+
+          await markMenuGenerationRequestApplied(
+            options.generationRequestId,
+            weekId,
+          );
+        } catch (error: unknown) {
+          console.warn(
+            "No se pudo marcar el request de generación como aplicado:",
+            error instanceof Error ? error.message : error,
+          );
+        }
+      })
       .catch((error: unknown) => {
         console.warn(
           "No se pudo sincronizar la semana actualizada con Supabase:",

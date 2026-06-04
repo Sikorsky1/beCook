@@ -5,11 +5,12 @@ const PANTRY_STORAGE_KEY = "becook-pantry-base";
 export type PantryCategory =
   | "básicos"
   | "especias"
+  | "aceites y vinagres"
   | "salsas"
   | "conservas"
   | "congelados"
   | "otros";
-type LegacyPantryCategory = PantryCategory | "aceites y vinagres";
+type LegacyPantryCategory = PantryCategory;
 
 export type PantryStorageItem = {
   name: string;
@@ -32,8 +33,8 @@ const pantryCategoryByItem = new Map<string, PantryCategory>([
   ["pimienta", "especias"],
   ["ajo en polvo", "especias"],
   ["mostaza", "salsas"],
-  ["aceite de oliva", "básicos"],
-  ["vinagre", "básicos"],
+  ["aceite de oliva", "aceites y vinagres"],
+  ["vinagre", "aceites y vinagres"],
 ]);
 
 export function normalizePantryItemName(itemName: string) {
@@ -64,10 +65,6 @@ function isPantryCategory(value: unknown): value is LegacyPantryCategory {
     typeof value === "string" &&
     pantryCategoryValues.has(value as LegacyPantryCategory)
   );
-}
-
-function normalizePantryCategory(category: LegacyPantryCategory): PantryCategory {
-  return category === "aceites y vinagres" ? "básicos" : category;
 }
 
 function normalizePantryItem(item: PantryStorageItem): PantryStorageItem {
@@ -116,9 +113,11 @@ function parsePantryStorageItems(value: unknown): PantryStorageItem[] {
       continue;
     }
 
-    itemMap.set(normalizePantryItemName(name), {
+    const category = parsedItem.category;
+
+    itemMap.set(`${category}:${normalizePantryItemName(name)}`, {
       name,
-      category: normalizePantryCategory(parsedItem.category),
+      category,
       active: parsedItem.active !== false,
     });
   }
@@ -160,7 +159,10 @@ export function savePantryItems(items: PantryStorageItem[]) {
       continue;
     }
 
-    itemMap.set(normalizePantryItemName(normalizedItem.name), normalizedItem);
+    itemMap.set(
+      `${normalizedItem.category}:${normalizePantryItemName(normalizedItem.name)}`,
+      normalizedItem,
+    );
   }
 
   window.localStorage.setItem(

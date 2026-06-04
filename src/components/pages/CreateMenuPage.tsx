@@ -19,6 +19,7 @@ import {
   importedMenuToWeekDays,
   type ImportedMenuResponse,
 } from "@/lib/importMenu";
+import { readPantryItems } from "@/lib/pantryStorage";
 import type { UserProfile } from "@/lib/supabase/profiles";
 import { pageContentClass, pageShellClass } from "@/lib/ui";
 import { saveWeekWithSupabaseSync } from "@/lib/weekStorage";
@@ -85,6 +86,12 @@ function normalizePeopleCount(value: number) {
   return Math.min(Math.max(value, 1), 6);
 }
 
+function readActivePantryItemNames() {
+  return readPantryItems()
+    .filter((item) => item.active)
+    .map((item) => item.name);
+}
+
 export default function CreateMenuPage() {
   const router = useRouter();
   const [hasMounted, setHasMounted] = useState(false);
@@ -99,6 +106,9 @@ export default function CreateMenuPage() {
     "Saludable y equilibrado",
   );
   const [freeTextPrompt, setFreeTextPrompt] = useState("");
+  const [generationRequestId, setGenerationRequestId] = useState<string | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMode, setLoadingMode] = useState<CreateMenuMode | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -161,6 +171,7 @@ export default function CreateMenuPage() {
     setIsLoading(true);
     setLoadingMode("import");
     setErrorMessage("");
+    setGenerationRequestId(null);
 
     try {
       const response = await fetch("/api/import-menu", {
@@ -202,18 +213,48 @@ export default function CreateMenuPage() {
     setIsLoading(true);
     setLoadingMode("generate");
     setErrorMessage("");
+    setGenerationRequestId(null);
+
+    const trimmedFreeTextPrompt = freeTextPrompt.trim();
+    const profileForGeneration = profile ?? readSavedProfile();
+    const pantryItemsForGeneration = readActivePantryItemNames();
+    let currentGenerationRequestId: string | null = null;
+
+    if (!profile && profileForGeneration) {
+      setProfile(profileForGeneration);
+    }
 
     try {
+      try {
+        const { createMenuGenerationRequest } = await import(
+          "@/lib/supabase/menu-generation-requests"
+        );
+
+        currentGenerationRequestId = await createMenuGenerationRequest({
+          profileId: profileForGeneration?.id ?? null,
+          peopleCount,
+          menuStyle,
+          freeTextPrompt: trimmedFreeTextPrompt,
+        });
+        setGenerationRequestId(currentGenerationRequestId);
+      } catch (error: unknown) {
+        console.warn(
+          "No se pudo registrar la petición de generación de menú:",
+          error instanceof Error ? error.message : error,
+        );
+      }
+
       const response = await fetch("/api/generate-menu", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          profile,
+          profile: profileForGeneration,
+          pantryItems: pantryItemsForGeneration,
           peopleCount,
           menuStyle,
-          freeTextPrompt: freeTextPrompt.trim(),
+          freeTextPrompt: trimmedFreeTextPrompt,
         }),
       });
 
@@ -223,6 +264,23 @@ export default function CreateMenuPage() {
 
       if (!response.ok) {
         setImportedMenu(null);
+        setGenerationRequestId(null);
+
+        if (currentGenerationRequestId) {
+          try {
+            const { markMenuGenerationRequestFailed } = await import(
+              "@/lib/supabase/menu-generation-requests"
+            );
+
+            await markMenuGenerationRequestFailed(currentGenerationRequestId);
+          } catch (error: unknown) {
+            console.warn(
+              "No se pudo marcar la petición de generación como fallida:",
+              error instanceof Error ? error.message : error,
+            );
+          }
+        }
+
         const fallbackMessage = "No se pudo crear el menú semanal.";
         setErrorMessage(
           "error" in data ? data.error ?? fallbackMessage : fallbackMessage,
@@ -233,10 +291,43 @@ export default function CreateMenuPage() {
       const generatedMenu = data as ImportedMenuResponse;
       const generatedWeekDays = importedMenuToWeekDays(generatedMenu.days);
 
+      if (currentGenerationRequestId) {
+        try {
+          const { markMenuGenerationRequestGenerated } = await import(
+            "@/lib/supabase/menu-generation-requests"
+          );
+
+          await markMenuGenerationRequestGenerated(currentGenerationRequestId);
+          setGenerationRequestId(currentGenerationRequestId);
+        } catch (error: unknown) {
+          console.warn(
+            "No se pudo marcar la petición de generación como generada:",
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
+
       setImportedMenu(generatedMenu);
       setSelectedDayName(getInitialSelectedDayName(generatedWeekDays));
     } catch {
       setImportedMenu(null);
+      setGenerationRequestId(null);
+
+      if (currentGenerationRequestId) {
+        try {
+          const { markMenuGenerationRequestFailed } = await import(
+            "@/lib/supabase/menu-generation-requests"
+          );
+
+          await markMenuGenerationRequestFailed(currentGenerationRequestId);
+        } catch (error: unknown) {
+          console.warn(
+            "No se pudo marcar la petición de generación como fallida:",
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
+
       setErrorMessage("Ha fallado la conexión al crear el menú.");
     } finally {
       setIsLoading(false);
@@ -250,7 +341,9 @@ export default function CreateMenuPage() {
     }
 
     console.log("Guardando semana importada:", importedWeekDays.length);
-    saveWeekWithSupabaseSync(importedWeekDays);
+    saveWeekWithSupabaseSync(importedWeekDays, {
+      generationRequestId,
+    });
     router.push("/week");
   };
 

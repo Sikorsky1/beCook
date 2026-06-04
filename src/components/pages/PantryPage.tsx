@@ -10,14 +10,12 @@ import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { CategoryPill as BaseCategoryPill } from "@/components/ui/CategoryPill";
 import { IconButton } from "@/components/ui/IconButton";
-import { StateMessage } from "@/components/ui/StateMessage";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { TextInput } from "@/components/ui/TextInput";
 import { pageShellClass } from "@/lib/ui";
 import {
   capitalizePantryItemName,
   normalizePantryItemName,
-  pantryHasItem,
   readPantryItems,
   savePantryItems,
   type PantryCategory,
@@ -41,6 +39,7 @@ type PantryCategoryProgress = {
 const pantryCategoryOrder: PantryCategory[] = [
   "básicos",
   "especias",
+  "aceites y vinagres",
   "salsas",
   "conservas",
   "congelados",
@@ -80,13 +79,10 @@ function getProfileIdFromLocalStorage() {
   }
 }
 
-function getActivePantryItemNames(items: PantryStorageItem[]) {
-  return items
-    .filter((item) => item.active)
-    .map((item) => normalizePantryItemName(item.name));
-}
-
-function syncPantryToSupabase(items: PantryStorageItem[], profileId: string | null) {
+function syncPantryToSupabase(
+  items: PantryStorageItem[],
+  profileId: string | null,
+) {
   try {
     const pantryItems = items.map((item) => ({
       name: item.name,
@@ -193,11 +189,11 @@ type PantryItemsForCategoryProps = {
   isAddingItem: boolean;
   group: PantryCategoryGroup;
   onCancelAddItem: () => void;
-  onDeleteItem: (itemName: string) => void;
+  onDeleteItem: (category: PantryCategory, itemName: string) => void;
   onDraftItemNameChange: (itemName: string) => void;
   onShowAddItem: () => void;
   onSubmitAddItem: (event: FormEvent<HTMLFormElement>) => void;
-  onToggleItem: (itemName: string) => void;
+  onToggleItem: (category: PantryCategory, itemName: string) => void;
 };
 
 function PantryItemsForCategory({
@@ -228,7 +224,7 @@ function PantryItemsForCategory({
           {!isAddingItem ? (
             <TertiaryButton
               onClick={onShowAddItem}
-              className="min-h-10 rounded-full px-3 text-xs sm:px-4"
+              className="min-h-10 shrink-0 rounded-full px-3 text-xs sm:px-4"
             >
               <Plus aria-hidden="true" className="h-4 w-4" />
               Añadir
@@ -270,7 +266,7 @@ function PantryItemsForCategory({
         <ul className="max-h-[min(56dvh,34rem)] overflow-y-auto divide-y divide-[color:var(--color-border)]">
           {group.items.map((item) => {
             return (
-              <li key={item.name}>
+              <li key={`${item.category}:${item.name}`}>
                 <div
                   className={`flex min-h-16 items-center gap-3 px-4 py-3 transition-colors sm:gap-4 sm:px-5 ${
                     item.active
@@ -282,7 +278,7 @@ function PantryItemsForCategory({
                     <input
                       type="checkbox"
                       checked={item.active}
-                      onChange={() => onToggleItem(item.name)}
+                      onChange={() => onToggleItem(group.category, item.name)}
                       className="h-7 w-7 shrink-0 rounded-md border-[color:var(--color-border-strong)] accent-[color:var(--color-accent)] transition-transform duration-150 ease-out focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.16)] active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
                     />
                     <span className="min-w-0">
@@ -296,7 +292,7 @@ function PantryItemsForCategory({
                   </label>
                   <IconButton
                     aria-label={`Borrar ${item.name}`}
-                    onClick={() => onDeleteItem(item.name)}
+                    onClick={() => onDeleteItem(group.category, item.name)}
                     className="h-10 w-10 shrink-0"
                   >
                     <Trash2 aria-hidden="true" className="h-4 w-4" />
@@ -325,7 +321,6 @@ export default function PantryPage() {
   );
   const [selectedCategory, setSelectedCategory] =
     useState<PantryCategory | null>(pantryCategoryOrder[0]);
-  const activePantryItemNames = getActivePantryItemNames(pantryItems);
   const selectedCount = pantryItems.filter((item) => item.active).length;
 
   useEffect(() => {
@@ -378,6 +373,12 @@ export default function PantryPage() {
     setDraftItemName("");
   };
 
+  const selectCategory = (category: PantryCategory) => {
+    setSelectedCategory(category);
+    setAddingCategory(null);
+    setDraftItemName("");
+  };
+
   const cancelAddItem = () => {
     setAddingCategory(null);
     setDraftItemName("");
@@ -418,9 +419,10 @@ export default function PantryPage() {
     setDraftItemName("");
   };
 
-  const toggleItem = (itemName: string) => {
+  const toggleItem = (category: PantryCategory, itemName: string) => {
     const normalizedItemName = normalizePantryItemName(itemName);
     const nextPantryItems = pantryItems.map((item) =>
+      item.category === category &&
       normalizePantryItemName(item.name) === normalizedItemName
         ? { ...item, active: !item.active }
         : item,
@@ -429,19 +431,20 @@ export default function PantryPage() {
     persistPantryItems(nextPantryItems);
   };
 
-  const deleteItem = (itemName: string) => {
+  const deleteItem = (category: PantryCategory, itemName: string) => {
     const normalizedItemName = normalizePantryItemName(itemName);
     const nextPantryItems = pantryItems.filter(
-      (item) => normalizePantryItemName(item.name) !== normalizedItemName,
+      (item) =>
+        item.category !== category ||
+        normalizePantryItemName(item.name) !== normalizedItemName,
     );
 
     persistPantryItems(nextPantryItems);
   };
+
   const pantryGroups = groupPantryItems(pantryItems);
   const categoryProgress = pantryGroups.map((group) => {
-    const activeItemsInCategory = group.items.filter((item) =>
-      pantryHasItem(activePantryItemNames, item.name),
-    ).length;
+    const activeItemsInCategory = group.items.filter((item) => item.active).length;
 
     return {
       category: group.category,
@@ -479,7 +482,7 @@ export default function PantryPage() {
               <PantryCategorySelector
                 categories={categoryProgress}
                 selectedCategory={selectedCategory}
-                onSelectCategory={setSelectedCategory}
+                onSelectCategory={selectCategory}
               />
             ) : null}
           </div>
@@ -495,7 +498,9 @@ export default function PantryPage() {
             </Card>
           ) : selectedGroup ? (
             <PantryItemsForCategory
-              draftItemName={draftItemName}
+              draftItemName={
+                addingCategory === selectedGroup.category ? draftItemName : ""
+              }
               group={selectedGroup}
               isAddingItem={addingCategory === selectedGroup.category}
               onCancelAddItem={cancelAddItem}
@@ -506,9 +511,9 @@ export default function PantryPage() {
               onToggleItem={toggleItem}
             />
           ) : (
-            <StateMessage title="No hay ingredientes disponibles." variant="empty">
+            <Card className="p-6 text-sm font-medium text-[color:var(--color-muted-foreground)]">
               No hay ingredientes de despensa disponibles.
-            </StateMessage>
+            </Card>
           )}
         </section>
       </div>
