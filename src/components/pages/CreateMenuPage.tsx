@@ -20,6 +20,11 @@ import {
   type ImportedMenuResponse,
 } from "@/lib/importMenu";
 import { readPantryItems } from "@/lib/pantryStorage";
+import {
+  clearShoppingListCache,
+  generateAndCacheShoppingListForWeek,
+  syncShoppingListToSupabase,
+} from "@/lib/shoppingListStorage";
 import type { UserProfile } from "@/lib/supabase/profiles";
 import { pageContentClass, pageShellClass } from "@/lib/ui";
 import { saveWeekWithSupabaseSync } from "@/lib/weekStorage";
@@ -341,9 +346,31 @@ export default function CreateMenuPage() {
     }
 
     console.log("Guardando semana importada:", importedWeekDays.length);
-    saveWeekWithSupabaseSync(importedWeekDays, {
+    clearShoppingListCache();
+
+    const weekIdPromise = saveWeekWithSupabaseSync(importedWeekDays, {
       generationRequestId,
     });
+
+    void (async () => {
+      try {
+        const generatedItems =
+          await generateAndCacheShoppingListForWeek(importedWeekDays);
+        const weekId = await weekIdPromise;
+
+        if (!weekId) {
+          return;
+        }
+
+        await syncShoppingListToSupabase(generatedItems, [], weekId);
+      } catch (error: unknown) {
+        console.warn(
+          "No se pudo generar automáticamente la lista de la compra:",
+          error instanceof Error ? error.message : error,
+        );
+      }
+    })();
+
     router.push("/week");
   };
 

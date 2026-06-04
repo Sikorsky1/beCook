@@ -63,7 +63,7 @@ type SaveWeekWithSupabaseSyncOptions = {
   generationRequestId?: string | null;
 };
 
-export function saveWeekWithSupabaseSync(
+export async function saveWeekWithSupabaseSync(
   weekDays: WeekDay[],
   options: SaveWeekWithSupabaseSyncOptions = {},
 ) {
@@ -71,43 +71,36 @@ export function saveWeekWithSupabaseSync(
 
   try {
     const week = weekDaysToSupabaseWeek(weekDays);
+    const { saveWeekToSupabase } = await import("@/lib/supabase/weeks");
+    const weekId = await saveWeekToSupabase(week, {
+      generationRequestId: options.generationRequestId ?? undefined,
+    });
 
-    void import("@/lib/supabase/weeks")
-      .then(async ({ saveWeekToSupabase }) => {
-        const weekId = await saveWeekToSupabase(week, {
-          generationRequestId: options.generationRequestId ?? undefined,
-        });
+    if (options.generationRequestId) {
+      try {
+        const { markMenuGenerationRequestApplied } = await import(
+          "@/lib/supabase/menu-generation-requests"
+        );
 
-        if (!options.generationRequestId) {
-          return;
-        }
-
-        try {
-          const { markMenuGenerationRequestApplied } = await import(
-            "@/lib/supabase/menu-generation-requests"
-          );
-
-          await markMenuGenerationRequestApplied(
-            options.generationRequestId,
-            weekId,
-          );
-        } catch (error: unknown) {
-          console.warn(
-            "No se pudo marcar el request de generación como aplicado:",
-            error instanceof Error ? error.message : error,
-          );
-        }
-      })
-      .catch((error: unknown) => {
+        await markMenuGenerationRequestApplied(
+          options.generationRequestId,
+          weekId,
+        );
+      } catch (error: unknown) {
         console.warn(
-          "No se pudo sincronizar la semana actualizada con Supabase:",
+          "No se pudo marcar el request de generación como aplicado:",
           error instanceof Error ? error.message : error,
         );
-      });
+      }
+    }
+
+    return weekId;
   } catch (error: unknown) {
     console.warn(
       "No se pudo sincronizar la semana actualizada con Supabase:",
       error instanceof Error ? error.message : error,
     );
+
+    return null;
   }
 }

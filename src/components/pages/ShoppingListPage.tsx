@@ -14,150 +14,18 @@ import { pageShellClass } from "@/lib/ui";
 import { pantryHasItem, readPantryBase } from "@/lib/pantryStorage";
 import {
   groupShoppingListItems,
-  isGeneratedShoppingListResponse,
-  type GeneratedShoppingListResponse,
   type ShoppingCategoryGroup,
   type ShoppingListItem,
   type SupermarketCategory,
 } from "@/lib/shoppingList";
+import {
+  generateAndCacheShoppingListForWeek,
+  getWeekSignature,
+  readShoppingListCache,
+  saveShoppingListCache,
+  syncShoppingListToSupabase,
+} from "@/lib/shoppingListStorage";
 import { readSavedWeek } from "@/lib/weekStorage";
-
-const SHOPPING_LIST_CACHE_KEY = "becook-shopping-list-cache";
-
-type ShoppingListCache = {
-  weekSignature: string;
-  items: GeneratedShoppingListResponse["items"];
-  checkedItemIds: string[];
-};
-
-function getWeekSignature(week: WeekDay[]) {
-  return JSON.stringify(week);
-}
-
-function readShoppingListCache(): ShoppingListCache | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const savedCache = window.localStorage.getItem(SHOPPING_LIST_CACHE_KEY);
-
-  if (!savedCache) {
-    return null;
-  }
-
-  try {
-    const parsedCache = JSON.parse(savedCache) as Partial<ShoppingListCache>;
-
-    if (
-      typeof parsedCache.weekSignature !== "string" ||
-      !Array.isArray(parsedCache.checkedItemIds) ||
-      !parsedCache.checkedItemIds.every((itemId) => typeof itemId === "string") ||
-      !isGeneratedShoppingListResponse({ items: parsedCache.items })
-    ) {
-      return null;
-    }
-
-    const parsedItems =
-      parsedCache.items as GeneratedShoppingListResponse["items"];
-
-    return {
-      weekSignature: parsedCache.weekSignature,
-      items: parsedItems,
-      checkedItemIds: parsedCache.checkedItemIds,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function saveShoppingListCache(cache: ShoppingListCache) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(
-    SHOPPING_LIST_CACHE_KEY,
-    JSON.stringify(cache),
-  );
-}
-
-function getShoppingItemsForSupabase(
-  items: ShoppingListItem[],
-  checkedItemIds: string[],
-) {
-  const checkedItemsSet = new Set(checkedItemIds);
-
-  return items.map((item) => ({
-    name: item.name,
-    quantity: item.quantity,
-    unit: item.unit,
-    category: item.category,
-    checked: checkedItemsSet.has(item.id),
-  }));
-}
-
-async function getLatestWeekIdFromSupabase() {
-  const { supabase } = await import("@/lib/supabase/client");
-
-  if (!supabase) {
-    throw new Error(
-      "Supabase client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.",
-    );
-  }
-
-  const { data: latestWeek, error: latestWeekError } = await supabase
-    .from("weeks")
-    .select("id")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<{ id: string }>();
-
-  if (latestWeekError) {
-    throw new Error(`Could not read latest week id: ${latestWeekError.message}`);
-  }
-
-  return latestWeek?.id ?? null;
-}
-
-function syncShoppingListToSupabase(
-  items: ShoppingListItem[],
-  checkedItemIds: string[],
-) {
-  if (items.length === 0) {
-    return;
-  }
-
-  try {
-    const shoppingItems = getShoppingItemsForSupabase(items, checkedItemIds);
-
-    void (async () => {
-      const weekId = await getLatestWeekIdFromSupabase();
-
-      if (!weekId) {
-        console.warn(
-          "No se pudo sincronizar la lista de la compra con Supabase: no hay semana remota.",
-        );
-        return;
-      }
-
-      const { saveShoppingListToSupabase } = await import(
-        "@/lib/supabase/shopping-lists"
-      );
-
-      await saveShoppingListToSupabase(weekId, shoppingItems);
-    })().catch((error: unknown) => {
-      console.warn(
-        "No se pudo sincronizar la lista de la compra con Supabase:",
-        error instanceof Error ? error.message : error,
-      );
-    });
-  } catch (error: unknown) {
-    console.warn(
-      "No se pudo sincronizar la lista de la compra con Supabase:",
-      error instanceof Error ? error.message : error,
-    );
-  }
-}
 
 function capitalizeIngredientName(name: string) {
   if (!name) {
@@ -332,6 +200,7 @@ export default function ShoppingListPage() {
     }
 
     const controller = new AbortController();
+    const currentWeekDays = weekDays;
     const weekSignature = getWeekSignature(weekDays);
 
     async function generateShoppingList() {
@@ -359,39 +228,19 @@ export default function ShoppingListPage() {
       setErrorMessage("");
 
       try {
-        const response = await fetch("/api/generate-shopping-list", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ week: weekDays }),
-          signal: controller.signal,
-        });
-
-        const data = (await response.json()) as
-          | GeneratedShoppingListResponse
-          | { error?: string };
-
-        if (!response.ok) {
-          setGeneratedItems([]);
-          const fallbackMessage = "No se pudo generar la lista de la compra.";
-          setErrorMessage(
-            "error" in data ? data.error ?? fallbackMessage : fallbackMessage,
-          );
-          return;
-        }
-
-        const generatedResponse = data as GeneratedShoppingListResponse;
-        const groupedItems = groupShoppingListItems(generatedResponse.items).flatMap(
-          (group) => group.items,
+        const groupedItems = await generateAndCacheShoppingListForWeek(
+          currentWeekDays,
+          controller.signal,
         );
 
-        saveShoppingListCache({
-          weekSignature,
-          items: generatedResponse.items,
-          checkedItemIds: [],
-        });
-        syncShoppingListToSupabase(groupedItems, []);
+        void syncShoppingListToSupabase(groupedItems, []).catch(
+          (error: unknown) => {
+            console.warn(
+              "No se pudo sincronizar la lista de la compra con Supabase:",
+              error instanceof Error ? error.message : error,
+            );
+          },
+        );
 
         setGeneratedItems(groupedItems);
         setCheckedItems([]);
@@ -461,7 +310,14 @@ export default function ShoppingListPage() {
       : [...checkedItems, itemId];
 
     setCheckedItems(nextCheckedItems);
-    syncShoppingListToSupabase(generatedItems, nextCheckedItems);
+    void syncShoppingListToSupabase(generatedItems, nextCheckedItems).catch(
+      (error: unknown) => {
+        console.warn(
+          "No se pudo sincronizar la lista de la compra con Supabase:",
+          error instanceof Error ? error.message : error,
+        );
+      },
+    );
   };
 
   const totalVisibleItems = shoppingList.reduce(
