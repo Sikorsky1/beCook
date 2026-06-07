@@ -44,7 +44,10 @@ const navigationItems: BottomNavigationItem[] = [
     href: "/profile",
     label: "Perfil",
     Icon: UserRound,
-    isActive: (pathname) => pathname.startsWith("/profile"),
+    isActive: (pathname) =>
+      pathname.startsWith("/profile") ||
+      pathname.startsWith("/login") ||
+      pathname.startsWith("/signup"),
   },
 ];
 

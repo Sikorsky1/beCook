@@ -91,9 +91,16 @@ function syncPantryToSupabase(
     }));
 
     void import("@/lib/supabase/pantry")
-      .then(({ replacePantryItemsInSupabase }) =>
-        replacePantryItemsInSupabase(pantryItems, profileId ?? undefined),
-      )
+      .then(async ({ replacePantryItemsInSupabase }) => {
+        const { getCurrentUser } = await import("@/lib/supabase/auth");
+        const currentUser = await getCurrentUser();
+
+        return replacePantryItemsInSupabase(
+          pantryItems,
+          profileId ?? undefined,
+          currentUser?.id,
+        );
+      })
       .catch((error: unknown) => {
         console.warn(
           "No se pudo sincronizar la despensa con Supabase:",

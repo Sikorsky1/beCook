@@ -34,6 +34,7 @@ type WeekDayRow = {
 
 type SaveWeekToSupabaseOptions = {
   generationRequestId?: string;
+  userId?: string | null;
 };
 
 const orderedDayNames = [
@@ -91,12 +92,18 @@ export async function saveWeekToSupabase(
     throw new Error("Cannot save a week without days.");
   }
 
+  const baseWeekRow = {
+    title: week.title ?? "",
+    user_id: options.userId ?? null,
+  };
+  console.log("Saving week with user:", options.userId ?? null);
+
   const weekRow = options.generationRequestId
     ? {
-        title: week.title ?? "",
+        ...baseWeekRow,
         generation_request_id: options.generationRequestId,
       }
-    : { title: week.title ?? "" };
+    : baseWeekRow;
   let weekInsert = await supabase
     .from("weeks")
     .insert(weekRow)
@@ -111,7 +118,7 @@ export async function saveWeekToSupabase(
 
     weekInsert = await supabase
       .from("weeks")
-      .insert({ title: week.title ?? "" })
+      .insert(baseWeekRow)
       .select("id")
       .single();
   }

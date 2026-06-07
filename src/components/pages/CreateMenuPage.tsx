@@ -234,9 +234,12 @@ export default function CreateMenuPage() {
         const { createMenuGenerationRequest } = await import(
           "@/lib/supabase/menu-generation-requests"
         );
+        const { getCurrentUser } = await import("@/lib/supabase/auth");
+        const currentUser = await getCurrentUser();
 
         currentGenerationRequestId = await createMenuGenerationRequest({
           profileId: profileForGeneration?.id ?? null,
+          userId: currentUser?.id,
           peopleCount,
           menuStyle,
           freeTextPrompt: trimmedFreeTextPrompt,

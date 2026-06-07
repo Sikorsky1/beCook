@@ -13,6 +13,7 @@ type LegacyPantryCategory = PantryCategory;
 export type PantryItem = {
   id?: string;
   profileId?: string;
+  userId?: string;
   name: string;
   category: PantryCategory;
   active: boolean;
@@ -21,6 +22,7 @@ export type PantryItem = {
 type PantryItemRow = {
   id: string;
   profile_id: string | null;
+  user_id?: string | null;
   name: string | null;
   category: string | null;
   active: boolean | null;
@@ -62,9 +64,13 @@ function parsePantryCategory(value: string | null): PantryCategory {
   throw new Error(`Unexpected value in pantry_items.category: ${parsedValue}.`);
 }
 
-function getPantryItemRow(item: PantryItem, profileId?: string) {
+function getPantryItemRow(
+  item: PantryItem,
+  options: { profileId?: string; userId?: string | null } = {},
+) {
   return {
-    profile_id: profileId ?? item.profileId ?? null,
+    profile_id: options.profileId ?? item.profileId ?? null,
+    user_id: options.userId ?? item.userId ?? null,
     name: item.name.trim(),
     category: item.category,
     active: item.active,
@@ -75,6 +81,7 @@ function rowToPantryItem(row: PantryItemRow): PantryItem {
   return {
     id: row.id,
     profileId: row.profile_id ?? undefined,
+    userId: row.user_id ?? undefined,
     name: parseRequiredString(row.name, "pantry_items.name"),
     category: parsePantryCategory(row.category),
     active: parseRequiredBoolean(row.active, "pantry_items.active"),
@@ -84,6 +91,7 @@ function rowToPantryItem(row: PantryItemRow): PantryItem {
 export async function savePantryItemsToSupabase(
   items: PantryItem[],
   profileId?: string,
+  userId?: string | null,
 ) {
   if (!supabase) {
     throw new Error(
@@ -95,7 +103,11 @@ export async function savePantryItemsToSupabase(
     throw new Error("Cannot save pantry items without items.");
   }
 
-  const pantryItems = items.map((item) => getPantryItemRow(item, profileId));
+  const pantryItems = items.map((item) =>
+    getPantryItemRow(item, { profileId, userId }),
+  );
+  console.log("Saving pantry item with user:", userId ?? null);
+
   const { data: insertedItems, error: pantryItemsError } = await supabase
     .from("pantry_items")
     .insert(pantryItems)
@@ -129,7 +141,7 @@ export async function getLatestPantryItemsFromSupabase(
 
   let query = supabase
     .from("pantry_items")
-    .select("id,profile_id,name,category,active")
+    .select("id,profile_id,user_id,name,category,active")
     .order("category", { ascending: true })
     .order("name", { ascending: true });
 
@@ -149,6 +161,7 @@ export async function getLatestPantryItemsFromSupabase(
 export async function replacePantryItemsInSupabase(
   items: PantryItem[],
   profileId?: string,
+  userId?: string | null,
 ) {
   if (!supabase) {
     throw new Error(
@@ -158,9 +171,13 @@ export async function replacePantryItemsInSupabase(
 
   let deleteQuery = supabase.from("pantry_items").delete();
 
-  deleteQuery = profileId
-    ? deleteQuery.eq("profile_id", profileId)
-    : deleteQuery.is("profile_id", null);
+  if (userId) {
+    deleteQuery = deleteQuery.eq("user_id", userId);
+  } else {
+    deleteQuery = profileId
+      ? deleteQuery.eq("profile_id", profileId)
+      : deleteQuery.is("profile_id", null);
+  }
 
   const { error: deleteError } = await deleteQuery;
 
@@ -172,5 +189,5 @@ export async function replacePantryItemsInSupabase(
     return [];
   }
 
-  return savePantryItemsToSupabase(items, profileId);
+  return savePantryItemsToSupabase(items, profileId, userId);
 }

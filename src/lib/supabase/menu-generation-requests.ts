@@ -8,6 +8,7 @@ export type MenuGenerationRequestStatus =
 
 type CreateMenuGenerationRequestInput = {
   profileId?: string | null;
+  userId?: string | null;
   peopleCount: number;
   menuStyle: string;
   freeTextPrompt: string;
@@ -29,15 +30,19 @@ function ensureSupabaseClient() {
 
 export async function createMenuGenerationRequest({
   profileId,
+  userId,
   peopleCount,
   menuStyle,
   freeTextPrompt,
 }: CreateMenuGenerationRequestInput) {
   const client = ensureSupabaseClient();
+  console.log("Saving menu request with user:", userId ?? null);
+
   const { data: insertedRequest, error } = await client
     .from("menu_generation_requests")
     .insert({
       profile_id: profileId ?? null,
+      user_id: userId ?? null,
       people_count: peopleCount,
       menu_style: menuStyle,
       free_text_prompt: freeTextPrompt.trim(),

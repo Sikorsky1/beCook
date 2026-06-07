@@ -42,6 +42,8 @@ export type WeeklyTrainingDays = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export type UserProfile = {
   id?: string;
+  userId?: string;
+  user_id?: string;
   sex: Sex;
   birthDate: string;
   heightCm: number;
@@ -57,8 +59,13 @@ export type UserProfile = {
   dislikedFoods: string[];
 };
 
+type SaveProfileToSupabaseOptions = {
+  userId?: string | null;
+};
+
 type ProfileRow = {
   id: string;
+  user_id?: string | null;
   sex: string | null;
   birth_date: string | null;
   height_cm: number | null;
@@ -188,12 +195,16 @@ function parseStringArray(values: string[] | null) {
   return Array.isArray(values) ? values : [];
 }
 
-function profileToRow(profile: UserProfile) {
+function profileToRow(
+  profile: UserProfile,
+  options: SaveProfileToSupabaseOptions = {},
+) {
   if (profile.weeklyTrainingDays < 0 || profile.weeklyTrainingDays > 7) {
     throw new Error("weeklyTrainingDays must be between 0 and 7.");
   }
 
   return {
+    user_id: options.userId ?? null,
     sex: profile.sex,
     birth_date: profile.birthDate,
     height_cm: profile.heightCm,
@@ -213,6 +224,8 @@ function profileToRow(profile: UserProfile) {
 function rowToProfile(row: ProfileRow): UserProfile {
   return {
     id: row.id,
+    userId: row.user_id ?? undefined,
+    user_id: row.user_id ?? undefined,
     sex: parseEnum(row.sex, sexValues, "sex"),
     birthDate: parseRequiredString(row.birth_date, "birth_date"),
     heightCm: parseRequiredNumber(row.height_cm, "height_cm"),
@@ -237,30 +250,49 @@ function rowToProfile(row: ProfileRow): UserProfile {
   };
 }
 
-export async function saveProfileToSupabase(profile: UserProfile) {
+export async function saveProfileToSupabase(
+  profile: UserProfile,
+  options: SaveProfileToSupabaseOptions = {},
+) {
   if (!supabase) {
     throw new Error(
       "Supabase client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.",
     );
   }
 
-  const { data: insertedProfile, error: profileError } = await supabase
-    .from("profiles")
-    .insert(profileToRow(profile))
-    .select("id")
-    .single();
-
-  if (profileError) {
-    throw new Error(`Could not save profile: ${profileError.message}`);
-  }
-
-  if (!insertedProfile?.id) {
+  if (!options.userId) {
     throw new Error(
-      "Could not save profile: Supabase did not return a profile id.",
+      "Cannot save profile to Supabase without an authenticated user id.",
     );
   }
 
-  return insertedProfile.id as string;
+  const profileRow = profileToRow(profile, options);
+  const { data: savedProfile, error: profileError } = await supabase
+    .from("profiles")
+    .upsert(profileRow, { onConflict: "user_id" })
+    .select(
+      "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,dietary_restrictions,allergies,other_allergies,disliked_foods",
+    )
+    .maybeSingle<ProfileRow>();
+
+  if (profileError) {
+    console.error("Supabase returned an error while saving profile.", {
+      userId: options.userId,
+      error: profileError,
+    });
+
+    throw new Error(
+      `Could not save profile for user ${options.userId}: ${profileError.message}`,
+    );
+  }
+
+  if (!savedProfile) {
+    throw new Error(
+      `Could not save profile for user ${options.userId}: Supabase did not return a row.`,
+    );
+  }
+
+  return rowToProfile(savedProfile);
 }
 
 export async function getLatestProfileFromSupabase(): Promise<UserProfile | null> {
@@ -273,7 +305,7 @@ export async function getLatestProfileFromSupabase(): Promise<UserProfile | null
   const { data: latestProfile, error: profileError } = await supabase
     .from("profiles")
     .select(
-      "id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,dietary_restrictions,allergies,other_allergies,disliked_foods",
+      "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,dietary_restrictions,allergies,other_allergies,disliked_foods",
     )
     .order("created_at", { ascending: false })
     .limit(1)

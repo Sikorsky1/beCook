@@ -71,9 +71,12 @@ export async function saveWeekWithSupabaseSync(
 
   try {
     const week = weekDaysToSupabaseWeek(weekDays);
+    const { getCurrentUser } = await import("@/lib/supabase/auth");
     const { saveWeekToSupabase } = await import("@/lib/supabase/weeks");
+    const currentUser = await getCurrentUser();
     const weekId = await saveWeekToSupabase(week, {
       generationRequestId: options.generationRequestId ?? undefined,
+      userId: currentUser?.id,
     });
 
     if (options.generationRequestId) {

@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Save } from "lucide-react";
+import { Check, LogOut, Save } from "lucide-react";
+import Link from "next/link";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -141,21 +142,43 @@ function saveProfile(profile: UserProfile) {
   window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
 }
 
-function syncProfileToSupabase(profile: UserProfile) {
-  try {
-    void import("@/lib/supabase/profiles")
-      .then(({ saveProfileToSupabase }) => saveProfileToSupabase(profile))
-      .catch((error: unknown) => {
-        console.warn(
-          "No se pudo sincronizar el perfil con Supabase:",
-          error instanceof Error ? error.message : error,
-        );
-      });
-  } catch (error: unknown) {
+type ProfileSyncResult =
+  | { status: "remote"; profile: UserProfile; userEmail: string | null }
+  | { status: "local"; reason: "no-user" };
+
+async function syncProfileToSupabase(
+  profile: UserProfile,
+): Promise<ProfileSyncResult> {
+  const { getCurrentUser } = await import("@/lib/supabase/auth");
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
     console.warn(
-      "No se pudo sincronizar el perfil con Supabase:",
-      error instanceof Error ? error.message : error,
+      "Perfil guardado solo en localStorage: no hay usuario autenticado en Supabase Auth.",
     );
+
+    return { status: "local", reason: "no-user" };
+  }
+
+  try {
+    const { saveProfileToSupabase } = await import("@/lib/supabase/profiles");
+    const savedProfile = await saveProfileToSupabase(profile, {
+      userId: currentUser.id,
+    });
+
+    return {
+      status: "remote",
+      profile: savedProfile,
+      userEmail: currentUser.email ?? null,
+    };
+  } catch (error: unknown) {
+    console.error("No se pudo sincronizar el perfil con Supabase.", {
+      userId: currentUser.id,
+      profileId: profile.id ?? null,
+      error,
+    });
+
+    throw error;
   }
 }
 
@@ -390,7 +413,11 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
   const [dislikedFoodsText, setDislikedFoodsText] = useState("");
   const [hasLoadedProfile, setHasLoadedProfile] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saving" | "saved-local" | "saved-remote" | "error"
+  >("idle");
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const dislikedFoodsCharacters = useMemo(
     () => dislikedFoodsText.length,
     [dislikedFoodsText],
@@ -448,6 +475,27 @@ export default function ProfilePage() {
     };
   }, []);
 
+  useEffect(() => {
+    let isCancelled = false;
+
+    void import("@/lib/supabase/auth")
+      .then(({ getCurrentUser }) => getCurrentUser())
+      .then((currentUser) => {
+        if (!isCancelled) {
+          setUserEmail(currentUser?.email ?? null);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setUserEmail(null);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
   const updateProfile = (updates: Partial<UserProfile>) => {
     setProfile((currentProfile) => ({ ...currentProfile, ...updates }));
     setSaveStatus("idle");
@@ -474,7 +522,7 @@ export default function ProfilePage() {
     updateProfile({ dietaryRestrictions: normalizedRestrictions });
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const profileToSave: UserProfile = {
@@ -490,8 +538,47 @@ export default function ProfilePage() {
 
     saveProfile(profileToSave);
     setProfile(profileToSave);
-    setSaveStatus("saved");
-    syncProfileToSupabase(profileToSave);
+    setSaveStatus("saving");
+
+    try {
+      const syncResult = await syncProfileToSupabase(profileToSave);
+
+      if (syncResult.status === "local") {
+        setSaveStatus("saved-local");
+        return;
+      }
+
+      const profileWithSupabaseIds = {
+        ...profileToSave,
+        id: syncResult.profile.id,
+        userId: syncResult.profile.userId,
+        user_id: syncResult.profile.user_id ?? syncResult.profile.userId,
+      };
+
+      saveProfile(profileWithSupabaseIds);
+      setProfile(profileWithSupabaseIds);
+      setUserEmail(syncResult.userEmail);
+      setSaveStatus("saved-remote");
+    } catch {
+      setSaveStatus("error");
+    }
+  };
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+
+    try {
+      const { signOut } = await import("@/lib/supabase/auth");
+      await signOut();
+      setUserEmail(null);
+    } catch (error: unknown) {
+      console.warn(
+        "No se pudo cerrar sesión:",
+        error instanceof Error ? error.message : error,
+      );
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   return (
@@ -507,6 +594,36 @@ export default function ProfilePage() {
             </h1>
           </div>
         </section>
+
+        <Card className="flex flex-col gap-3 p-3.5 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+          <div>
+            <p className="text-[0.78rem] font-semibold text-[color:var(--color-muted-foreground)]">
+              Cuenta
+            </p>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--color-foreground)]">
+              {userEmail ?? "Modo local"}
+            </p>
+          </div>
+
+          {userEmail ? (
+            <PrimaryButton
+              type="button"
+              onClick={() => void handleSignOut()}
+              disabled={isSigningOut}
+              className="min-h-10 rounded-full px-4 text-xs sm:w-auto"
+            >
+              <LogOut aria-hidden="true" className="h-4 w-4" />
+              Cerrar sesión
+            </PrimaryButton>
+          ) : (
+            <Link
+              href="/login"
+              className="inline-flex min-h-10 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-white px-4 text-xs font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
+            >
+              Entrar o crear cuenta
+            </Link>
+          )}
+        </Card>
 
         <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
           <Card className="space-y-3 p-3.5 sm:p-4">
@@ -683,21 +800,40 @@ export default function ProfilePage() {
 
           <div className="sticky bottom-[calc(6rem+env(safe-area-inset-bottom))] z-20 -mx-3 border-t border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 px-3 py-3 backdrop-blur sm:-mx-6 sm:px-6">
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="min-h-5 text-[0.78rem] font-semibold text-[color:var(--color-secondary-hover)]">
-                {saveStatus === "saved" ? (
+              <p
+                className={`min-h-5 text-[0.78rem] font-semibold ${
+                  saveStatus === "error"
+                    ? "text-[color:var(--color-danger)]"
+                    : "text-[color:var(--color-secondary-hover)]"
+                }`}
+              >
+                {saveStatus === "saved-remote" ? (
                   <span className="inline-flex items-center gap-2">
                     <Check aria-hidden="true" className="h-4 w-4" />
-                    Perfil guardado
+                    Perfil sincronizado
                   </span>
+                ) : saveStatus === "saved-local" ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Check aria-hidden="true" className="h-4 w-4" />
+                    Perfil guardado en este dispositivo
+                  </span>
+                ) : saveStatus === "saving" ? (
+                  "Guardando perfil"
+                ) : saveStatus === "error" ? (
+                  "Guardado localmente; revisa la consola para Supabase"
                 ) : hasLoadedProfile ? (
                   ""
                 ) : (
                   "Cargando perfil"
                 )}
               </p>
-              <PrimaryButton type="submit" className="w-full text-[0.78rem] sm:w-auto">
+              <PrimaryButton
+                type="submit"
+                disabled={saveStatus === "saving"}
+                className="w-full text-[0.78rem] sm:w-auto"
+              >
                 <Save aria-hidden="true" className="h-4 w-4" />
-                Guardar perfil
+                {saveStatus === "saving" ? "Guardando..." : "Guardar perfil"}
               </PrimaryButton>
             </div>
           </div>
