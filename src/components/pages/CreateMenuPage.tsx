@@ -35,15 +35,19 @@ const freeTextPromptMaxLength = 300;
 type CreateMenuMode = "import" | "generate";
 
 const menuStyleOptions = [
-  "Saludable y equilibrado",
-  "Alto en proteína",
-  "Pérdida de grasa",
-  "Ganancia muscular",
-  "Mediterráneo",
-  "Rápido y sencillo",
+  { id: "healthy_balanced", label: "Saludable y equilibrado" },
+  { id: "high_protein", label: "Alto en proteína" },
+  { id: "fat_loss", label: "Pérdida de grasa" },
+  { id: "muscle_gain", label: "Ganancia muscular" },
+  { id: "mediterranean", label: "Mediterráneo" },
+  { id: "quick_simple", label: "Rápido y sencillo" },
 ] as const;
 
-type MenuStyle = (typeof menuStyleOptions)[number];
+type MenuStyle = (typeof menuStyleOptions)[number]["id"];
+
+const defaultMenuStyles: MenuStyle[] = ["healthy_balanced"];
+const defaultElaborationLevel = 4;
+const elaborationLevels = [1, 2, 3, 4, 5, 6, 7] as const;
 
 function isProfile(value: unknown): value is UserProfile {
   if (!value || typeof value !== "object") {
@@ -97,18 +101,31 @@ function readActivePantryItemNames() {
     .map((item) => item.name);
 }
 
+function getMenuStylesForGeneration(menuStyles: MenuStyle[]) {
+  return menuStyles.length > 0 ? menuStyles : defaultMenuStyles;
+}
+
+function serializeMenuGenerationContext(
+  menuStyles: MenuStyle[],
+  elaborationLevel: number,
+) {
+  return `${getMenuStylesForGeneration(menuStyles).join(",")}|elaboration_level=${elaborationLevel}`;
+}
+
 export default function CreateMenuPage() {
   const router = useRouter();
   const [hasMounted, setHasMounted] = useState(false);
-  const [mode, setMode] = useState<CreateMenuMode>("import");
+  const [mode, setMode] = useState<CreateMenuMode>("generate");
   const [menuText, setMenuText] = useState("");
   const [importedMenu, setImportedMenu] = useState<ImportedMenuResponse | null>(
     null,
   );
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [peopleCount, setPeopleCount] = useState(2);
-  const [menuStyle, setMenuStyle] = useState<MenuStyle>(
-    "Saludable y equilibrado",
+  const [menuStyles, setMenuStyles] =
+    useState<MenuStyle[]>(defaultMenuStyles);
+  const [elaborationLevel, setElaborationLevel] = useState(
+    defaultElaborationLevel,
   );
   const [freeTextPrompt, setFreeTextPrompt] = useState("");
   const [generationRequestId, setGenerationRequestId] = useState<string | null>(
@@ -223,6 +240,7 @@ export default function CreateMenuPage() {
     const trimmedFreeTextPrompt = freeTextPrompt.trim();
     const profileForGeneration = profile ?? readSavedProfile();
     const pantryItemsForGeneration = readActivePantryItemNames();
+    const menuStylesForGeneration = getMenuStylesForGeneration(menuStyles);
     let currentGenerationRequestId: string | null = null;
 
     if (!profile && profileForGeneration) {
@@ -241,7 +259,10 @@ export default function CreateMenuPage() {
           profileId: profileForGeneration?.id ?? null,
           userId: currentUser?.id,
           peopleCount,
-          menuStyle,
+          menuStyle: serializeMenuGenerationContext(
+            menuStylesForGeneration,
+            elaborationLevel,
+          ),
           freeTextPrompt: trimmedFreeTextPrompt,
         });
         setGenerationRequestId(currentGenerationRequestId);
@@ -261,7 +282,8 @@ export default function CreateMenuPage() {
           profile: profileForGeneration,
           pantryItems: pantryItemsForGeneration,
           peopleCount,
-          menuStyle,
+          menuStyle: menuStylesForGeneration,
+          elaborationLevel,
           freeTextPrompt: trimmedFreeTextPrompt,
         }),
       });
@@ -395,22 +417,6 @@ export default function CreateMenuPage() {
           <button
             type="button"
             role="tab"
-            aria-selected={mode === "import"}
-            onClick={() => {
-              setMode("import");
-              setErrorMessage("");
-            }}
-            className={`min-h-11 rounded-[0.8rem] px-3 text-sm font-semibold transition-colors ${
-              mode === "import"
-                ? "bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
-                : "text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-surface-muted)]"
-            }`}
-          >
-            Tengo un menú
-          </button>
-          <button
-            type="button"
-            role="tab"
             aria-selected={mode === "generate"}
             onClick={() => {
               setMode("generate");
@@ -423,6 +429,22 @@ export default function CreateMenuPage() {
             }`}
           >
             Crear menú con beCook
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "import"}
+            onClick={() => {
+              setMode("import");
+              setErrorMessage("");
+            }}
+            className={`min-h-11 rounded-[0.8rem] px-3 text-sm font-semibold transition-colors ${
+              mode === "import"
+                ? "bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
+                : "text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-surface-muted)]"
+            }`}
+          >
+            Tengo un menú
           </button>
         </div>
 
@@ -506,11 +528,11 @@ export default function CreateMenuPage() {
               </legend>
               <div className="flex flex-wrap gap-1.5">
                 {menuStyleOptions.map((option) => {
-                  const isSelected = menuStyle === option;
+                  const isSelected = menuStyles.includes(option.id);
 
                   return (
                     <label
-                      key={option}
+                      key={option.id}
                       className={`inline-flex min-h-8 cursor-pointer items-center justify-center rounded-full border px-2.5 py-1.5 text-center text-[0.78rem] font-semibold leading-tight transition-colors ${
                         isSelected
                           ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
@@ -518,17 +540,62 @@ export default function CreateMenuPage() {
                       }`}
                     >
                       <input
-                        type="radio"
-                        name="menuStyle"
+                        type="checkbox"
+                        name="menuStyles"
                         checked={isSelected}
                         disabled={isLoading}
-                        onChange={() => setMenuStyle(option)}
+                        onChange={() =>
+                          setMenuStyles((currentMenuStyles) =>
+                            isSelected
+                              ? currentMenuStyles.filter(
+                                  (menuStyle) => menuStyle !== option.id,
+                                )
+                              : [...currentMenuStyles, option.id],
+                          )
+                        }
                         className="sr-only"
                       />
-                      {option}
+                      {option.label}
                     </label>
                   );
                 })}
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <legend className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+                  Nivel de elaboración deseado
+                </legend>
+                <span className="rounded-full bg-[color:var(--color-accent-soft)] px-2.5 py-1 text-[0.72rem] font-semibold text-[color:var(--color-foreground)]">
+                  {elaborationLevel}/7
+                </span>
+              </div>
+              <div className="grid grid-cols-7 gap-1.5 rounded-[1rem] border border-[color:var(--color-border)] bg-white p-1.5">
+                {elaborationLevels.map((level) => {
+                  const isSelected = elaborationLevel === level;
+
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => setElaborationLevel(level)}
+                      aria-pressed={isSelected}
+                      className={`flex min-h-9 items-center justify-center rounded-[0.75rem] text-[0.78rem] font-semibold transition-colors ${
+                        isSelected
+                          ? "bg-[color:var(--color-accent)] text-white"
+                          : "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-accent-soft)] hover:text-[color:var(--color-foreground)]"
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      {level}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex justify-between gap-3 text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)]">
+                <span>Poco elaborado</span>
+                <span>Muy elaborado</span>
               </div>
             </fieldset>
 

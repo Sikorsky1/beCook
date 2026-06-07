@@ -9,14 +9,28 @@ import {
 
 export const runtime = "nodejs";
 
-const validMenuStyles = new Set([
-  "Saludable y equilibrado",
-  "Alto en proteína",
-  "Pérdida de grasa",
-  "Ganancia muscular",
-  "Mediterráneo",
-  "Rápido y sencillo",
-]);
+const menuStyleLabelsById = {
+  healthy_balanced: "Saludable y equilibrado",
+  high_protein: "Alto en proteína",
+  fat_loss: "Pérdida de grasa",
+  muscle_gain: "Ganancia muscular",
+  mediterranean: "Mediterráneo",
+  quick_simple: "Rápido y sencillo",
+} as const;
+
+const legacyMenuStyleIdsByLabel = new Map<string, MenuStyleId>(
+  Object.entries(menuStyleLabelsById).map(([id, label]) => [
+    label,
+    id as MenuStyleId,
+  ]),
+);
+
+type MenuStyleId = keyof typeof menuStyleLabelsById;
+
+const validMenuStyles = new Set<MenuStyleId>(
+  Object.keys(menuStyleLabelsById) as MenuStyleId[],
+);
+const defaultMenuStyles: MenuStyleId[] = ["healthy_balanced"];
 
 const systemPrompt = `
 Eres beCook, un asistente que crea menús semanales prácticos en español.
@@ -47,6 +61,7 @@ type GenerateMenuBody = {
   profile?: unknown;
   peopleCount?: unknown;
   menuStyle?: unknown;
+  elaborationLevel?: unknown;
   freeTextPrompt?: unknown;
   pantryItems?: unknown;
 };
@@ -67,6 +82,39 @@ function sanitizeFreeText(value: unknown) {
   }
 
   return value.trim().slice(0, 300);
+}
+
+function sanitizeMenuStyles(value: unknown): MenuStyleId[] {
+  const rawMenuStyles = Array.isArray(value) ? value : [value];
+  const menuStyles = new Set<MenuStyleId>();
+
+  for (const rawMenuStyle of rawMenuStyles) {
+    if (typeof rawMenuStyle !== "string") {
+      continue;
+    }
+
+    const trimmedMenuStyle = rawMenuStyle.trim();
+    const menuStyleId =
+      validMenuStyles.has(trimmedMenuStyle as MenuStyleId)
+        ? (trimmedMenuStyle as MenuStyleId)
+        : legacyMenuStyleIdsByLabel.get(trimmedMenuStyle);
+
+    if (menuStyleId) {
+      menuStyles.add(menuStyleId);
+    }
+  }
+
+  return menuStyles.size > 0 ? Array.from(menuStyles) : defaultMenuStyles;
+}
+
+function sanitizeElaborationLevel(value: unknown) {
+  const parsedValue = Number(value);
+
+  if (!Number.isInteger(parsedValue)) {
+    return 4;
+  }
+
+  return Math.min(Math.max(parsedValue, 1), 7);
 }
 
 function sanitizePantryItems(value: unknown) {
@@ -95,25 +143,37 @@ function buildUserPrompt({
   profile,
   pantryItems,
   peopleCount,
-  menuStyle,
+  menuStyles,
+  elaborationLevel,
   freeTextPrompt,
 }: {
   profile: unknown;
   pantryItems: string[];
   peopleCount: number;
-  menuStyle: string;
+  menuStyles: MenuStyleId[];
+  elaborationLevel: number;
   freeTextPrompt: string;
 }) {
   const pantryContext =
     pantryItems.length > 0
       ? pantryItems.map((item) => `- ${item}`).join("\n")
       : "No hay ingredientes activos de despensa disponibles.";
+  const menuStyleLabels = menuStyles.map(
+    (menuStyle) => menuStyleLabelsById[menuStyle],
+  );
+  const elaborationGuidance =
+    elaborationLevel <= 2
+      ? "Nivel bajo: platos muy sencillos, pocos pasos, ingredientes comunes y comidas/cenas rápidas."
+      : elaborationLevel <= 5
+        ? "Nivel medio: platos algo más variados, elaboración moderada y sin complicar demasiado los días laborables."
+        : "Nivel alto: platos más elaborados, más variedad y preparaciones más cuidadas, concentrando preferentemente lo más elaborado en fin de semana.";
 
   return `
 Genera un menú semanal de comidas y cenas con estos datos:
 
 Número de personas: ${peopleCount}
-Tipo de menú: ${menuStyle}
+Tipos de menú seleccionados: ${menuStyleLabels.join(", ")}
+Nivel de elaboración deseado: ${elaborationLevel}/7
 Preferencia libre del usuario: ${freeTextPrompt || "Sin preferencia adicional."}
 
 Perfil del usuario, si existe. Úsalo explícitamente para adaptar objetivo, actividad física, restricciones alimentarias, alergias y alimentos que no gustan:
@@ -125,6 +185,10 @@ ${pantryContext}
 Instrucciones de adaptación:
 - Respeta siempre alergias, restricciones alimentarias y alimentos no deseados del perfil.
 - Ajusta el estilo del menú al objetivo y al nivel de actividad del perfil.
+- Ajusta el menú a todos los tipos de menú seleccionados, priorizando combinaciones coherentes.
+- ${elaborationGuidance}
+- Aunque el nivel sea medio o alto, los días entre semana no deben ser excesivamente complejos salvo que el texto libre lo pida explícitamente.
+- Si el nivel es alto, concentra preferentemente los platos más elaborados en sábado y domingo.
 - Usa ingredientes de despensa cuando encajen de forma natural en platos realistas.
 - No fuerces todos los ingredientes de despensa ni sacrifiques variedad por usarlos.
 - Mantén comidas y cenas normales, claras y fáciles de reconocer.
@@ -156,21 +220,14 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as GenerateMenuBody;
     const peopleCount = clampPeopleCount(body.peopleCount);
-    const menuStyle =
-      typeof body.menuStyle === "string" ? body.menuStyle.trim() : "";
+    const menuStyles = sanitizeMenuStyles(body.menuStyle);
+    const elaborationLevel = sanitizeElaborationLevel(body.elaborationLevel);
     const freeTextPrompt = sanitizeFreeText(body.freeTextPrompt);
     const pantryItems = sanitizePantryItems(body.pantryItems);
 
     if (!peopleCount) {
       return NextResponse.json(
         { error: "El número de personas debe estar entre 1 y 6." },
-        { status: 400 },
-      );
-    }
-
-    if (!validMenuStyles.has(menuStyle)) {
-      return NextResponse.json(
-        { error: "Selecciona un tipo de menú válido." },
         { status: 400 },
       );
     }
@@ -198,7 +255,8 @@ export async function POST(request: Request) {
             profile: body.profile ?? null,
             pantryItems,
             peopleCount,
-            menuStyle,
+            menuStyles,
+            elaborationLevel,
             freeTextPrompt,
           }),
         },
