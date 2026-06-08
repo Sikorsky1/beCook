@@ -17,10 +17,12 @@ export type TrainingType =
 
 export type Goal =
   | "fat_loss"
-  | "maintenance"
   | "muscle_gain"
   | "sports_performance"
-  | "healthy_eating";
+  | "healthy_eating"
+  | "other";
+
+export type LegacyGoal = Goal | "maintenance";
 
 export type DietaryRestriction =
   | "none"
@@ -52,7 +54,9 @@ export type UserProfile = {
   weeklyTrainingDays: WeeklyTrainingDays;
   trainingTypes: TrainingType[];
   otherTrainingType?: string;
-  goal: Goal;
+  goals: Goal[];
+  goal?: LegacyGoal;
+  otherGoal?: string;
   dietaryRestrictions: DietaryRestriction[];
   allergies: Allergy[];
   otherAllergies?: string;
@@ -75,6 +79,8 @@ type ProfileRow = {
   training_types: string[] | null;
   other_training_type: string | null;
   goal: string | null;
+  goals: string[] | null;
+  other_goal: string | null;
   dietary_restrictions: string[] | null;
   allergies: string[] | null;
   other_allergies: string | null;
@@ -97,11 +103,12 @@ const trainingTypeValues = new Set<TrainingType>([
 ]);
 const goalValues = new Set<Goal>([
   "fat_loss",
-  "maintenance",
   "muscle_gain",
   "sports_performance",
   "healthy_eating",
+  "other",
 ]);
+const legacyGoalValues = new Set<LegacyGoal>([...goalValues, "maintenance"]);
 const dietaryRestrictionValues = new Set<DietaryRestriction>([
   "none",
   "vegetarian",
@@ -195,6 +202,19 @@ function parseStringArray(values: string[] | null) {
   return Array.isArray(values) ? values : [];
 }
 
+function normalizeGoals(goals: Goal[], legacyGoal?: LegacyGoal): Goal[] {
+  const normalizedGoals = goals.length > 0 ? goals : legacyGoal ? [legacyGoal] : [];
+  const filteredGoals = normalizedGoals
+    .map((goal) => (goal === "maintenance" ? "healthy_eating" : goal))
+    .filter((goal): goal is Goal => goalValues.has(goal as Goal));
+
+  return Array.from(new Set(filteredGoals));
+}
+
+function getLegacyGoalForStorage(profile: UserProfile): Goal {
+  return normalizeGoals(profile.goals, profile.goal)[0] ?? "healthy_eating";
+}
+
 function profileToRow(
   profile: UserProfile,
   options: SaveProfileToSupabaseOptions = {},
@@ -213,7 +233,11 @@ function profileToRow(
     weekly_training_days: profile.weeklyTrainingDays,
     training_types: profile.trainingTypes,
     other_training_type: optionalText(profile.otherTrainingType),
-    goal: profile.goal,
+    goal: getLegacyGoalForStorage(profile),
+    goals: normalizeGoals(profile.goals, profile.goal),
+    other_goal: profile.goals.includes("other")
+      ? optionalText(profile.otherGoal)
+      : null,
     dietary_restrictions: profile.dietaryRestrictions,
     allergies: profile.allergies,
     other_allergies: optionalText(profile.otherAllergies),
@@ -238,7 +262,16 @@ function rowToProfile(row: ProfileRow): UserProfile {
       "training_types",
     ),
     otherTrainingType: row.other_training_type ?? undefined,
-    goal: parseEnum(row.goal, goalValues, "goal"),
+    goal: row.goal && legacyGoalValues.has(row.goal as LegacyGoal)
+      ? (row.goal as LegacyGoal)
+      : undefined,
+    goals: normalizeGoals(
+      parseEnumArray(row.goals, goalValues, "goals"),
+      row.goal && legacyGoalValues.has(row.goal as LegacyGoal)
+        ? (row.goal as LegacyGoal)
+        : undefined,
+    ),
+    otherGoal: row.other_goal ?? undefined,
     dietaryRestrictions: parseEnumArray(
       row.dietary_restrictions,
       dietaryRestrictionValues,
@@ -271,7 +304,7 @@ export async function saveProfileToSupabase(
     .from("profiles")
     .upsert(profileRow, { onConflict: "user_id" })
     .select(
-      "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,dietary_restrictions,allergies,other_allergies,disliked_foods",
+      "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,goals,other_goal,dietary_restrictions,allergies,other_allergies,disliked_foods",
     )
     .maybeSingle<ProfileRow>();
 
@@ -305,7 +338,7 @@ export async function getLatestProfileFromSupabase(): Promise<UserProfile | null
   const { data: latestProfile, error: profileError } = await supabase
     .from("profiles")
     .select(
-      "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,dietary_restrictions,allergies,other_allergies,disliked_foods",
+      "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,goals,other_goal,dietary_restrictions,allergies,other_allergies,disliked_foods",
     )
     .order("created_at", { ascending: false })
     .limit(1)

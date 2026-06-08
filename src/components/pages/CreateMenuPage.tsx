@@ -64,7 +64,7 @@ function isProfile(value: unknown): value is UserProfile {
     typeof profile.householdSize === "number" &&
     typeof profile.weeklyTrainingDays === "number" &&
     Array.isArray(profile.trainingTypes) &&
-    typeof profile.goal === "string" &&
+    (Array.isArray(profile.goals) || typeof profile.goal === "string") &&
     Array.isArray(profile.dietaryRestrictions) &&
     Array.isArray(profile.allergies) &&
     Array.isArray(profile.dislikedFoods)

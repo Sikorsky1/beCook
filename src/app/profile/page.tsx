@@ -20,6 +20,7 @@ import { pageShellClass } from "@/lib/ui";
 
 const PROFILE_STORAGE_KEY = "becook-profile";
 const dislikedFoodsMaxLength = 150;
+const otherGoalMaxLength = 150;
 
 const defaultProfile: UserProfile = {
   sex: "male",
@@ -30,7 +31,9 @@ const defaultProfile: UserProfile = {
   weeklyTrainingDays: 0,
   trainingTypes: [],
   otherTrainingType: "",
+  goals: ["healthy_eating"],
   goal: "healthy_eating",
+  otherGoal: "",
   dietaryRestrictions: ["none"],
   allergies: [],
   otherAllergies: "",
@@ -58,10 +61,10 @@ const trainingTypeOptions: { label: string; value: TrainingType }[] = [
 
 const goalOptions: { label: string; value: Goal }[] = [
   { label: "Perder grasa", value: "fat_loss" },
-  { label: "Mantener peso", value: "maintenance" },
   { label: "Ganar masa muscular", value: "muscle_gain" },
   { label: "Mejorar rendimiento deportivo", value: "sports_performance" },
   { label: "Comer más saludable", value: "healthy_eating" },
+  { label: "Otro", value: "other" },
 ];
 
 const dietaryRestrictionOptions: {
@@ -107,11 +110,40 @@ function isProfile(value: unknown): value is UserProfile {
     profile.weeklyTrainingDays >= 0 &&
     profile.weeklyTrainingDays <= 7 &&
     Array.isArray(profile.trainingTypes) &&
-    typeof profile.goal === "string" &&
+    (Array.isArray(profile.goals) || typeof profile.goal === "string") &&
     Array.isArray(profile.dietaryRestrictions) &&
     Array.isArray(profile.allergies) &&
     Array.isArray(profile.dislikedFoods)
   );
+}
+
+function normalizeGoals(
+  goals: unknown,
+  legacyGoal: unknown,
+): Goal[] {
+  const rawGoals = Array.isArray(goals) ? goals : [legacyGoal];
+  const normalizedGoals = rawGoals
+    .map((goal) => (goal === "maintenance" ? "healthy_eating" : goal))
+    .filter((goal): goal is Goal =>
+      goalOptions.some((option) => option.value === goal),
+    );
+
+  return Array.from(new Set(normalizedGoals));
+}
+
+function normalizeProfile(profile: UserProfile): UserProfile {
+  const goals = normalizeGoals(profile.goals, profile.goal);
+  const normalizedGoals = goals.length > 0 ? goals : defaultProfile.goals;
+
+  return {
+    ...defaultProfile,
+    ...profile,
+    goals: normalizedGoals,
+    goal: normalizedGoals[0] ?? "healthy_eating",
+    otherGoal: normalizedGoals.includes("other")
+      ? profile.otherGoal?.slice(0, otherGoalMaxLength) ?? ""
+      : "",
+  };
 }
 
 function readSavedProfile() {
@@ -128,7 +160,7 @@ function readSavedProfile() {
   try {
     const parsedProfile = JSON.parse(savedProfile);
 
-    return isProfile(parsedProfile) ? parsedProfile : null;
+    return isProfile(parsedProfile) ? normalizeProfile(parsedProfile) : null;
   } catch {
     return null;
   }
@@ -191,6 +223,10 @@ function textToDislikedFoods(value: string) {
     .split(/,|\n/)
     .map((food) => food.trim())
     .filter(Boolean);
+}
+
+function normalizeOtherGoal(value: string | undefined) {
+  return value?.trim().slice(0, otherGoalMaxLength) ?? "";
 }
 
 function toWeeklyTrainingDays(value: number): WeeklyTrainingDays {
@@ -326,46 +362,6 @@ function HouseholdSizeStepper({
   );
 }
 
-function ChipRadioGroup<T extends string>({
-  name,
-  options,
-  value,
-  onChange,
-}: {
-  name: string;
-  options: { label: string; value: T }[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((option) => {
-        const isSelected = option.value === value;
-
-        return (
-          <label
-            key={String(option.value)}
-            className={`${chipBaseClass} ${
-              isSelected
-                ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
-                : "border-[color:var(--color-border)] bg-white text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
-            }`}
-          >
-            <input
-              type="radio"
-              name={name}
-              checked={isSelected}
-              onChange={() => onChange(option.value)}
-              className="sr-only"
-            />
-            {option.label}
-          </label>
-        );
-      })}
-    </div>
-  );
-}
-
 function ChipCheckboxGroup<T extends string>({
   options,
   values,
@@ -422,6 +418,10 @@ export default function ProfilePage() {
     () => dislikedFoodsText.length,
     [dislikedFoodsText],
   );
+  const otherGoalCharacters = useMemo(
+    () => profile.otherGoal?.length ?? 0,
+    [profile.otherGoal],
+  );
 
   useEffect(() => {
     let isCancelled = false;
@@ -433,7 +433,7 @@ export default function ProfilePage() {
       const savedProfile = readSavedProfile();
 
       if (savedProfile) {
-        setProfile({ ...defaultProfile, ...savedProfile });
+        setProfile(savedProfile);
         setDislikedFoodsText(dislikedFoodsToText(savedProfile.dislikedFoods));
         setHasLoadedProfile(true);
         return;
@@ -450,7 +450,7 @@ export default function ProfilePage() {
           return;
         }
 
-        const restoredProfile = { ...defaultProfile, ...latestProfile };
+        const restoredProfile = normalizeProfile(latestProfile);
 
         setProfile(restoredProfile);
         setDislikedFoodsText(
@@ -522,6 +522,16 @@ export default function ProfilePage() {
     updateProfile({ dietaryRestrictions: normalizedRestrictions });
   };
 
+  const handleGoalsChange = (goals: Goal[]) => {
+    const normalizedGoals = Array.from(new Set(goals));
+
+    updateProfile({
+      goals: normalizedGoals,
+      goal: normalizedGoals[0] ?? "healthy_eating",
+      otherGoal: normalizedGoals.includes("other") ? profile.otherGoal : "",
+    });
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -529,6 +539,11 @@ export default function ProfilePage() {
       ...profile,
       otherTrainingType: profile.trainingTypes.includes("other")
         ? profile.otherTrainingType?.trim()
+        : "",
+      goals: profile.goals,
+      goal: profile.goals[0] ?? "healthy_eating",
+      otherGoal: profile.goals.includes("other")
+        ? normalizeOtherGoal(profile.otherGoal)
         : "",
       otherAllergies: profile.allergies.includes("other")
         ? profile.otherAllergies?.trim()
@@ -720,12 +735,33 @@ export default function ProfilePage() {
 
           <Card className="space-y-3 p-3.5 sm:p-4">
             <SectionTitle title="Objetivo" />
-            <ChipRadioGroup
-              name="goal"
+            <ChipCheckboxGroup
               options={goalOptions}
-              value={profile.goal}
-              onChange={(goal) => updateProfile({ goal })}
+              values={profile.goals}
+              onChange={handleGoalsChange}
             />
+            {profile.goals.includes("other") ? (
+              <label className="block space-y-1.5">
+                <FieldLabel>Cuéntanos tu objetivo</FieldLabel>
+                <textarea
+                  value={profile.otherGoal ?? ""}
+                  maxLength={otherGoalMaxLength}
+                  placeholder="Ejemplo: mejorar digestiones, organizar comidas familiares o cuidar energía diaria."
+                  onChange={(event) =>
+                    updateProfile({
+                      otherGoal: event.target.value.slice(
+                        0,
+                        otherGoalMaxLength,
+                      ),
+                    })
+                  }
+                  className={`${compactInputClass} min-h-20 resize-y leading-5 placeholder:text-xs placeholder:italic placeholder:text-[color:var(--color-muted-foreground)]`}
+                />
+                <span className="block text-right text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)]">
+                  {otherGoalCharacters}/{otherGoalMaxLength}
+                </span>
+              </label>
+            ) : null}
           </Card>
 
           <Card className="space-y-3 p-3.5 sm:p-4">

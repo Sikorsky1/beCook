@@ -45,7 +45,7 @@ Reglas importantes:
 - Adapta el menú al perfil del usuario si existe.
 - Respeta estrictamente alergias y restricciones dietéticas.
 - Evita los alimentos que el usuario no quiere.
-- Ten en cuenta objetivo, actividad física, tipo de menú y número de personas.
+- Ten en cuenta objetivos, actividad física, tipo de menú y número de personas.
 - Ten en cuenta los ingredientes activos de despensa como ingredientes disponibles en casa.
 - Usa ingredientes de despensa cuando encajen de forma natural, sin forzarlos todos.
 - No crees platos raros ni poco realistas solo para usar la despensa.
@@ -176,7 +176,7 @@ Tipos de menú seleccionados: ${menuStyleLabels.join(", ")}
 Nivel de elaboración deseado: ${elaborationLevel}/7
 Preferencia libre del usuario: ${freeTextPrompt || "Sin preferencia adicional."}
 
-Perfil del usuario, si existe. Úsalo explícitamente para adaptar objetivo, actividad física, restricciones alimentarias, alergias y alimentos que no gustan:
+Perfil del usuario, si existe. Úsalo explícitamente para adaptar objetivos, actividad física, restricciones alimentarias, alergias y alimentos que no gustan. Si goals incluye "other" y otherGoal existe, trátalo como un objetivo adicional:
 ${profile ? JSON.stringify(profile, null, 2) : "No hay perfil disponible."}
 
 Ingredientes activos en despensa, disponibles en casa:
@@ -184,7 +184,7 @@ ${pantryContext}
 
 Instrucciones de adaptación:
 - Respeta siempre alergias, restricciones alimentarias y alimentos no deseados del perfil.
-- Ajusta el estilo del menú al objetivo y al nivel de actividad del perfil.
+- Ajusta el estilo del menú a los objetivos y al nivel de actividad del perfil.
 - Ajusta el menú a todos los tipos de menú seleccionados, priorizando combinaciones coherentes.
 - ${elaborationGuidance}
 - Aunque el nivel sea medio o alto, los días entre semana no deben ser excesivamente complejos salvo que el texto libre lo pida explícitamente.
