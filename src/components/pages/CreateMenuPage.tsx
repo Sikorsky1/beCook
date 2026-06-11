@@ -122,11 +122,23 @@ function serializeMenuGenerationContext(
   return `${getMenuStylesForGeneration(menuStyles).join(",")}|elaboration_level=${elaborationLevel}`;
 }
 
+function sanitizeDateParam(value: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  return value;
+}
+
 export default function CreateMenuPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isoYearParam = searchParams.get("isoYear");
   const isoWeekParam = searchParams.get("isoWeek");
+  const rawStartDateParam = searchParams.get("startDate");
+  const rawEndDateParam = searchParams.get("endDate");
+  const startDateParam = sanitizeDateParam(rawStartDateParam);
+  const endDateParam = sanitizeDateParam(rawEndDateParam);
   const [hasMounted, setHasMounted] = useState(false);
   const [mode, setMode] = useState<CreateMenuMode>("generate");
   const [menuText, setMenuText] = useState("");
@@ -172,6 +184,15 @@ export default function CreateMenuPage() {
     const weekForMenu =
       weekFromUrl ?? readSelectedIsoWeek() ?? getIsoWeekFromDate();
 
+    if (
+      (rawStartDateParam && !startDateParam) ||
+      (rawEndDateParam && !endDateParam)
+    ) {
+      console.warn(
+        "Parámetros de fecha de semana ignorados por formato inválido.",
+      );
+    }
+
     setTargetIsoWeek(weekForMenu);
     saveSelectedIsoWeek(weekForMenu);
 
@@ -211,7 +232,14 @@ export default function CreateMenuPage() {
     return () => {
       isCancelled = true;
     };
-  }, [isoWeekParam, isoYearParam]);
+  }, [
+    endDateParam,
+    isoWeekParam,
+    isoYearParam,
+    rawEndDateParam,
+    rawStartDateParam,
+    startDateParam,
+  ]);
 
   const handleProcessMenu = async () => {
     setIsLoading(true);

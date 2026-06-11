@@ -308,6 +308,52 @@ export async function getWeekFromSupabaseByIsoWeek({
   };
 }
 
+export async function getWeeksPresenceForIsoWeeks({
+  isoWeeks,
+  userId,
+}: {
+  isoWeeks: { isoYear: number; isoWeek: number }[];
+  userId?: string | null;
+}) {
+  if (!supabase || !userId || isoWeeks.length === 0) {
+    return new Set<string>();
+  }
+
+  const isoYears = Array.from(new Set(isoWeeks.map((week) => week.isoYear)));
+  const { data: weeks, error: weeksError } = await supabase
+    .from("weeks")
+    .select("iso_year,iso_week")
+    .eq("user_id", userId)
+    .in("iso_year", isoYears)
+    .not("iso_week", "is", null);
+
+  if (weeksError) {
+    throw new Error(`Could not read weeks presence: ${weeksError.message}`);
+  }
+
+  const requestedKeys = new Set(
+    isoWeeks.map((week) => `${week.isoYear}-${week.isoWeek}`),
+  );
+  const presentKeys = new Set<string>();
+
+  for (const week of (weeks ?? []) as Pick<
+    WeekRow,
+    "iso_year" | "iso_week"
+  >[]) {
+    if (!week.iso_year || !week.iso_week) {
+      continue;
+    }
+
+    const key = `${week.iso_year}-${week.iso_week}`;
+
+    if (requestedKeys.has(key)) {
+      presentKeys.add(key);
+    }
+  }
+
+  return presentKeys;
+}
+
 export async function getRecentWeekDishNamesFromSupabase({
   userId,
   limit = 4,

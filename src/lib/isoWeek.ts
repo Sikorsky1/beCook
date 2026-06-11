@@ -63,6 +63,14 @@ export function getIsoWeekRange(isoWeek: IsoWeek) {
   return { startDate, endDate };
 }
 
+export function formatDateForQuery(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 export function addIsoWeeks(isoWeek: IsoWeek, offset: number): IsoWeek {
   const date = getIsoWeekStartDate(isoWeek);
   date.setDate(date.getDate() + offset * 7);
@@ -76,6 +84,10 @@ export function isSameIsoWeek(left: IsoWeek, right: IsoWeek) {
 
 export function getIsoWeekStorageId({ isoYear, isoWeek }: IsoWeek) {
   return `${isoYear}-W${String(isoWeek).padStart(2, "0")}`;
+}
+
+export function getIsoWeekKey({ isoYear, isoWeek }: IsoWeek) {
+  return `${isoYear}-${isoWeek}`;
 }
 
 export function formatIsoWeekRange(isoWeek: IsoWeek) {

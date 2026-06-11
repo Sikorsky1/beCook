@@ -13,8 +13,11 @@ import { SelectedDayCard } from "@/components/features/SelectedDayCard";
 import { type MealKey, type WeekDay } from "@/data/mockWeek";
 import {
   addIsoWeeks,
+  formatDateForQuery,
   formatIsoWeekRange,
   getIsoWeekFromDate,
+  getIsoWeekKey,
+  getIsoWeekRange,
   isSameIsoWeek,
   parseIsoWeek,
   type IsoWeek,
@@ -47,11 +50,23 @@ function supabaseWeekToWeekDays(week: SupabaseWeek, isoWeek: IsoWeek): WeekDay[]
 }
 
 function buildCreateMenuHref(isoWeek: IsoWeek) {
-  return `/create-menu?isoYear=${isoWeek.isoYear}&isoWeek=${isoWeek.isoWeek}`;
+  const { startDate, endDate } = getIsoWeekRange(isoWeek);
+  const searchParams = new URLSearchParams({
+    isoYear: String(isoWeek.isoYear),
+    isoWeek: String(isoWeek.isoWeek),
+    startDate: formatDateForQuery(startDate),
+    endDate: formatDateForQuery(endDate),
+  });
+
+  return `/create-menu?${searchParams.toString()}`;
 }
 
 function formatWeekTitle(isoWeek: IsoWeek) {
   return formatIsoWeekRange(isoWeek).replace("-", " - ");
+}
+
+function getNearbyIsoWeeks(isoWeek: IsoWeek) {
+  return [-2, -1, 0, 1, 2].map((offset) => addIsoWeeks(isoWeek, offset));
 }
 
 function WeekPageContent() {
@@ -63,6 +78,9 @@ function WeekPageContent() {
   const [weekDays, setWeekDays] = useState<WeekDay[] | null>(null);
   const [selectedDayName, setSelectedDayName] = useState<DayName>("Lunes");
   const [isLoadingWeek, setIsLoadingWeek] = useState(true);
+  const [weeksWithMenu, setWeeksWithMenu] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const availableDayNames = useMemo(
     () => new Set(weekDays?.map((day) => day.day) ?? []),
@@ -76,6 +94,10 @@ function WeekPageContent() {
     selectedIsoWeek && currentIsoWeek
       ? isSameIsoWeek(selectedIsoWeek, currentIsoWeek)
       : false;
+  const nearbyIsoWeeks = useMemo(
+    () => (selectedIsoWeek ? getNearbyIsoWeeks(selectedIsoWeek) : []),
+    [selectedIsoWeek],
+  );
 
   useEffect(() => {
     const realCurrentIsoWeek = getIsoWeekFromDate();
@@ -170,6 +192,48 @@ function WeekPageContent() {
     };
   }, [selectedIsoWeek]);
 
+  useEffect(() => {
+    if (!selectedIsoWeek || nearbyIsoWeeks.length === 0) {
+      setWeeksWithMenu(new Set());
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadWeeksPresence() {
+      try {
+        const { getCurrentUser } = await import("@/lib/supabase/auth");
+        const { getWeeksPresenceForIsoWeeks } = await import(
+          "@/lib/supabase/weeks"
+        );
+        const currentUser = await getCurrentUser();
+        const presence = await getWeeksPresenceForIsoWeeks({
+          isoWeeks: nearbyIsoWeeks,
+          userId: currentUser?.id,
+        });
+
+        if (!isCancelled) {
+          setWeeksWithMenu(presence);
+        }
+      } catch (error: unknown) {
+        console.warn(
+          "No se pudo recuperar la presencia de menús cercanos:",
+          error instanceof Error ? error.message : error,
+        );
+
+        if (!isCancelled) {
+          setWeeksWithMenu(new Set());
+        }
+      }
+    }
+
+    void loadWeeksPresence();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [nearbyIsoWeeks, selectedIsoWeek]);
+
   const handleNavigateWeek = (offset: number) => {
     if (!selectedIsoWeek) {
       return;
@@ -254,6 +318,54 @@ function WeekPageContent() {
                 </div>
               ) : null}
             </div>
+
+            {selectedIsoWeek ? (
+              <div
+                className="grid grid-cols-5 gap-1"
+                aria-label="Semanas cercanas"
+              >
+                {nearbyIsoWeeks.map((isoWeek) => {
+                  const isSelected = isSameIsoWeek(isoWeek, selectedIsoWeek);
+                  const isCurrent =
+                    currentIsoWeek && isSameIsoWeek(isoWeek, currentIsoWeek);
+                  const hasMenu = weeksWithMenu.has(getIsoWeekKey(isoWeek));
+
+                  return (
+                    <button
+                      key={getIsoWeekKey(isoWeek)}
+                      type="button"
+                      onClick={() => setSelectedIsoWeek(isoWeek)}
+                      aria-pressed={isSelected}
+                      className={`min-h-10 rounded-[0.8rem] border px-1.5 py-1 text-center transition-colors ${
+                        isSelected
+                          ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
+                          : "border-[color:var(--color-border)] bg-white/70 text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)] hover:bg-white hover:text-[color:var(--color-foreground)]"
+                      }`}
+                    >
+                      <span className="block text-[0.74rem] font-semibold leading-none sm:text-[0.82rem]">
+                        S{isoWeek.isoWeek}
+                      </span>
+                      <span className="mt-1.5 flex h-1.5 items-center justify-center gap-1">
+                        <span
+                          aria-label={hasMenu ? "Con menú" : "Sin menú"}
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            hasMenu
+                              ? "bg-[color:var(--color-success)]"
+                              : "bg-transparent"
+                          }`}
+                        />
+                        {isCurrent ? (
+                          <span
+                            aria-label="Semana actual"
+                            className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-warning)]"
+                          />
+                        ) : null}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
 
             {weekDays ? (
               <DaySelector
