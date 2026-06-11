@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Eraser, Sparkles } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -19,6 +19,12 @@ import {
   importedMenuToWeekDays,
   type ImportedMenuResponse,
 } from "@/lib/importMenu";
+import {
+  formatIsoWeekRange,
+  getIsoWeekFromDate,
+  parseIsoWeek,
+  type IsoWeek,
+} from "@/lib/isoWeek";
 import { readPantryItems } from "@/lib/pantryStorage";
 import {
   clearShoppingListCache,
@@ -27,7 +33,11 @@ import {
 } from "@/lib/shoppingListStorage";
 import type { UserProfile } from "@/lib/supabase/profiles";
 import { pageContentClass, pageShellClass } from "@/lib/ui";
-import { saveWeekWithSupabaseSync } from "@/lib/weekStorage";
+import {
+  readSelectedIsoWeek,
+  saveSelectedIsoWeek,
+  saveWeekWithSupabaseSync,
+} from "@/lib/weekStorage";
 
 const PROFILE_STORAGE_KEY = "becook-profile";
 const freeTextPromptMaxLength = 300;
@@ -114,6 +124,9 @@ function serializeMenuGenerationContext(
 
 export default function CreateMenuPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isoYearParam = searchParams.get("isoYear");
+  const isoWeekParam = searchParams.get("isoWeek");
   const [hasMounted, setHasMounted] = useState(false);
   const [mode, setMode] = useState<CreateMenuMode>("generate");
   const [menuText, setMenuText] = useState("");
@@ -135,6 +148,7 @@ export default function CreateMenuPage() {
   const [loadingMode, setLoadingMode] = useState<CreateMenuMode | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedDayName, setSelectedDayName] = useState<DayName>("Lunes");
+  const [targetIsoWeek, setTargetIsoWeek] = useState<IsoWeek | null>(null);
   const importedWeekDays = importedMenu
     ? importedMenuToWeekDays(importedMenu.days)
     : null;
@@ -150,6 +164,16 @@ export default function CreateMenuPage() {
 
   useEffect(() => {
     setHasMounted(true);
+
+    const weekFromUrl = parseIsoWeek({
+      isoYear: isoYearParam,
+      isoWeek: isoWeekParam,
+    });
+    const weekForMenu =
+      weekFromUrl ?? readSelectedIsoWeek() ?? getIsoWeekFromDate();
+
+    setTargetIsoWeek(weekForMenu);
+    saveSelectedIsoWeek(weekForMenu);
 
     let isCancelled = false;
 
@@ -187,7 +211,7 @@ export default function CreateMenuPage() {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [isoWeekParam, isoYearParam]);
 
   const handleProcessMenu = async () => {
     setIsLoading(true);
@@ -241,7 +265,9 @@ export default function CreateMenuPage() {
     const profileForGeneration = profile ?? readSavedProfile();
     const pantryItemsForGeneration = readActivePantryItemNames();
     const menuStylesForGeneration = getMenuStylesForGeneration(menuStyles);
+    const weekForGeneration = targetIsoWeek ?? getIsoWeekFromDate();
     let currentGenerationRequestId: string | null = null;
+    let recentDishes: string[] = [];
 
     if (!profile && profileForGeneration) {
       setProfile(profileForGeneration);
@@ -254,6 +280,26 @@ export default function CreateMenuPage() {
         );
         const { getCurrentUser } = await import("@/lib/supabase/auth");
         const currentUser = await getCurrentUser();
+
+        if (currentUser?.id) {
+          try {
+            const { getRecentWeekDishNamesFromSupabase } = await import(
+              "@/lib/supabase/weeks"
+            );
+
+            recentDishes = await getRecentWeekDishNamesFromSupabase({
+              userId: currentUser.id,
+              limit: 4,
+              excludeIsoYear: weekForGeneration.isoYear,
+              excludeIsoWeek: weekForGeneration.isoWeek,
+            });
+          } catch (error: unknown) {
+            console.warn(
+              "No se pudieron recuperar platos recientes para el prompt:",
+              error instanceof Error ? error.message : error,
+            );
+          }
+        }
 
         currentGenerationRequestId = await createMenuGenerationRequest({
           profileId: profileForGeneration?.id ?? null,
@@ -284,6 +330,7 @@ export default function CreateMenuPage() {
           peopleCount,
           menuStyle: menuStylesForGeneration,
           elaborationLevel,
+          recentDishes,
           freeTextPrompt: trimmedFreeTextPrompt,
         }),
       });
@@ -365,38 +412,65 @@ export default function CreateMenuPage() {
     }
   };
 
-  const handleUseWeek = () => {
+  const handleUseWeek = async () => {
     if (!importedWeekDays) {
       return;
     }
 
-    console.log("Guardando semana importada:", importedWeekDays.length);
-    clearShoppingListCache();
+    const weekForUse = targetIsoWeek ?? getIsoWeekFromDate();
+    const weekHref = `/week?isoYear=${weekForUse.isoYear}&isoWeek=${weekForUse.isoWeek}`;
 
-    const weekIdPromise = saveWeekWithSupabaseSync(importedWeekDays, {
-      generationRequestId,
-    });
+    try {
+      const { getCurrentUser } = await import("@/lib/supabase/auth");
+      const { getWeekFromSupabaseByIsoWeek } = await import(
+        "@/lib/supabase/weeks"
+      );
+      const currentUser = await getCurrentUser();
 
-    void (async () => {
-      try {
-        const generatedItems =
-          await generateAndCacheShoppingListForWeek(importedWeekDays);
-        const weekId = await weekIdPromise;
+      if (currentUser?.id) {
+        const existingWeek = await getWeekFromSupabaseByIsoWeek({
+          isoYear: weekForUse.isoYear,
+          isoWeek: weekForUse.isoWeek,
+          userId: currentUser.id,
+        });
 
-        if (!weekId) {
-          return;
+        if (existingWeek) {
+          const shouldReplace = window.confirm(
+            "Ya hay menú para esta semana. ¿Quieres reemplazarlo?",
+          );
+
+          if (!shouldReplace) {
+            return;
+          }
         }
-
-        await syncShoppingListToSupabase(generatedItems, [], weekId);
-      } catch (error: unknown) {
-        console.warn(
-          "No se pudo generar automáticamente la lista de la compra:",
-          error instanceof Error ? error.message : error,
-        );
       }
-    })();
 
-    router.push("/week");
+      console.log("Guardando semana importada:", importedWeekDays.length);
+      saveSelectedIsoWeek(weekForUse);
+      clearShoppingListCache();
+
+      const weekIdPromise = saveWeekWithSupabaseSync(importedWeekDays, {
+        generationRequestId,
+        isoYear: weekForUse.isoYear,
+        isoWeek: weekForUse.isoWeek,
+        replaceExisting: true,
+      });
+      const generatedItems =
+        await generateAndCacheShoppingListForWeek(importedWeekDays);
+      const weekId = await weekIdPromise;
+
+      if (weekId) {
+        await syncShoppingListToSupabase(generatedItems, [], weekId);
+      }
+
+      router.push(weekHref);
+    } catch (error: unknown) {
+      console.warn(
+        "No se pudo generar automáticamente la lista de la compra:",
+        error instanceof Error ? error.message : error,
+      );
+      router.push(weekHref);
+    }
   };
 
   return (
@@ -407,6 +481,12 @@ export default function CreateMenuPage() {
           <h1 className="mt-2 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
             Prepara tu menú semanal
           </h1>
+          {targetIsoWeek ? (
+            <p className="mt-2 text-sm font-medium text-[color:var(--color-muted-foreground)]">
+              Se guardará en Semana {targetIsoWeek.isoWeek} ·{" "}
+              {formatIsoWeekRange(targetIsoWeek)}
+            </p>
+          ) : null}
         </section>
 
         <div

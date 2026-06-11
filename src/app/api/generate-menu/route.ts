@@ -64,6 +64,7 @@ type GenerateMenuBody = {
   elaborationLevel?: unknown;
   freeTextPrompt?: unknown;
   pantryItems?: unknown;
+  recentDishes?: unknown;
 };
 
 function clampPeopleCount(value: unknown) {
@@ -139,9 +140,32 @@ function sanitizePantryItems(value: unknown) {
   return Array.from(pantryItems).slice(0, 80);
 }
 
+function sanitizeRecentDishes(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const recentDishes = new Set<string>();
+
+  for (const dish of value) {
+    if (typeof dish !== "string") {
+      continue;
+    }
+
+    const normalizedDish = dish.trim().replace(/\s+/g, " ").slice(0, 100);
+
+    if (normalizedDish) {
+      recentDishes.add(normalizedDish);
+    }
+  }
+
+  return Array.from(recentDishes).slice(0, 40);
+}
+
 function buildUserPrompt({
   profile,
   pantryItems,
+  recentDishes,
   peopleCount,
   menuStyles,
   elaborationLevel,
@@ -149,6 +173,7 @@ function buildUserPrompt({
 }: {
   profile: unknown;
   pantryItems: string[];
+  recentDishes: string[];
   peopleCount: number;
   menuStyles: MenuStyleId[];
   elaborationLevel: number;
@@ -158,6 +183,10 @@ function buildUserPrompt({
     pantryItems.length > 0
       ? pantryItems.map((item) => `- ${item}`).join("\n")
       : "No hay ingredientes activos de despensa disponibles.";
+  const recentDishesContext =
+    recentDishes.length > 0
+      ? recentDishes.map((dish) => `- ${dish}`).join("\n")
+      : "No hay platos recientes disponibles.";
   const menuStyleLabels = menuStyles.map(
     (menuStyle) => menuStyleLabelsById[menuStyle],
   );
@@ -182,6 +211,9 @@ ${profile ? JSON.stringify(profile, null, 2) : "No hay perfil disponible."}
 Ingredientes activos en despensa, disponibles en casa:
 ${pantryContext}
 
+Platos recientes de las últimas semanas, para evitar repetición excesiva:
+${recentDishesContext}
+
 Instrucciones de adaptación:
 - Respeta siempre alergias, restricciones alimentarias y alimentos no deseados del perfil.
 - Ajusta el estilo del menú a los objetivos y al nivel de actividad del perfil.
@@ -191,6 +223,8 @@ Instrucciones de adaptación:
 - Si el nivel es alto, concentra preferentemente los platos más elaborados en sábado y domingo.
 - Usa ingredientes de despensa cuando encajen de forma natural en platos realistas.
 - No fuerces todos los ingredientes de despensa ni sacrifiques variedad por usarlos.
+- Evita repetir en exceso los platos recientes, pero permite repeticiones puntuales si tienen sentido.
+- No hagas el menú raro ni menos útil solo por evitar una repetición.
 - Mantén comidas y cenas normales, claras y fáciles de reconocer.
 
 Devuelve estrictamente JSON parseable con el shape:
@@ -224,6 +258,7 @@ export async function POST(request: Request) {
     const elaborationLevel = sanitizeElaborationLevel(body.elaborationLevel);
     const freeTextPrompt = sanitizeFreeText(body.freeTextPrompt);
     const pantryItems = sanitizePantryItems(body.pantryItems);
+    const recentDishes = sanitizeRecentDishes(body.recentDishes);
 
     if (!peopleCount) {
       return NextResponse.json(
@@ -254,6 +289,7 @@ export async function POST(request: Request) {
           content: buildUserPrompt({
             profile: body.profile ?? null,
             pantryItems,
+            recentDishes,
             peopleCount,
             menuStyles,
             elaborationLevel,

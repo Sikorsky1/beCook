@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import {
   DaySelector,
@@ -8,112 +10,185 @@ import {
   type DayName,
 } from "@/components/features/DaySelector";
 import { SelectedDayCard } from "@/components/features/SelectedDayCard";
-import { mockWeek, type MealKey, type WeekDay } from "@/data/mockWeek";
+import { type MealKey, type WeekDay } from "@/data/mockWeek";
+import {
+  addIsoWeeks,
+  formatIsoWeekRange,
+  getIsoWeekFromDate,
+  isSameIsoWeek,
+  parseIsoWeek,
+  type IsoWeek,
+} from "@/lib/isoWeek";
 import type { SupabaseMealSlot, SupabaseWeek } from "@/lib/supabase/weeks";
 import { pageShellClass } from "@/lib/ui";
 import {
+  clearSavedWeek,
   readSavedWeek,
+  saveSelectedIsoWeek,
   saveWeek,
   saveWeekWithSupabaseSync,
+  withWeekDates,
 } from "@/lib/weekStorage";
-
-const datesByDayName: Record<string, string> = {
-  Lunes: "31 mar",
-  Martes: "1 abr",
-  Miércoles: "2 abr",
-  Jueves: "3 abr",
-  Viernes: "4 abr",
-  Sábado: "5 abr",
-  Domingo: "6 abr",
-};
 
 function supabaseMealSlotToWeekMeal(slot: SupabaseMealSlot) {
   return slot.status === "free" ? "LIBRE" : slot.dishName;
 }
 
-function supabaseWeekToWeekDays(week: SupabaseWeek): WeekDay[] {
-  return week.days.map((day) => ({
-    day: day.dayName,
-    date: datesByDayName[day.dayName] ?? "",
-    lunch: supabaseMealSlotToWeekMeal(day.lunch),
-    dinner: supabaseMealSlotToWeekMeal(day.dinner),
-  }));
+function supabaseWeekToWeekDays(week: SupabaseWeek, isoWeek: IsoWeek): WeekDay[] {
+  return withWeekDates(
+    week.days.map((day) => ({
+      day: day.dayName,
+      date: "",
+      lunch: supabaseMealSlotToWeekMeal(day.lunch),
+      dinner: supabaseMealSlotToWeekMeal(day.dinner),
+    })),
+    isoWeek,
+  );
 }
 
-export default function WeekPage() {
-  const [weekDays, setWeekDays] = useState<WeekDay[]>(mockWeek.days);
+function buildCreateMenuHref(isoWeek: IsoWeek) {
+  return `/create-menu?isoYear=${isoWeek.isoYear}&isoWeek=${isoWeek.isoWeek}`;
+}
+
+function formatWeekTitle(isoWeek: IsoWeek) {
+  return formatIsoWeekRange(isoWeek).replace("-", " - ");
+}
+
+function WeekPageContent() {
+  const searchParams = useSearchParams();
+  const isoYearParam = searchParams.get("isoYear");
+  const isoWeekParam = searchParams.get("isoWeek");
+  const [currentIsoWeek, setCurrentIsoWeek] = useState<IsoWeek | null>(null);
+  const [selectedIsoWeek, setSelectedIsoWeek] = useState<IsoWeek | null>(null);
+  const [weekDays, setWeekDays] = useState<WeekDay[] | null>(null);
   const [selectedDayName, setSelectedDayName] = useState<DayName>("Lunes");
+  const [isLoadingWeek, setIsLoadingWeek] = useState(true);
+
   const availableDayNames = useMemo(
-    () => new Set(weekDays.map((day) => day.day)),
+    () => new Set(weekDays?.map((day) => day.day) ?? []),
     [weekDays],
   );
   const selectedDay = useMemo(
-    () => weekDays.find((day) => day.day === selectedDayName) ?? null,
+    () => weekDays?.find((day) => day.day === selectedDayName) ?? null,
     [selectedDayName, weekDays],
   );
+  const isCurrentWeek =
+    selectedIsoWeek && currentIsoWeek
+      ? isSameIsoWeek(selectedIsoWeek, currentIsoWeek)
+      : false;
 
   useEffect(() => {
-    // Cargamos la semana guardada solo después del primer render para evitar hydration mismatch.
+    const realCurrentIsoWeek = getIsoWeekFromDate();
+    setCurrentIsoWeek(realCurrentIsoWeek);
+
+    const nextIsoWeek = parseIsoWeek({
+      isoYear: isoYearParam,
+      isoWeek: isoWeekParam,
+    }) ?? realCurrentIsoWeek;
+
+    setSelectedIsoWeek((currentWeek) =>
+      currentWeek && isSameIsoWeek(nextIsoWeek, currentWeek)
+        ? currentWeek
+        : nextIsoWeek,
+    );
+  }, [isoWeekParam, isoYearParam]);
+
+  useEffect(() => {
+    if (!selectedIsoWeek) {
+      return;
+    }
+
     let isCancelled = false;
+    const weekToLoad = selectedIsoWeek;
 
-    const loadWeek = window.setTimeout(() => {
-      void loadInitialWeek();
-    }, 0);
+    async function loadSelectedWeek() {
+      setIsLoadingWeek(true);
+      saveSelectedIsoWeek(weekToLoad);
 
-    async function loadInitialWeek() {
-      const savedWeek = readSavedWeek();
-
-      if (savedWeek) {
-        setWeekDays(savedWeek);
-
-        if (!savedWeek.some((day) => day.day === "Lunes")) {
-          setSelectedDayName(getInitialSelectedDayName(savedWeek));
-        }
-
-        return;
+      const cachedWeek = readSavedWeek(weekToLoad);
+      if (cachedWeek) {
+        setWeekDays(withWeekDates(cachedWeek, weekToLoad));
+        setSelectedDayName(getInitialSelectedDayName(cachedWeek));
+      } else {
+        setWeekDays(null);
+        setSelectedDayName("Lunes");
       }
 
       try {
-        const { getLatestWeekFromSupabase } = await import(
+        const { getCurrentUser } = await import("@/lib/supabase/auth");
+        const { getWeekFromSupabaseByIsoWeek } = await import(
           "@/lib/supabase/weeks"
         );
-        const latestWeek = await getLatestWeekFromSupabase();
+        const currentUser = await getCurrentUser();
+        const remoteWeek = await getWeekFromSupabaseByIsoWeek({
+          isoYear: weekToLoad.isoYear,
+          isoWeek: weekToLoad.isoWeek,
+          userId: currentUser?.id,
+        });
 
-        if (!latestWeek || isCancelled) {
+        if (isCancelled) {
           return;
         }
 
-        const restoredWeek = supabaseWeekToWeekDays(latestWeek);
+        if (!remoteWeek) {
+          if (currentUser) {
+            clearSavedWeek(weekToLoad);
+            setWeekDays(null);
+            setSelectedDayName("Lunes");
+          }
+
+          return;
+        }
+
+        const restoredWeek = supabaseWeekToWeekDays(remoteWeek, weekToLoad);
 
         if (restoredWeek.length === 0) {
+          setWeekDays(null);
+          setSelectedDayName("Lunes");
           return;
         }
 
         setWeekDays(restoredWeek);
-        saveWeek(restoredWeek);
-
-        if (!restoredWeek.some((day) => day.day === "Lunes")) {
-          setSelectedDayName(getInitialSelectedDayName(restoredWeek));
-        }
+        saveWeek(restoredWeek, weekToLoad);
+        setSelectedDayName(getInitialSelectedDayName(restoredWeek));
       } catch (error: unknown) {
         console.warn(
-          "No se pudo recuperar la última semana desde Supabase:",
+          "No se pudo recuperar la semana calendario desde Supabase:",
           error instanceof Error ? error.message : error,
         );
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingWeek(false);
+        }
       }
     }
 
+    void loadSelectedWeek();
+
     return () => {
       isCancelled = true;
-      window.clearTimeout(loadWeek);
     };
-  }, []);
+  }, [selectedIsoWeek]);
+
+  const handleNavigateWeek = (offset: number) => {
+    if (!selectedIsoWeek) {
+      return;
+    }
+
+    setSelectedIsoWeek((currentWeek) =>
+      currentWeek ? addIsoWeeks(currentWeek, offset) : currentWeek,
+    );
+  };
 
   const handleMealChange = (
     dayName: string,
     mealKey: MealKey,
     value: string,
   ) => {
+    if (!weekDays || !selectedIsoWeek) {
+      return;
+    }
+
     const updatedWeekDays = weekDays.map((day) =>
       day.day === dayName
         ? {
@@ -124,7 +199,11 @@ export default function WeekPage() {
     );
 
     setWeekDays(updatedWeekDays);
-    saveWeekWithSupabaseSync(updatedWeekDays);
+    saveWeekWithSupabaseSync(updatedWeekDays, {
+      isoYear: selectedIsoWeek.isoYear,
+      isoWeek: selectedIsoWeek.isoWeek,
+      replaceExisting: true,
+    });
   };
 
   return (
@@ -133,33 +212,94 @@ export default function WeekPage() {
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
         <section className="sticky top-0 z-30 -mx-3 border-b border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 px-3 pb-3 pt-3 backdrop-blur sm:-mx-6 sm:px-6">
-          <div>
-            <p className="ui-eyebrow text-[0.78rem]">Plan semanal</p>
-            <div className="mt-3">
+          <div className="space-y-2.5">
+            <div>
+              <p className="ui-eyebrow text-[0.78rem]">Plan semanal</p>
+              <div className="mt-1 flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-2xl font-semibold leading-tight text-[color:var(--color-foreground)] sm:text-3xl">
+                    {selectedIsoWeek
+                      ? formatWeekTitle(selectedIsoWeek)
+                      : "Preparando calendario"}
+                  </h1>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateWeek(-1)}
+                    disabled={!selectedIsoWeek}
+                    className="min-h-8 rounded-[0.75rem] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2.5 text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-xs"
+                  >
+                    ← Anterior
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateWeek(1)}
+                    disabled={!selectedIsoWeek}
+                    className="min-h-8 rounded-[0.75rem] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2.5 text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-xs"
+                  >
+                    Siguiente →
+                  </button>
+                </div>
+              </div>
+              {selectedIsoWeek && currentIsoWeek && !isCurrentWeek ? (
+                <div className="mt-1.5 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIsoWeek(currentIsoWeek)}
+                    className="min-h-7 rounded-[0.7rem] border border-[color:var(--color-border)] bg-white px-2.5 text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] sm:text-[0.72rem]"
+                  >
+                    Volver a semana actual
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            {weekDays ? (
               <DaySelector
                 ariaLabel="Selecciona un día de la semana"
                 availableDays={availableDayNames}
                 selectedDayName={selectedDayName}
                 onSelectDay={setSelectedDayName}
               />
-            </div>
+            ) : null}
           </div>
         </section>
 
         <section>
           {selectedDay ? (
             <SelectedDayCard
-              key={selectedDay.day}
+              key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}-${selectedDay.day}`}
               day={selectedDay}
               onMealChange={handleMealChange}
             />
           ) : (
-            <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] p-6 text-sm font-medium text-[color:var(--color-muted-foreground)]">
-              No hay comidas guardadas para este día.
+            <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] p-6 text-center">
+              <p className="text-base font-semibold text-[color:var(--color-foreground)]">
+                {isLoadingWeek
+                  ? "Cargando esta semana..."
+                  : "No hay menú para esta semana"}
+              </p>
+              {!isLoadingWeek && selectedIsoWeek ? (
+                <Link
+                  href={buildCreateMenuHref(selectedIsoWeek)}
+                  className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-accent)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-card)]"
+                >
+                  Crear menú
+                </Link>
+              ) : null}
             </div>
           )}
         </section>
       </div>
     </main>
+  );
+}
+
+export default function WeekPage() {
+  return (
+    <Suspense fallback={null}>
+      <WeekPageContent />
+    </Suspense>
   );
 }
