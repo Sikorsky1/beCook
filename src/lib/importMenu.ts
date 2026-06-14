@@ -16,6 +16,24 @@ export type ImportedMenuResponse = {
   days: ImportedMenuDay[];
 };
 
+export type OpenAIMenuGenerationTelemetry = {
+  modelUsed: string;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  estimatedCostUsd: number | null;
+  responseTimeMs: number;
+};
+
+export type GeneratedMenuApiResponse = ImportedMenuResponse & {
+  openaiTelemetry?: OpenAIMenuGenerationTelemetry;
+};
+
+export type MenuGenerationApiErrorResponse = {
+  error?: string;
+  openaiTelemetry?: OpenAIMenuGenerationTelemetry;
+};
+
 const orderedDayNames: ImportedMenuDay["dayName"][] = [
   "Lunes",
   "Martes",

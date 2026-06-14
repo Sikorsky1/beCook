@@ -7,10 +7,9 @@ import {
   isGeneratedShoppingListResponse,
   type GeneratedShoppingListResponse,
 } from "@/lib/shoppingList";
+import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
 
 export const runtime = "nodejs";
-
-const model = "gpt-5.2";
 
 const systemPrompt = `
 Eres un asistente que genera listas de la compra semanales en español.
@@ -88,9 +87,10 @@ export async function POST(request: Request) {
     }
 
     const openai = new OpenAI({ apiKey });
+    logOpenAIModelUsage("generate-shopping-list");
 
     const response = await openai.responses.create({
-      model,
+      model: OPENAI_MODEL,
       instructions: systemPrompt,
       input: `Genera una lista de la compra semanal a partir de esta semana estructurada:\n\n${JSON.stringify(week, null, 2)}`,
       text: {

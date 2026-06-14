@@ -17,7 +17,9 @@ import { StateMessage } from "@/components/ui/StateMessage";
 import { TextArea } from "@/components/ui/TextArea";
 import {
   importedMenuToWeekDays,
+  type GeneratedMenuApiResponse,
   type ImportedMenuResponse,
+  type MenuGenerationApiErrorResponse,
 } from "@/lib/importMenu";
 import {
   formatIsoWeekRange,
@@ -364,8 +366,8 @@ export default function CreateMenuPage() {
       });
 
       const data = (await response.json()) as
-        | ImportedMenuResponse
-        | { error?: string };
+        | GeneratedMenuApiResponse
+        | MenuGenerationApiErrorResponse;
 
       if (!response.ok) {
         setImportedMenu(null);
@@ -377,7 +379,10 @@ export default function CreateMenuPage() {
               "@/lib/supabase/menu-generation-requests"
             );
 
-            await markMenuGenerationRequestFailed(currentGenerationRequestId);
+            await markMenuGenerationRequestFailed(
+              currentGenerationRequestId,
+              data.openaiTelemetry,
+            );
           } catch (error: unknown) {
             console.warn(
               "No se pudo marcar la petición de generación como fallida:",
@@ -393,7 +398,7 @@ export default function CreateMenuPage() {
         return;
       }
 
-      const generatedMenu = data as ImportedMenuResponse;
+      const generatedMenu = data as GeneratedMenuApiResponse;
       const generatedWeekDays = importedMenuToWeekDays(generatedMenu.days);
 
       if (currentGenerationRequestId) {
@@ -402,7 +407,10 @@ export default function CreateMenuPage() {
             "@/lib/supabase/menu-generation-requests"
           );
 
-          await markMenuGenerationRequestGenerated(currentGenerationRequestId);
+          await markMenuGenerationRequestGenerated(
+            currentGenerationRequestId,
+            generatedMenu.openaiTelemetry,
+          );
           setGenerationRequestId(currentGenerationRequestId);
         } catch (error: unknown) {
           console.warn(

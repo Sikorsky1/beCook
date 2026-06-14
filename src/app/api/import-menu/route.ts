@@ -7,6 +7,7 @@ import {
   isImportedMenuResponse,
   type ImportedMenuResponse,
 } from "@/lib/importMenu";
+import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
 
 export const runtime = "nodejs";
 
@@ -51,9 +52,10 @@ export async function POST(request: Request) {
     }
 
     const openai = new OpenAI({ apiKey });
+    logOpenAIModelUsage("import-menu");
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
+      model: OPENAI_MODEL,
       response_format: {
         type: "json_schema",
         json_schema: {

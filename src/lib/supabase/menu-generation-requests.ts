@@ -1,5 +1,7 @@
 import { supabase } from "./client";
 
+import type { OpenAIMenuGenerationTelemetry } from "@/lib/importMenu";
+
 export type MenuGenerationRequestStatus =
   | "generating"
   | "generated"
@@ -71,6 +73,12 @@ async function updateMenuGenerationRequest(
   values: {
     status: MenuGenerationRequestStatus;
     created_week_id?: string;
+    model_used?: string;
+    prompt_tokens?: number | null;
+    completion_tokens?: number | null;
+    total_tokens?: number | null;
+    estimated_cost_usd?: number | null;
+    response_time_ms?: number;
   },
 ) {
   const client = ensureSupabaseClient();
@@ -86,12 +94,42 @@ async function updateMenuGenerationRequest(
   }
 }
 
-export function markMenuGenerationRequestGenerated(id: string) {
-  return updateMenuGenerationRequest(id, { status: "generated" });
+export function markMenuGenerationRequestGenerated(
+  id: string,
+  telemetry?: OpenAIMenuGenerationTelemetry,
+) {
+  return updateMenuGenerationRequest(id, {
+    status: "generated",
+    ...(telemetry
+      ? {
+          model_used: telemetry.modelUsed,
+          prompt_tokens: telemetry.promptTokens,
+          completion_tokens: telemetry.completionTokens,
+          total_tokens: telemetry.totalTokens,
+          estimated_cost_usd: telemetry.estimatedCostUsd,
+          response_time_ms: telemetry.responseTimeMs,
+        }
+      : {}),
+  });
 }
 
-export function markMenuGenerationRequestFailed(id: string) {
-  return updateMenuGenerationRequest(id, { status: "failed" });
+export function markMenuGenerationRequestFailed(
+  id: string,
+  telemetry?: OpenAIMenuGenerationTelemetry,
+) {
+  return updateMenuGenerationRequest(id, {
+    status: "failed",
+    ...(telemetry
+      ? {
+          model_used: telemetry.modelUsed,
+          prompt_tokens: telemetry.promptTokens,
+          completion_tokens: telemetry.completionTokens,
+          total_tokens: telemetry.totalTokens,
+          estimated_cost_usd: telemetry.estimatedCostUsd,
+          response_time_ms: telemetry.responseTimeMs,
+        }
+      : {}),
+  });
 }
 
 export function markMenuGenerationRequestApplied(id: string, weekId: string) {

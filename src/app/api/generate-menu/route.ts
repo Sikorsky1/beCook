@@ -2,10 +2,14 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
 import {
+  type GeneratedMenuApiResponse,
   importedMenuSchema,
   isImportedMenuResponse,
+  type OpenAIMenuGenerationTelemetry,
   type ImportedMenuResponse,
 } from "@/lib/importMenu";
+import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
+import { estimateOpenAICostUsd } from "@/lib/openai/cost";
 
 export const runtime = "nodejs";
 
@@ -241,6 +245,31 @@ Devuelve estrictamente JSON parseable con el shape:
 `.trim();
 }
 
+function buildOpenAITelemetry({
+  promptTokens,
+  completionTokens,
+  totalTokens,
+  responseTimeMs,
+}: {
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  responseTimeMs: number;
+}): OpenAIMenuGenerationTelemetry {
+  return {
+    modelUsed: OPENAI_MODEL,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    estimatedCostUsd: estimateOpenAICostUsd({
+      model: OPENAI_MODEL,
+      promptTokens,
+      completionTokens,
+    }),
+    responseTimeMs,
+  };
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -268,9 +297,11 @@ export async function POST(request: Request) {
     }
 
     const openai = new OpenAI({ apiKey });
+    logOpenAIModelUsage("generate-menu");
 
+    const openAIRequestStartedAt = Date.now();
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
+      model: OPENAI_MODEL,
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -298,12 +329,22 @@ export async function POST(request: Request) {
         },
       ],
     });
+    const responseTimeMs = Date.now() - openAIRequestStartedAt;
+    const openaiTelemetry = buildOpenAITelemetry({
+      promptTokens: completion.usage?.prompt_tokens ?? null,
+      completionTokens: completion.usage?.completion_tokens ?? null,
+      totalTokens: completion.usage?.total_tokens ?? null,
+      responseTimeMs,
+    });
 
     const content = completion.choices[0]?.message?.content;
 
     if (!content) {
       return NextResponse.json(
-        { error: "OpenAI no devolvió contenido para crear el menú." },
+        {
+          error: "OpenAI no devolvió contenido para crear el menú.",
+          openaiTelemetry,
+        },
         { status: 500 },
       );
     }
@@ -314,14 +355,21 @@ export async function POST(request: Request) {
       console.error("Respuesta de menú generado inesperada:", parsedJson);
 
       return NextResponse.json(
-        { error: "La respuesta del modelo no tiene el formato esperado." },
+        {
+          error: "La respuesta del modelo no tiene el formato esperado.",
+          openaiTelemetry,
+        },
         { status: 500 },
       );
     }
 
     const generatedMenu = parsedJson as ImportedMenuResponse;
+    const response: GeneratedMenuApiResponse = {
+      ...generatedMenu,
+      openaiTelemetry,
+    };
 
-    return NextResponse.json(generatedMenu);
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Error al generar menú:", error);
 
