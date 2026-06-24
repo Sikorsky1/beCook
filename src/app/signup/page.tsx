@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
 
-import { PrimaryButton } from "@/components/ui/Button";
+import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { TextInput } from "@/components/ui/TextInput";
 import { getCurrentUser, signUp } from "@/lib/supabase/auth";
@@ -132,13 +132,13 @@ export default function SignupPage() {
             </label>
 
             {errorMessage ? (
-              <p className="rounded-[1rem] border border-[color:var(--color-danger-soft)] bg-[color:var(--color-danger-soft)] px-3 py-2 text-sm font-semibold text-[color:var(--color-danger)]">
+              <p className="rounded-[var(--radius-control)] border border-[color:var(--color-danger-soft)] bg-[color:var(--color-danger-soft)] px-3 py-2 text-sm font-semibold text-[color:var(--color-danger)]">
                 {errorMessage}
               </p>
             ) : null}
 
             {message ? (
-              <p className="rounded-[1rem] border border-[color:var(--color-secondary-soft)] bg-[color:var(--color-secondary-soft)] px-3 py-2 text-sm font-semibold text-[color:var(--color-secondary-hover)]">
+              <p className="rounded-[var(--radius-control)] border border-[color:var(--color-secondary-soft)] bg-[color:var(--color-secondary-soft)] px-3 py-2 text-sm font-semibold text-[color:var(--color-secondary-hover)]">
                 {message}
               </p>
             ) : null}
@@ -152,13 +152,12 @@ export default function SignupPage() {
                 <UserPlus aria-hidden="true" className="h-4 w-4" />
                 Crear cuenta
               </PrimaryButton>
-              <Link
-                href="/login"
-                className="inline-flex min-h-12 touch-manipulation items-center justify-center gap-2 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-5 text-sm font-semibold text-[color:var(--color-foreground)] shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-200 ease-out hover:-translate-y-0.5 hover:bg-[color:var(--color-surface-muted)] hover:shadow-[0_12px_28px_rgba(217,184,121,0.14)] active:translate-y-0 active:scale-[0.98] motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100"
-              >
-                <LogIn aria-hidden="true" className="h-4 w-4" />
-                Ya tengo cuenta
-              </Link>
+              <TertiaryButton asChild>
+                <Link href="/login">
+                  <LogIn aria-hidden="true" className="h-4 w-4" />
+                  Ya tengo cuenta
+                </Link>
+              </TertiaryButton>
             </div>
           </form>
         </Card>

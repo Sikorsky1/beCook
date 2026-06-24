@@ -353,6 +353,7 @@ export default function ShoppingListPage() {
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
         <StickyPageHeader
           title="LISTA DE LA COMPRA"
+          heading="Tu lista de la compra"
           action={
             hasLoadedWeek && weekDays && weekDays.length > 0 ? (
               <ShoppingProgress

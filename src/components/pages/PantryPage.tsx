@@ -473,6 +473,7 @@ export default function PantryPage() {
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
         <StickyPageHeader
           title="DESPENSA"
+          heading="Tu despensa"
           action={
             hasLoadedPantry ? (
               <PantryProgress

@@ -7,7 +7,7 @@ const mealLabels = [
 
 export function ImportedDayPreview({ day }: { day: WeekDay }) {
   return (
-    <article className="rounded-[1.5rem] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-3.5 shadow-[0_18px_45px_rgba(32,28,23,0.07)] transition-[box-shadow,border-color,transform] duration-200 ease-out motion-reduce:transition-none sm:p-5">
+    <article className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-3.5 shadow-[0_18px_45px_rgba(32,28,23,0.07)] transition-[box-shadow,border-color,transform] duration-200 ease-out motion-reduce:transition-none sm:p-5">
       <div className="border-b border-[color:var(--color-border)] pb-2.5">
         <h2 className="text-2xl font-semibold leading-none text-[color:var(--color-foreground)] sm:text-3xl">
           {day.day}
@@ -22,7 +22,7 @@ export function ImportedDayPreview({ day }: { day: WeekDay }) {
           return (
             <section
               key={meal.key}
-              className="min-h-[126px] rounded-2xl border border-[color:var(--color-border)] bg-white p-3"
+              className="min-h-[126px] rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-3"
             >
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-[color:var(--color-muted-foreground)]">
@@ -35,7 +35,7 @@ export function ImportedDayPreview({ day }: { day: WeekDay }) {
                 ) : null}
               </div>
 
-              <div className="mt-2.5 flex min-h-[64px] w-full items-start rounded-xl bg-[color:var(--color-surface-muted)] px-3 py-2.5 transition-colors duration-200 ease-out motion-reduce:transition-none">
+              <div className="mt-2.5 flex min-h-[64px] w-full items-start rounded-[var(--radius-input)] bg-[color:var(--color-surface-muted)] px-3 py-2.5 transition-colors duration-200 ease-out motion-reduce:transition-none">
                 <p
                   className={
                     isFree
