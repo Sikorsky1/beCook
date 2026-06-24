@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, Eraser, Sparkles } from "lucide-react";
+import { Check, Eraser, LoaderCircle, Sparkles } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   DaySelector,
@@ -45,6 +45,7 @@ const PROFILE_STORAGE_KEY = "becook-profile";
 const freeTextPromptMaxLength = 300;
 
 type CreateMenuMode = "import" | "generate";
+type UseWeekStatus = "idle" | "applying" | "success" | "error";
 
 const menuStyleOptions = [
   { id: "healthy_balanced", label: "Saludable y equilibrado" },
@@ -60,6 +61,7 @@ type MenuStyle = (typeof menuStyleOptions)[number]["id"];
 const defaultMenuStyles: MenuStyle[] = ["healthy_balanced"];
 const defaultElaborationLevel = 4;
 const elaborationLevels = [1, 2, 3, 4, 5, 6, 7] as const;
+const useWeekSuccessDelayMs = 900;
 
 function isProfile(value: unknown): value is UserProfile {
   if (!value || typeof value !== "object") {
@@ -161,6 +163,10 @@ export default function CreateMenuPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMode, setLoadingMode] = useState<CreateMenuMode | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [useWeekStatus, setUseWeekStatus] = useState<UseWeekStatus>("idle");
+  const [useWeekMessage, setUseWeekMessage] = useState("");
+  const isApplyingWeekRef = useRef(false);
+  const navigationTimeoutRef = useRef<number | null>(null);
   const [selectedDayName, setSelectedDayName] = useState<DayName>("Lunes");
   const [targetIsoWeek, setTargetIsoWeek] = useState<IsoWeek | null>(null);
   const importedWeekDays = importedMenu
@@ -243,10 +249,21 @@ export default function CreateMenuPage() {
     startDateParam,
   ]);
 
+  useEffect(
+    () => () => {
+      if (navigationTimeoutRef.current !== null) {
+        window.clearTimeout(navigationTimeoutRef.current);
+      }
+    },
+    [],
+  );
+
   const handleProcessMenu = async () => {
     setIsLoading(true);
     setLoadingMode("import");
     setErrorMessage("");
+    setUseWeekStatus("idle");
+    setUseWeekMessage("");
     setGenerationRequestId(null);
 
     try {
@@ -289,6 +306,8 @@ export default function CreateMenuPage() {
     setIsLoading(true);
     setLoadingMode("generate");
     setErrorMessage("");
+    setUseWeekStatus("idle");
+    setUseWeekMessage("");
     setGenerationRequestId(null);
 
     const trimmedFreeTextPrompt = freeTextPrompt.trim();
@@ -449,9 +468,18 @@ export default function CreateMenuPage() {
   };
 
   const handleUseWeek = async () => {
-    if (!importedWeekDays) {
+    if (
+      !importedWeekDays ||
+      isApplyingWeekRef.current ||
+      useWeekStatus === "applying" ||
+      useWeekStatus === "success"
+    ) {
       return;
     }
+
+    isApplyingWeekRef.current = true;
+    setUseWeekStatus("applying");
+    setUseWeekMessage("");
 
     const weekForUse = targetIsoWeek ?? getIsoWeekFromDate();
     const weekHref = `/week?isoYear=${weekForUse.isoYear}&isoWeek=${weekForUse.isoWeek}`;
@@ -476,6 +504,8 @@ export default function CreateMenuPage() {
           );
 
           if (!shouldReplace) {
+            isApplyingWeekRef.current = false;
+            setUseWeekStatus("idle");
             return;
           }
         }
@@ -491,21 +521,48 @@ export default function CreateMenuPage() {
         isoWeek: weekForUse.isoWeek,
         replaceExisting: true,
       });
-      const generatedItems =
-        await generateAndCacheShoppingListForWeek(importedWeekDays);
-      const weekId = await weekIdPromise;
+      let generatedItems:
+        | Awaited<ReturnType<typeof generateAndCacheShoppingListForWeek>>
+        | null = null;
 
-      if (weekId) {
-        await syncShoppingListToSupabase(generatedItems, [], weekId);
+      try {
+        generatedItems =
+          await generateAndCacheShoppingListForWeek(importedWeekDays);
+      } catch (error: unknown) {
+        console.warn(
+          "No se pudo generar automáticamente la lista de la compra:",
+          error instanceof Error ? error.message : error,
+        );
       }
 
-      router.push(weekHref);
+      const weekId = await weekIdPromise;
+
+      if (weekId && generatedItems) {
+        try {
+          await syncShoppingListToSupabase(generatedItems, [], weekId);
+        } catch (error: unknown) {
+          console.warn(
+            "No se pudo sincronizar automáticamente la lista de la compra:",
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
+
+      setUseWeekStatus("success");
+      setUseWeekMessage("Tu semana se ha actualizado correctamente.");
+      navigationTimeoutRef.current = window.setTimeout(() => {
+        router.push(weekHref);
+      }, useWeekSuccessDelayMs);
     } catch (error: unknown) {
       console.warn(
-        "No se pudo generar automáticamente la lista de la compra:",
+        "No se pudo aplicar el menú semanal:",
         error instanceof Error ? error.message : error,
       );
-      router.push(weekHref);
+      isApplyingWeekRef.current = false;
+      setUseWeekStatus("error");
+      setUseWeekMessage(
+        "No hemos podido aplicar el menú. Inténtalo de nuevo.",
+      );
     }
   };
 
@@ -797,9 +854,52 @@ export default function CreateMenuPage() {
                 selectedDayName={selectedDayName}
                 onSelectDay={setSelectedDayName}
               />
-              <TertiaryButton onClick={handleUseWeek} className="px-7">
-                Usar esta semana
-              </TertiaryButton>
+              <div className="w-full sm:w-auto">
+                <TertiaryButton
+                  onClick={handleUseWeek}
+                  disabled={
+                    useWeekStatus === "applying" ||
+                    useWeekStatus === "success"
+                  }
+                  className={`w-full px-7 sm:w-auto ${
+                    useWeekStatus === "applying"
+                      ? "cursor-wait"
+                      : useWeekStatus === "success"
+                        ? "border-[color:var(--color-success)] bg-[color:var(--color-success-soft)] text-[color:var(--color-success-hover)] disabled:opacity-100 disabled:grayscale-0"
+                        : ""
+                  }`}
+                >
+                  {useWeekStatus === "applying" ? (
+                    <>
+                      <LoaderCircle
+                        aria-hidden="true"
+                        className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                      />
+                      Aplicando menú...
+                    </>
+                  ) : useWeekStatus === "success" ? (
+                    <>
+                      <Check aria-hidden="true" className="h-4 w-4" />
+                      Menú aplicado
+                    </>
+                  ) : (
+                    "Usar este menú"
+                  )}
+                </TertiaryButton>
+                {useWeekMessage ? (
+                  <p
+                    className={`mt-2 text-center text-xs font-semibold sm:text-left ${
+                      useWeekStatus === "error"
+                        ? "text-[color:var(--color-danger)]"
+                        : "text-[color:var(--color-success-hover)]"
+                    }`}
+                    role={useWeekStatus === "error" ? "alert" : "status"}
+                    aria-live="polite"
+                  >
+                    {useWeekMessage}
+                  </p>
+                ) : null}
+              </div>
             </div>
 
             <ImportedDayPreview day={selectedDay} />
