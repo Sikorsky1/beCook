@@ -33,6 +33,8 @@
   --ring: var(--focus-ring);
   --radius-card: 1.5rem;
   --radius-control: 1rem;
+  --radius-input: 0.875rem;
+  --radius-chip: 999px;
   --shadow-card: 0 10px 30px rgba(46, 42, 38, 0.055);
   --focus-ring: color-mix(in srgb, var(--accent) 48%, white);
 }

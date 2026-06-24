@@ -2,12 +2,14 @@ import type { ReactNode } from "react";
 
 type StickyPageHeaderProps = {
   title: string;
+  heading?: string;
   action?: ReactNode;
   children?: ReactNode;
 };
 
 export function StickyPageHeader({
   title,
+  heading,
   action,
   children,
 }: StickyPageHeaderProps) {
@@ -18,6 +20,12 @@ export function StickyPageHeader({
           <p className="ui-eyebrow min-w-0 text-[0.78rem]">{title}</p>
           {action}
         </div>
+
+        {heading ? (
+          <h1 className="mt-1 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
+            {heading}
+          </h1>
+        ) : null}
 
         {children ? <div className="mt-2.5">{children}</div> : null}
       </div>

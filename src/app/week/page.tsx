@@ -292,7 +292,7 @@ function WeekPageContent() {
                     type="button"
                     onClick={() => handleNavigateWeek(-1)}
                     disabled={!selectedIsoWeek}
-                    className="min-h-8 rounded-[0.75rem] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2.5 text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-xs"
+                    className="min-h-8 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2.5 text-xs font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
                   >
                     ← Anterior
                   </button>
@@ -300,7 +300,7 @@ function WeekPageContent() {
                     type="button"
                     onClick={() => handleNavigateWeek(1)}
                     disabled={!selectedIsoWeek}
-                    className="min-h-8 rounded-[0.75rem] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2.5 text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-xs"
+                    className="min-h-8 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2.5 text-xs font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
                   >
                     Siguiente →
                   </button>
@@ -311,7 +311,7 @@ function WeekPageContent() {
                   <button
                     type="button"
                     onClick={() => setSelectedIsoWeek(currentIsoWeek)}
-                    className="min-h-7 rounded-[0.7rem] border border-[color:var(--color-border)] bg-white px-2.5 text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] sm:text-[0.72rem]"
+                    className="min-h-7 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2.5 text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] sm:text-[0.72rem]"
                   >
                     Volver a semana actual
                   </button>
@@ -336,10 +336,10 @@ function WeekPageContent() {
                       type="button"
                       onClick={() => setSelectedIsoWeek(isoWeek)}
                       aria-pressed={isSelected}
-                      className={`min-h-10 rounded-[0.8rem] border px-1.5 py-1 text-center transition-colors ${
+                      className={`min-h-10 rounded-[var(--radius-input)] border px-1.5 py-1 text-center transition-colors ${
                         isSelected
                           ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
-                          : "border-[color:var(--color-border)] bg-white/70 text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)] hover:bg-white hover:text-[color:var(--color-foreground)]"
+                          : "border-[color:var(--color-border)] bg-[color:var(--color-surface)]/70 text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-surface)] hover:text-[color:var(--color-foreground)]"
                       }`}
                     >
                       <span className="block text-[0.74rem] font-semibold leading-none sm:text-[0.82rem]">

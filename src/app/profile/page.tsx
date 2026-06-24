@@ -250,7 +250,7 @@ function SectionTitle({ title }: { title: string }) {
 }
 
 const compactInputClass =
-  "w-full rounded-[0.85rem] border border-[color:var(--color-border)] bg-white px-3 py-2.5 text-[0.78rem] font-medium text-[color:var(--color-foreground)] outline-none transition-colors placeholder:text-[color:var(--color-muted-foreground)] focus:border-[color:var(--color-accent)] focus:bg-[color:var(--color-surface)]";
+  "w-full rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5 text-[0.78rem] font-medium text-[color:var(--color-foreground)] outline-none transition-colors placeholder:text-[color:var(--color-muted-foreground)] focus:border-[color:var(--color-accent)]";
 
 const chipBaseClass =
   "inline-flex min-h-8 cursor-pointer items-center justify-center rounded-full border px-2.5 py-1.5 text-center text-[0.78rem] font-semibold leading-tight transition-colors";
@@ -263,7 +263,7 @@ function InlineSexControl({
   onChange: (value: Sex) => void;
 }) {
   return (
-    <div className="inline-flex min-h-10 w-fit flex-wrap items-center gap-x-3 gap-y-2 rounded-[1rem] border border-[color:var(--color-border)] bg-white px-3 py-2">
+    <div className="inline-flex min-h-10 w-fit flex-wrap items-center gap-x-3 gap-y-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2">
       <FieldLabel>Sexo:</FieldLabel>
       {sexOptions.map((option) => (
         <label
@@ -294,7 +294,7 @@ function TrainingDaysStepper({
   const normalizedValue = toWeeklyTrainingDays(value);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border border-[color:var(--color-border)] bg-white px-3 py-2.5">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
       <FieldLabel>Días que entrenas a la semana</FieldLabel>
       <div className="inline-flex items-center gap-2 rounded-full bg-[color:var(--color-surface-muted)] p-1">
         <button
@@ -302,7 +302,7 @@ function TrainingDaysStepper({
           disabled={normalizedValue === 0}
           onClick={() => onChange(toWeeklyTrainingDays(normalizedValue - 1))}
           aria-label="Reducir días de entrenamiento"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
         >
           -
         </button>
@@ -314,7 +314,7 @@ function TrainingDaysStepper({
           disabled={normalizedValue === 7}
           onClick={() => onChange(toWeeklyTrainingDays(normalizedValue + 1))}
           aria-label="Aumentar días de entrenamiento"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
         >
           +
         </button>
@@ -333,7 +333,7 @@ function HouseholdSizeStepper({
   const normalizedValue = Math.min(Math.max(value, 1), 6);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border border-[color:var(--color-border)] bg-white px-3 py-2.5">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
       <FieldLabel>¿Para cuántas personas?</FieldLabel>
       <div className="inline-flex items-center gap-2 rounded-full bg-[color:var(--color-surface-muted)] p-1">
         <button
@@ -341,7 +341,7 @@ function HouseholdSizeStepper({
           disabled={normalizedValue === 1}
           onClick={() => onChange(normalizedValue - 1)}
           aria-label="Reducir personas del menú semanal"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
         >
           -
         </button>
@@ -353,7 +353,7 @@ function HouseholdSizeStepper({
           disabled={normalizedValue === 6}
           onClick={() => onChange(normalizedValue + 1)}
           aria-label="Aumentar personas del menú semanal"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
         >
           +
         </button>
@@ -382,7 +382,7 @@ function ChipCheckboxGroup<T extends string>({
             className={`${chipBaseClass} ${
               isChecked
                 ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-foreground)]"
-                : "border-[color:var(--color-border)] bg-white text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
+                : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
             }`}
           >
             <input
@@ -633,7 +633,7 @@ export default function ProfilePage() {
           ) : (
             <Link
               href="/login"
-              className="inline-flex min-h-10 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-white px-4 text-xs font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
+              className="inline-flex min-h-10 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-xs font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
             >
               Entrar o crear cuenta
             </Link>
@@ -649,7 +649,7 @@ export default function ProfilePage() {
                 onChange={(sex) => updateProfile({ sex })}
               />
 
-              <label className="flex flex-col gap-2 rounded-[1rem] border border-[color:var(--color-border)] bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex flex-col gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                 <FieldLabel>Fecha de nacimiento</FieldLabel>
                 <input
                   type="date"
@@ -776,7 +776,7 @@ export default function ProfilePage() {
                     })
                   }
                 />
-                <span className="block whitespace-nowrap text-[0.58rem] leading-none text-[color:var(--color-muted-foreground)]">
+                <span className="block whitespace-nowrap text-[0.72rem] leading-none text-[color:var(--color-muted-foreground)]">
                   Esta información se utiliza para calcular las cantidades de las recetas.
                 </span>
               </div>
@@ -856,7 +856,7 @@ export default function ProfilePage() {
                 ) : saveStatus === "saving" ? (
                   "Guardando perfil"
                 ) : saveStatus === "error" ? (
-                  "Guardado localmente; revisa la consola para Supabase"
+                  "No se pudo sincronizar. Tus datos están guardados en este dispositivo."
                 ) : hasLoadedProfile ? (
                   ""
                 ) : (

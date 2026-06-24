@@ -28,7 +28,7 @@ export function StateMessage({
   return (
     <article
       className={[
-        "rounded-2xl border px-4 py-3 text-sm leading-6 shadow-[0_10px_24px_rgba(32,28,23,0.035)] transition-[background-color,border-color,color,box-shadow,opacity] duration-200 ease-out motion-reduce:transition-none",
+        "rounded-[var(--radius-control)] border px-4 py-3 text-sm leading-6 shadow-[0_10px_24px_rgba(32,28,23,0.035)] transition-[background-color,border-color,color,box-shadow,opacity] duration-200 ease-out motion-reduce:transition-none",
         stateClasses[variant],
         className,
       ].join(" ")}

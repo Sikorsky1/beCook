@@ -37,7 +37,7 @@ export function DaySelector({
 }: DaySelectorProps) {
   return (
     <div
-      className="grid w-full max-w-[23rem] grid-cols-7 gap-1.5 sm:gap-2"
+      className="grid w-full grid-cols-7 gap-1.5 sm:gap-2"
       role="tablist"
       aria-label={ariaLabel}
     >
