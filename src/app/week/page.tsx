@@ -9,6 +9,7 @@ import {
   getInitialSelectedDayName,
   type DayName,
 } from "@/components/features/DaySelector";
+import { RecipeDetailPanel } from "@/components/features/RecipeDetailPanel";
 import { SelectedDayCard } from "@/components/features/SelectedDayCard";
 import { type MealKey, type WeekDay } from "@/data/mockWeek";
 import {
@@ -81,6 +82,7 @@ function WeekPageContent() {
   const [weeksWithMenu, setWeeksWithMenu] = useState<Set<string>>(
     () => new Set(),
   );
+  const [openRecipe, setOpenRecipe] = useState<string | null>(null);
 
   const availableDayNames = useMemo(
     () => new Set(weekDays?.map((day) => day.day) ?? []),
@@ -384,6 +386,7 @@ function WeekPageContent() {
               key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}-${selectedDay.day}`}
               day={selectedDay}
               onMealChange={handleMealChange}
+              onOpenRecipe={setOpenRecipe}
             />
           ) : (
             <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] p-6 text-center">
@@ -404,6 +407,11 @@ function WeekPageContent() {
           )}
         </section>
       </div>
+
+      <RecipeDetailPanel
+        recipeName={openRecipe}
+        onClose={() => setOpenRecipe(null)}
+      />
     </main>
   );
 }
