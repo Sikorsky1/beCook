@@ -1,0 +1,42 @@
+{
+  "projectId": "34c4afeb-e158-494b-9e33-7d7d1481070f",
+  "shape": "package",
+  "pkg": "becook",
+  "globalName": "BeCookUI",
+  "tsconfig": "./tsconfig.json",
+  "cssEntry": "./ds-css/styles.css",
+  "readmeHeader": ".design-sync/conventions.md",
+  "buildCmd": "node .design-sync/build-css.mjs",
+  "overrides": {
+    "StickyPageHeader": { "cardMode": "column" }
+  },
+  "componentSrcMap": {
+    "Button": "src/components/ui/Button.tsx",
+    "Card": "src/components/ui/Card.tsx",
+    "CategoryPill": "src/components/ui/CategoryPill.tsx",
+    "CheckboxItem": "src/components/ui/CheckboxItem.tsx",
+    "IconButton": "src/components/ui/IconButton.tsx",
+    "StateMessage": "src/components/ui/StateMessage.tsx",
+    "StatusPill": "src/components/ui/StatusPill.tsx",
+    "TextArea": "src/components/ui/TextArea.tsx",
+    "TextInput": "src/components/ui/TextInput.tsx",
+    "SectionHeader": "src/components/layout/SectionHeader.tsx",
+    "StickyPageHeader": "src/components/layout/StickyPageHeader.tsx",
+    "BottomNavigation": null,
+    "ShoppingTabs": null,
+    "DayCard": null,
+    "SelectedDayCard": null,
+    "ImportedDayPreview": null,
+    "DaySelector": null,
+    "CreateMenuPage": null,
+    "PantryPage": null,
+    "ShoppingListPage": null,
+    "Badge": null,
+    "Checkbox": null,
+    "Textarea": null,
+    "PrimaryButton": null,
+    "SecondaryButton": null,
+    "TertiaryButton": null,
+    "GhostButton": null
+  }
+}

@@ -47,3 +47,11 @@ node_modules
 dist
 build
 coverage
+
+# design-sync (generated artifacts — durable files in .design-sync/ are committed)
+.ds-sync/
+ds-bundle/
+ds-css/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
