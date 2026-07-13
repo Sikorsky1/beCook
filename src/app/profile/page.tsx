@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
-import { PrimaryButton } from "@/components/ui/Button";
+import { Button, PrimaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import type {
   Allergy,
@@ -235,7 +235,7 @@ function toWeeklyTrainingDays(value: number): WeeklyTrainingDays {
 
 function FieldLabel({ children }: { children: string }) {
   return (
-    <span className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+    <span className="t-body-strong text-[color:var(--color-foreground)]">
       {children}
     </span>
   );
@@ -243,9 +243,7 @@ function FieldLabel({ children }: { children: string }) {
 
 function SectionTitle({ title }: { title: string }) {
   return (
-    <h2 className="text-[1.05rem] font-semibold text-[color:var(--color-foreground)] sm:text-lg">
-      {title}
-    </h2>
+    <h2 className="t-h2 text-[color:var(--color-foreground)]">{title}</h2>
   );
 }
 
@@ -603,41 +601,32 @@ export default function ProfilePage() {
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
         <section className="sticky top-0 z-30 -mx-3 border-b border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 px-3 pb-3 pt-3 backdrop-blur sm:-mx-6 sm:px-6">
           <div>
-            <p className="ui-eyebrow text-[0.78rem]">Perfil</p>
-            <h1 className="mt-2 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
+            <p className="t-eyebrow">Perfil</p>
+            <h1 className="t-h1 mt-2 text-[color:var(--color-foreground)]">
               Tu base nutricional
             </h1>
           </div>
         </section>
 
-        <Card className="flex flex-col gap-3 p-3.5 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-          <div>
-            <p className="text-[0.78rem] font-semibold text-[color:var(--color-muted-foreground)]">
-              Cuenta
-            </p>
-            <p className="mt-1 text-sm font-semibold text-[color:var(--color-foreground)]">
+        <Card className="flex items-center gap-3 p-3.5 sm:p-4">
+          <span
+            aria-hidden="true"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-soft)] text-lg font-semibold text-[color:var(--color-accent)]"
+          >
+            {(userEmail?.[0] ?? "B").toUpperCase()}
+          </span>
+          <div className="min-w-0">
+            <p className="t-body-strong truncate text-[color:var(--color-foreground)]">
               {userEmail ?? "Modo local"}
             </p>
+            <p className="t-meta mt-0.5">
+              {goalOptions.find(
+                (option) => option.value === (profile.goals[0] ?? profile.goal),
+              )?.label ?? "Sin objetivo"}{" "}
+              · {profile.householdSize}{" "}
+              {profile.householdSize === 1 ? "persona" : "personas"}
+            </p>
           </div>
-
-          {userEmail ? (
-            <PrimaryButton
-              type="button"
-              onClick={() => void handleSignOut()}
-              disabled={isSigningOut}
-              className="min-h-10 rounded-full px-4 text-xs sm:w-auto"
-            >
-              <LogOut aria-hidden="true" className="h-4 w-4" />
-              Cerrar sesión
-            </PrimaryButton>
-          ) : (
-            <Link
-              href="/login"
-              className="inline-flex min-h-10 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-xs font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
-            >
-              Entrar o crear cuenta
-            </Link>
-          )}
         </Card>
 
         <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
@@ -701,7 +690,53 @@ export default function ProfilePage() {
           </Card>
 
           <Card className="space-y-3 p-3.5 sm:p-4">
-            <SectionTitle title="Actividad" />
+            <SectionTitle title="Preferencias de menú" />
+
+            <div className="space-y-2">
+              <FieldLabel>Objetivos</FieldLabel>
+              <ChipCheckboxGroup
+                options={goalOptions}
+                values={profile.goals}
+                onChange={handleGoalsChange}
+              />
+            </div>
+            {profile.goals.includes("other") ? (
+              <label className="block space-y-1.5">
+                <FieldLabel>Cuéntanos tu objetivo</FieldLabel>
+                <textarea
+                  value={profile.otherGoal ?? ""}
+                  maxLength={otherGoalMaxLength}
+                  placeholder="Ejemplo: mejorar digestiones, organizar comidas familiares o cuidar energía diaria."
+                  onChange={(event) =>
+                    updateProfile({
+                      otherGoal: event.target.value.slice(
+                        0,
+                        otherGoalMaxLength,
+                      ),
+                    })
+                  }
+                  className={`${compactInputClass} min-h-20 resize-y leading-5 placeholder:text-xs placeholder:italic placeholder:text-[color:var(--color-muted-foreground)]`}
+                />
+                <span className="block text-right text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)]">
+                  {otherGoalCharacters}/{otherGoalMaxLength}
+                </span>
+              </label>
+            ) : null}
+
+            <div className="space-y-1.5">
+              <HouseholdSizeStepper
+                value={profile.householdSize}
+                onChange={(householdSize) =>
+                  updateProfile({
+                    householdSize,
+                  })
+                }
+              />
+              <span className="t-meta block">
+                Esta información se utiliza para calcular las cantidades de las recetas.
+              </span>
+            </div>
+
             <TrainingDaysStepper
               value={profile.weeklyTrainingDays}
               onChange={(weeklyTrainingDays) =>
@@ -734,53 +769,8 @@ export default function ProfilePage() {
           </Card>
 
           <Card className="space-y-3 p-3.5 sm:p-4">
-            <SectionTitle title="Objetivo" />
-            <ChipCheckboxGroup
-              options={goalOptions}
-              values={profile.goals}
-              onChange={handleGoalsChange}
-            />
-            {profile.goals.includes("other") ? (
-              <label className="block space-y-1.5">
-                <FieldLabel>Cuéntanos tu objetivo</FieldLabel>
-                <textarea
-                  value={profile.otherGoal ?? ""}
-                  maxLength={otherGoalMaxLength}
-                  placeholder="Ejemplo: mejorar digestiones, organizar comidas familiares o cuidar energía diaria."
-                  onChange={(event) =>
-                    updateProfile({
-                      otherGoal: event.target.value.slice(
-                        0,
-                        otherGoalMaxLength,
-                      ),
-                    })
-                  }
-                  className={`${compactInputClass} min-h-20 resize-y leading-5 placeholder:text-xs placeholder:italic placeholder:text-[color:var(--color-muted-foreground)]`}
-                />
-                <span className="block text-right text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)]">
-                  {otherGoalCharacters}/{otherGoalMaxLength}
-                </span>
-              </label>
-            ) : null}
-          </Card>
-
-          <Card className="space-y-3 p-3.5 sm:p-4">
-            <SectionTitle title="Alimentación" />
+            <SectionTitle title="Restricciones y alergias" />
             <div className="space-y-3">
-              <div className="space-y-1.5">
-                <HouseholdSizeStepper
-                  value={profile.householdSize}
-                  onChange={(householdSize) =>
-                    updateProfile({
-                      householdSize,
-                    })
-                  }
-                />
-                <span className="block whitespace-nowrap text-[0.72rem] leading-none text-[color:var(--color-muted-foreground)]">
-                  Esta información se utiliza para calcular las cantidades de las recetas.
-                </span>
-              </div>
-
               <div className="space-y-2">
                 <FieldLabel>Restricciones alimentarias</FieldLabel>
                 <ChipCheckboxGroup
@@ -834,6 +824,35 @@ export default function ProfilePage() {
             </div>
           </Card>
 
+          <Card className="space-y-3 p-3.5 sm:p-4">
+            <SectionTitle title="Cuenta" />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="t-meta min-w-0 truncate">
+                {userEmail ?? "Modo local"}
+              </p>
+
+              {userEmail ? (
+                <Button
+                  variant="danger"
+                  type="button"
+                  onClick={() => void handleSignOut()}
+                  disabled={isSigningOut}
+                  className="rounded-full sm:w-auto"
+                >
+                  <LogOut aria-hidden="true" className="h-4 w-4" />
+                  Cerrar sesión
+                </Button>
+              ) : (
+                <Link
+                  href="/login"
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-xs font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
+                >
+                  Entrar o crear cuenta
+                </Link>
+              )}
+            </div>
+          </Card>
+
           <div className="sticky bottom-[calc(6rem+env(safe-area-inset-bottom))] z-20 -mx-3 border-t border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 px-3 py-3 backdrop-blur sm:-mx-6 sm:px-6">
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p
@@ -866,7 +885,8 @@ export default function ProfilePage() {
               <PrimaryButton
                 type="submit"
                 disabled={saveStatus === "saving"}
-                className="w-full text-[0.78rem] sm:w-auto"
+                size="lg"
+                className="w-full sm:w-auto"
               >
                 <Save aria-hidden="true" className="h-4 w-4" />
                 {saveStatus === "saving" ? "Guardando..." : "Guardar perfil"}

@@ -38,14 +38,14 @@ export function CheckboxItem({
       />
       <span className="min-w-0 flex-1">
         <span
-          className={`block text-base font-medium leading-6 transition-[color,opacity,text-decoration-color] duration-200 ease-out motion-reduce:transition-none sm:text-lg ${
+          className={`t-body-strong block transition-[color,opacity,text-decoration-color] duration-200 ease-out motion-reduce:transition-none ${
             checked && strikeWhenChecked ? "line-through opacity-60" : ""
           }`}
         >
           {label}
         </span>
         {status ? (
-          <span className="mt-0.5 block text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-muted-foreground)] transition-opacity duration-200 ease-out motion-reduce:transition-none">
+          <span className="t-micro mt-1 block transition-opacity duration-200 ease-out motion-reduce:transition-none">
             {status}
           </span>
         ) : null}

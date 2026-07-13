@@ -16,9 +16,9 @@ export function SectionHeader({
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <p className="ui-eyebrow text-[0.78rem]">{eyebrow}</p>
+        <p className="t-eyebrow">{eyebrow}</p>
         {title ? (
-          <h2 className="mt-3 text-2xl font-semibold leading-tight text-[color:var(--color-foreground)] sm:text-3xl">
+          <h2 className="t-h2 mt-2.5 text-[color:var(--color-foreground)]">
             {title}
           </h2>
         ) : null}

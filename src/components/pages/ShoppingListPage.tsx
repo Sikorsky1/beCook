@@ -35,6 +35,15 @@ function capitalizeIngredientName(name: string) {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
+// Las categorías visibles son 6: los congelados se agrupan bajo "otros".
+function withVisibleCategories<T extends { category: SupermarketCategory }>(
+  items: T[],
+): T[] {
+  return items.map((item) =>
+    item.category === "congelados" ? { ...item, category: "otros" } : item,
+  );
+}
+
 type CategoryProgress = {
   category: SupermarketCategory;
   checked: number;
@@ -209,7 +218,7 @@ export default function ShoppingListPage() {
       if (cachedShoppingList?.weekSignature === weekSignature) {
         console.log("Lista de la compra: usando caché local");
         const cachedItems = groupShoppingListItems(
-          cachedShoppingList.items,
+          withVisibleCategories(cachedShoppingList.items),
         ).flatMap((group) => group.items);
         const cachedItemIds = new Set(cachedItems.map((item) => item.id));
 
@@ -242,7 +251,11 @@ export default function ShoppingListPage() {
           },
         );
 
-        setGeneratedItems(groupedItems);
+        setGeneratedItems(
+          groupShoppingListItems(withVisibleCategories(groupedItems)).flatMap(
+            (group) => group.items,
+          ),
+        );
         setCheckedItems([]);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -352,8 +365,8 @@ export default function ShoppingListPage() {
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
         <StickyPageHeader
-          title="LISTA DE LA COMPRA"
-          heading="Tu lista de la compra"
+          title="Lista de la compra"
+          heading="Tu compra"
           action={
             hasLoadedWeek && weekDays && weekDays.length > 0 ? (
               <ShoppingProgress
@@ -379,29 +392,28 @@ export default function ShoppingListPage() {
         <section className="transition-opacity duration-200 ease-out motion-reduce:transition-none">
           {!hasLoadedWeek ? (
             <Card className="p-6 sm:p-7">
-              <p className="ui-eyebrow">Preparando</p>
-              <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
+              <p className="t-eyebrow">Preparando</p>
+              <h2 className="t-h2 mt-3 text-[color:var(--color-foreground)]">
                 Cargando tu semana
               </h2>
-              <p className="ui-copy mt-3 max-w-xl text-base">
+              <p className="t-meta mt-3 max-w-xl">
                 Estamos preparando la lista de la compra con tu menú guardado.
               </p>
             </Card>
           ) : !weekDays || weekDays.length === 0 ? (
             <StateMessage title="No hay una semana guardada." variant="empty">
-              <p className="ui-eyebrow">Sin semana</p>
-              <p className="ui-copy mt-3 max-w-xl text-base">
+              <p className="t-meta max-w-xl">
                 Vuelve a la semana y guarda o importa un menú para generar tu
                 lista de la compra.
               </p>
             </StateMessage>
           ) : isLoadingList ? (
             <Card className="p-6 sm:p-7">
-              <p className="ui-eyebrow">Generando</p>
-              <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
+              <p className="t-eyebrow">Generando</p>
+              <h2 className="t-h2 mt-3 text-[color:var(--color-foreground)]">
                 Generando tu lista
               </h2>
-              <p className="ui-copy mt-3 max-w-xl text-base">
+              <p className="t-meta mt-3 max-w-xl">
                 Estamos calculando los ingredientes de tu semana actual.
               </p>
               <div className="mt-5 h-2 overflow-hidden rounded-full bg-[color:var(--color-surface-muted)]">
@@ -425,7 +437,7 @@ export default function ShoppingListPage() {
             />
           ) : (
             <StateMessage title="No hay lista de la compra." variant="empty">
-              <p className="ui-copy mt-3 max-w-xl text-base">
+              <p className="t-meta max-w-xl">
                 Guarda una semana para generar los ingredientes que necesitas.
               </p>
             </StateMessage>

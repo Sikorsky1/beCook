@@ -3,10 +3,18 @@ import type { ComponentProps, ReactNode } from "react";
 import { Button as ShadcnButton } from "@/components/shadcn/ui/button";
 
 type ButtonVariant = "primary" | "secondary" | "soft" | "danger";
+type ButtonSize = "sm" | "md" | "lg";
 
-type ButtonProps = Omit<ComponentProps<typeof ShadcnButton>, "variant"> & {
+type ButtonProps = Omit<ComponentProps<typeof ShadcnButton>, "variant" | "size"> & {
   children: ReactNode;
   variant?: ButtonVariant;
+  size?: ButtonSize;
+};
+
+const buttonSizeClasses: Record<ButtonSize, string> = {
+  sm: "min-h-10 px-4 text-sm",
+  md: "min-h-11 px-5 text-sm",
+  lg: "min-h-12 px-6 text-sm",
 };
 
 const buttonVariantClasses: Record<ButtonVariant, string> = {
@@ -24,6 +32,7 @@ export function Button({
   children,
   className = "",
   variant = "primary",
+  size = "md",
   type = "button",
   ...props
 }: ButtonProps) {
@@ -31,7 +40,8 @@ export function Button({
     <ShadcnButton
       type={type}
       className={[
-        "inline-flex min-h-12 touch-manipulation items-center justify-center gap-2 rounded-[var(--radius-control)] border px-5 text-sm font-semibold shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-200 ease-out hover:-translate-y-0.5 focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.18),0_8px_22px_rgba(46,42,38,0.04)] active:translate-y-0 active:scale-[0.98] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:grayscale-[0.15] disabled:active:scale-100 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100",
+        "inline-flex touch-manipulation items-center justify-center gap-2 rounded-[var(--radius-control)] border font-semibold shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-200 ease-out hover:-translate-y-0.5 focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.18),0_8px_22px_rgba(46,42,38,0.04)] active:translate-y-0 active:scale-[0.98] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:grayscale-[0.15] disabled:active:scale-100 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100",
+        buttonSizeClasses[size],
         buttonVariantClasses[variant],
         className,
       ].join(" ")}
