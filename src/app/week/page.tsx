@@ -213,9 +213,9 @@ function WeekPageContent() {
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
         <section className="sticky top-0 z-30 -mx-3 border-b border-[color:var(--color-border)] bg-[color:var(--color-background)]/90 px-3 pb-3 pt-3 backdrop-blur sm:-mx-6 sm:px-6">
           <div>
-            <p className="ui-eyebrow text-[0.78rem]">Plan semanal</p>
-            <div className="mt-1 flex items-center justify-between gap-2">
-              <h1 className="min-w-0 flex-1 truncate text-2xl font-semibold leading-tight tracking-[-0.03em] text-[color:var(--color-foreground)] sm:text-3xl">
+            <p className="t-eyebrow">Plan semanal</p>
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <h1 className="t-h1 min-w-0 flex-1 truncate text-[color:var(--color-foreground)]">
                 {selectedIsoWeek
                   ? formatWeekTitle(selectedIsoWeek)
                   : "Preparando calendario"}

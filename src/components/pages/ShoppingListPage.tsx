@@ -392,29 +392,28 @@ export default function ShoppingListPage() {
         <section className="transition-opacity duration-200 ease-out motion-reduce:transition-none">
           {!hasLoadedWeek ? (
             <Card className="p-6 sm:p-7">
-              <p className="ui-eyebrow">Preparando</p>
-              <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
+              <p className="t-eyebrow">Preparando</p>
+              <h2 className="t-h2 mt-3 text-[color:var(--color-foreground)]">
                 Cargando tu semana
               </h2>
-              <p className="ui-copy mt-3 max-w-xl text-base">
+              <p className="t-meta mt-3 max-w-xl">
                 Estamos preparando la lista de la compra con tu menú guardado.
               </p>
             </Card>
           ) : !weekDays || weekDays.length === 0 ? (
             <StateMessage title="No hay una semana guardada." variant="empty">
-              <p className="ui-eyebrow">Sin semana</p>
-              <p className="ui-copy mt-3 max-w-xl text-base">
+              <p className="t-meta max-w-xl">
                 Vuelve a la semana y guarda o importa un menú para generar tu
                 lista de la compra.
               </p>
             </StateMessage>
           ) : isLoadingList ? (
             <Card className="p-6 sm:p-7">
-              <p className="ui-eyebrow">Generando</p>
-              <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
+              <p className="t-eyebrow">Generando</p>
+              <h2 className="t-h2 mt-3 text-[color:var(--color-foreground)]">
                 Generando tu lista
               </h2>
-              <p className="ui-copy mt-3 max-w-xl text-base">
+              <p className="t-meta mt-3 max-w-xl">
                 Estamos calculando los ingredientes de tu semana actual.
               </p>
               <div className="mt-5 h-2 overflow-hidden rounded-full bg-[color:var(--color-surface-muted)]">
@@ -438,7 +437,7 @@ export default function ShoppingListPage() {
             />
           ) : (
             <StateMessage title="No hay lista de la compra." variant="empty">
-              <p className="ui-copy mt-3 max-w-xl text-base">
+              <p className="t-meta max-w-xl">
                 Guarda una semana para generar los ingredientes que necesitas.
               </p>
             </StateMessage>

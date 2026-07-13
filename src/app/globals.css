@@ -142,4 +142,14 @@ select {
     color: var(--muted-foreground);
     line-height: 1.7;
   }
+
+  /* Jerarquía tipográfica beCook */
+  .t-eyebrow { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted-foreground); line-height: 1; }
+  .t-h1      { font-size: 1.5rem;  font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; }   /* Título de página */
+  .t-h2      { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }    /* Título de sección */
+  .t-h3      { font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }  /* Título de tarjeta / día */
+  .t-body-strong { font-size: 1rem; font-weight: 600; line-height: 1.4; }   /* valor de plato, label de item de lista */
+  .t-body    { font-size: 0.9375rem; font-weight: 500; line-height: 1.5; }  /* cuerpo general */
+  .t-meta    { font-size: 0.8125rem; font-weight: 500; line-height: 1.4; color: var(--muted-foreground); } /* fecha, meta, valores secundarios */
+  .t-micro   { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted-foreground); line-height: 1; } /* COMIDA/CENA, estado, meta de item */
 }

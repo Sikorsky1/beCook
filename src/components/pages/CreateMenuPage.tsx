@@ -553,12 +553,12 @@ export default function CreateMenuPage() {
     <main className={pageShellClass}>
       <div className={`${pageContentClass} gap-5 sm:gap-6`}>
         <section>
-          <p className="ui-eyebrow text-[0.78rem]">Crear menú</p>
-          <h1 className="mt-2 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
+          <p className="t-eyebrow">Crear menú</p>
+          <h1 className="t-h1 mt-2 text-[color:var(--color-foreground)]">
             Prepara tu menú semanal
           </h1>
           {targetIsoWeek ? (
-            <p className="mt-2 text-sm font-medium text-[color:var(--color-muted-foreground)]">
+            <p className="t-meta mt-2">
               Se guardará en Semana {targetIsoWeek.isoWeek} ·{" "}
               {formatIsoWeekRange(targetIsoWeek)}
             </p>
@@ -635,7 +635,8 @@ export default function CreateMenuPage() {
             <PrimaryButton
               onClick={handleProcessMenu}
               disabled={isLoading}
-              className="mt-3 w-full disabled:cursor-wait sm:w-auto sm:px-7"
+              size="lg"
+              className="mt-3 w-full disabled:cursor-wait"
             >
               {isLoading && loadingMode === "import" ? (
                 "Estamos organizando tu menú..."
@@ -650,7 +651,7 @@ export default function CreateMenuPage() {
         ) : (
           <Card className="space-y-4 p-3.5 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
-              <span className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+              <span className="t-body-strong text-[color:var(--color-foreground)]">
                 Número de personas
               </span>
               <div className="inline-flex items-center gap-2 rounded-full bg-[color:var(--color-surface-muted)] p-1">
@@ -659,11 +660,11 @@ export default function CreateMenuPage() {
                   disabled={peopleCount === 1 || isLoading}
                   onClick={() => setPeopleCount((value) => value - 1)}
                   aria-label="Reducir personas"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-sm font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
                 >
                   -
                 </button>
-                <span className="min-w-10 text-center text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+                <span className="t-body-strong min-w-10 text-center text-[color:var(--color-foreground)]">
                   {peopleCount}
                 </span>
                 <button
@@ -671,7 +672,7 @@ export default function CreateMenuPage() {
                   disabled={peopleCount === 6 || isLoading}
                   onClick={() => setPeopleCount((value) => value + 1)}
                   aria-label="Aumentar personas"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-sm font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
                 >
                   +
                 </button>
@@ -679,7 +680,7 @@ export default function CreateMenuPage() {
             </div>
 
             <fieldset className="space-y-2">
-              <legend className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+              <legend className="t-body-strong text-[color:var(--color-foreground)]">
                 Tipo de menú
               </legend>
               <div className="flex flex-wrap gap-1.5">
@@ -689,7 +690,7 @@ export default function CreateMenuPage() {
                   return (
                     <label
                       key={option.id}
-                      className={`inline-flex min-h-8 cursor-pointer items-center justify-center rounded-full border px-2.5 py-1.5 text-center text-[0.78rem] font-semibold leading-tight transition-colors ${
+                      className={`inline-flex min-h-10 cursor-pointer items-center justify-center rounded-full border px-3 py-1.5 text-center text-[0.78rem] font-semibold leading-tight transition-colors ${
                         isSelected
                           ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
                           : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
@@ -719,7 +720,7 @@ export default function CreateMenuPage() {
             </fieldset>
 
             <fieldset className="space-y-2">
-              <legend className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+              <legend className="t-body-strong text-[color:var(--color-foreground)]">
                 Nivel de elaboración deseado
               </legend>
               <div className="grid grid-cols-3 gap-1.5 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1.5">
@@ -733,7 +734,7 @@ export default function CreateMenuPage() {
                       disabled={isLoading}
                       onClick={() => setElaborationLevel(option.value)}
                       aria-pressed={isSelected}
-                      className={`flex min-h-11 items-center justify-center rounded-[var(--radius-input)] px-2 text-[0.78rem] font-semibold transition-colors ${
+                      className={`flex min-h-10 items-center justify-center rounded-[var(--radius-input)] px-2 text-[0.78rem] font-semibold transition-colors ${
                         isSelected
                           ? "bg-[color:var(--color-accent)] text-white"
                           : "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-accent-soft)] hover:text-[color:var(--color-foreground)]"
@@ -747,7 +748,7 @@ export default function CreateMenuPage() {
             </fieldset>
 
             <label className="block space-y-2">
-              <span className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+              <span className="t-body-strong text-[color:var(--color-foreground)]">
                 ¿Qué te apetece esta semana?
               </span>
               <TextArea
@@ -761,7 +762,7 @@ export default function CreateMenuPage() {
                 placeholder="Ejemplo: cenas ligeras, comidas fáciles de tupper, algo mediterráneo y sin mucho pescado."
                 className="min-h-28 resize-y bg-[color:var(--color-surface)] text-sm"
               />
-              <span className="block text-right text-xs font-medium text-[color:var(--color-muted-foreground)]">
+              <span className="t-meta block text-right">
                 {freeTextPrompt.length}/{freeTextPromptMaxLength}
               </span>
             </label>
@@ -769,7 +770,8 @@ export default function CreateMenuPage() {
             <PrimaryButton
               onClick={handleGenerateMenu}
               disabled={isLoading}
-              className="w-full disabled:cursor-wait sm:w-auto sm:px-7"
+              size="lg"
+              className="w-full disabled:cursor-wait"
             >
               {isLoading && loadingMode === "generate" ? (
                 "Estamos creando tu semana..."
@@ -821,11 +823,15 @@ export default function CreateMenuPage() {
 
         {importedMenu && importedWeekDays ? (
           <section className="space-y-4 border-t border-[color:var(--color-border)] pt-5 transition-opacity duration-200 ease-out motion-reduce:transition-none sm:space-y-5">
+            <h2 className="t-h2 text-[color:var(--color-foreground)]">
+              Revisa tu semana
+            </h2>
+
             <Card className="overflow-hidden">
               <ul className="divide-y divide-[color:var(--color-border)]">
                 {importedWeekDays.map((day) => (
                   <li key={day.day} className="px-4 py-3 sm:px-5">
-                    <h3 className="text-sm font-semibold text-[color:var(--color-foreground)]">
+                    <h3 className="t-h3 text-[color:var(--color-foreground)]">
                       {day.day}
                     </h3>
                     <div className="mt-1.5 grid grid-cols-2 gap-3">
@@ -836,14 +842,12 @@ export default function CreateMenuPage() {
                         ] as const
                       ).map((meal) => (
                         <div key={meal.label} className="min-w-0">
-                          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-muted-foreground)]">
-                            {meal.label}
-                          </p>
+                          <p className="t-micro">{meal.label}</p>
                           <p
-                            className={`mt-0.5 text-sm leading-5 ${
+                            className={`t-body-strong mt-1 ${
                               meal.value === "LIBRE"
-                                ? "font-medium text-[color:var(--color-muted-foreground)]"
-                                : "font-semibold text-[color:var(--color-foreground)]"
+                                ? "text-[color:var(--color-muted-foreground)]"
+                                : "text-[color:var(--color-foreground)]"
                             }`}
                           >
                             {meal.value === "LIBRE" ? "Libre" : meal.value}
@@ -863,7 +867,8 @@ export default function CreateMenuPage() {
                   useWeekStatus === "applying" ||
                   useWeekStatus === "success"
                 }
-                className={`w-full px-7 sm:w-auto ${
+                size="lg"
+                className={`w-full sm:w-auto ${
                   useWeekStatus === "applying"
                     ? "cursor-wait"
                     : useWeekStatus === "success"

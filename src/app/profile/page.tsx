@@ -235,14 +235,16 @@ function toWeeklyTrainingDays(value: number): WeeklyTrainingDays {
 
 function FieldLabel({ children }: { children: string }) {
   return (
-    <span className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+    <span className="t-body-strong text-[color:var(--color-foreground)]">
       {children}
     </span>
   );
 }
 
 function SectionTitle({ title }: { title: string }) {
-  return <h2 className="ui-eyebrow text-[0.7rem]">{title}</h2>;
+  return (
+    <h2 className="t-h2 text-[color:var(--color-foreground)]">{title}</h2>
+  );
 }
 
 const compactInputClass =
@@ -599,8 +601,8 @@ export default function ProfilePage() {
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
         <section className="sticky top-0 z-30 -mx-3 border-b border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 px-3 pb-3 pt-3 backdrop-blur sm:-mx-6 sm:px-6">
           <div>
-            <p className="ui-eyebrow text-[0.78rem]">Perfil</p>
-            <h1 className="mt-2 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
+            <p className="t-eyebrow">Perfil</p>
+            <h1 className="t-h1 mt-2 text-[color:var(--color-foreground)]">
               Tu base nutricional
             </h1>
           </div>
@@ -614,10 +616,10 @@ export default function ProfilePage() {
             {(userEmail?.[0] ?? "B").toUpperCase()}
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[color:var(--color-foreground)]">
+            <p className="t-body-strong truncate text-[color:var(--color-foreground)]">
               {userEmail ?? "Modo local"}
             </p>
-            <p className="mt-0.5 text-xs font-medium text-[color:var(--color-muted-foreground)]">
+            <p className="t-meta mt-0.5">
               {goalOptions.find(
                 (option) => option.value === (profile.goals[0] ?? profile.goal),
               )?.label ?? "Sin objetivo"}{" "}
@@ -730,7 +732,7 @@ export default function ProfilePage() {
                   })
                 }
               />
-              <span className="block text-[0.72rem] leading-4 text-[color:var(--color-muted-foreground)]">
+              <span className="t-meta block">
                 Esta información se utiliza para calcular las cantidades de las recetas.
               </span>
             </div>
@@ -825,7 +827,7 @@ export default function ProfilePage() {
           <Card className="space-y-3 p-3.5 sm:p-4">
             <SectionTitle title="Cuenta" />
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="min-w-0 truncate text-sm font-semibold text-[color:var(--color-foreground)]">
+              <p className="t-meta min-w-0 truncate">
                 {userEmail ?? "Modo local"}
               </p>
 
@@ -835,7 +837,7 @@ export default function ProfilePage() {
                   type="button"
                   onClick={() => void handleSignOut()}
                   disabled={isSigningOut}
-                  className="min-h-11 rounded-full px-4 text-xs sm:w-auto"
+                  className="rounded-full sm:w-auto"
                 >
                   <LogOut aria-hidden="true" className="h-4 w-4" />
                   Cerrar sesión
@@ -883,7 +885,8 @@ export default function ProfilePage() {
               <PrimaryButton
                 type="submit"
                 disabled={saveStatus === "saving"}
-                className="w-full text-[0.78rem] sm:w-auto"
+                size="lg"
+                className="w-full sm:w-auto"
               >
                 <Save aria-hidden="true" className="h-4 w-4" />
                 {saveStatus === "saving" ? "Guardando..." : "Guardar perfil"}

@@ -220,10 +220,10 @@ function PantryItemsForCategory({
       <div className="sticky top-0 z-10 border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-3 sm:px-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold capitalize leading-tight text-[color:var(--color-foreground)]">
+            <h2 className="t-h3 capitalize text-[color:var(--color-foreground)]">
               {group.category}
             </h2>
-            <p className="mt-0.5 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-muted-foreground)]">
+            <p className="t-micro mt-1">
               {group.items.filter((item) => item.active).length}/
               {group.items.length} activos
             </p>
@@ -232,7 +232,7 @@ function PantryItemsForCategory({
           {!isAddingItem ? (
             <TertiaryButton
               onClick={onShowAddItem}
-              className="min-h-10 shrink-0 rounded-full px-3 text-xs sm:px-4"
+              className="shrink-0 rounded-full"
             >
               <Plus aria-hidden="true" className="h-4 w-4" />
               Añadir
@@ -250,19 +250,18 @@ function PantryItemsForCategory({
               onChange={(event) => onDraftItemNameChange(event.target.value)}
               placeholder={`Añadir en ${group.category}`}
               aria-label={`Añadir artículo en ${group.category}`}
-              className="min-h-10 py-2.5 text-sm"
               autoFocus
             />
             <PrimaryButton
               type="submit"
               disabled={!draftItemName.trim()}
-              className="min-h-10 rounded-full px-4 text-xs"
+              className="rounded-full"
             >
               Guardar
             </PrimaryButton>
             <TertiaryButton
               onClick={onCancelAddItem}
-              className="min-h-10 rounded-full px-4 text-xs"
+              className="rounded-full"
             >
               Cancelar
             </TertiaryButton>
@@ -288,7 +287,7 @@ function PantryItemsForCategory({
                       event.stopPropagation();
                       onDeleteItem(group.category, item.name);
                     }}
-                    className="h-10 w-10 shrink-0"
+                    className="shrink-0"
                   >
                     <Trash2 aria-hidden="true" className="h-4 w-4" />
                   </IconButton>
@@ -298,7 +297,7 @@ function PantryItemsForCategory({
           })}
         </ul>
       ) : (
-        <div className="px-4 py-5 text-sm font-medium text-[color:var(--color-muted-foreground)] sm:px-5">
+        <div className="t-meta px-4 py-5 sm:px-5">
           Aún no hay artículos en esta sección.
         </div>
       )}
@@ -487,8 +486,8 @@ export default function PantryPage() {
         <section className="transition-opacity duration-200 ease-out motion-reduce:transition-none">
           {!hasLoadedPantry ? (
             <Card className="p-6 sm:p-7">
-              <p className="ui-eyebrow">Preparando</p>
-              <h2 className="mt-3 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
+              <p className="t-eyebrow">Preparando</p>
+              <h2 className="t-h2 mt-3 text-[color:var(--color-foreground)]">
                 Cargando tu despensa
               </h2>
             </Card>
@@ -507,7 +506,7 @@ export default function PantryPage() {
               onToggleItem={toggleItem}
             />
           ) : (
-            <Card className="p-6 text-sm font-medium text-[color:var(--color-muted-foreground)]">
+            <Card className="t-meta p-6">
               No hay ingredientes de despensa disponibles.
             </Card>
           )}
