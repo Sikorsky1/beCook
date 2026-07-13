@@ -35,6 +35,15 @@ function capitalizeIngredientName(name: string) {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
+// Las categorías visibles son 6: los congelados se agrupan bajo "otros".
+function withVisibleCategories<T extends { category: SupermarketCategory }>(
+  items: T[],
+): T[] {
+  return items.map((item) =>
+    item.category === "congelados" ? { ...item, category: "otros" } : item,
+  );
+}
+
 type CategoryProgress = {
   category: SupermarketCategory;
   checked: number;
@@ -209,7 +218,7 @@ export default function ShoppingListPage() {
       if (cachedShoppingList?.weekSignature === weekSignature) {
         console.log("Lista de la compra: usando caché local");
         const cachedItems = groupShoppingListItems(
-          cachedShoppingList.items,
+          withVisibleCategories(cachedShoppingList.items),
         ).flatMap((group) => group.items);
         const cachedItemIds = new Set(cachedItems.map((item) => item.id));
 
@@ -242,7 +251,11 @@ export default function ShoppingListPage() {
           },
         );
 
-        setGeneratedItems(groupedItems);
+        setGeneratedItems(
+          groupShoppingListItems(withVisibleCategories(groupedItems)).flatMap(
+            (group) => group.items,
+          ),
+        );
         setCheckedItems([]);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -352,8 +365,8 @@ export default function ShoppingListPage() {
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
         <StickyPageHeader
-          title="LISTA DE LA COMPRA"
-          heading="Tu lista de la compra"
+          title="Lista de la compra"
+          heading="Tu compra"
           action={
             hasLoadedWeek && weekDays && weekDays.length > 0 ? (
               <ShoppingProgress

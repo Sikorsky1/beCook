@@ -9,6 +9,7 @@ import { ShoppingTabs } from "@/components/layout/ShoppingTabs";
 import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { CategoryPill as BaseCategoryPill } from "@/components/ui/CategoryPill";
+import { CheckboxItem } from "@/components/ui/CheckboxItem";
 import { IconButton } from "@/components/ui/IconButton";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { TextInput } from "@/components/ui/TextInput";
@@ -149,7 +150,7 @@ function PantryCategoryPill({
       isCompleted={isCompleted}
       isSelected={isSelected}
       label={category}
-      meta={`${active}/${total} activos`}
+      meta={`${active}/${total}`}
       onClick={onSelect}
     />
   );
@@ -274,37 +275,24 @@ function PantryItemsForCategory({
           {group.items.map((item) => {
             return (
               <li key={`${item.category}:${item.name}`}>
-                <div
-                  className={`flex min-h-16 items-center gap-3 px-4 py-3 transition-colors sm:gap-4 sm:px-5 ${
-                    item.active
-                      ? "text-[color:var(--color-foreground)]"
-                      : "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)]"
-                  }`}
+                <CheckboxItem
+                  checked={item.active}
+                  label={item.name}
+                  onChange={() => onToggleItem(group.category, item.name)}
+                  status={item.active ? "En despensa" : "Agotado"}
                 >
-                  <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={item.active}
-                      onChange={() => onToggleItem(group.category, item.name)}
-                      className="h-7 w-7 shrink-0 rounded-md border-[color:var(--color-border-strong)] accent-[color:var(--color-accent)] transition-transform duration-150 ease-out focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.16)] active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-base font-medium leading-6 sm:text-lg">
-                        {item.name}
-                      </span>
-                      <span className="mt-0.5 block text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-muted-foreground)]">
-                        {item.active ? "Activo" : "Inactivo"}
-                      </span>
-                    </span>
-                  </label>
                   <IconButton
                     aria-label={`Borrar ${item.name}`}
-                    onClick={() => onDeleteItem(group.category, item.name)}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onDeleteItem(group.category, item.name);
+                    }}
                     className="h-10 w-10 shrink-0"
                   >
                     <Trash2 aria-hidden="true" className="h-4 w-4" />
                   </IconButton>
-                </div>
+                </CheckboxItem>
               </li>
             );
           })}
@@ -472,7 +460,7 @@ export default function PantryPage() {
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
         <StickyPageHeader
-          title="DESPENSA"
+          title="Despensa"
           heading="Tu despensa"
           action={
             hasLoadedPantry ? (

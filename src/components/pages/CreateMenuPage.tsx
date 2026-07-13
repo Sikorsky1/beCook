@@ -2,15 +2,9 @@
 
 import { Check, Eraser, LoaderCircle, Sparkles } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import {
-  DaySelector,
-  getInitialSelectedDayName,
-  type DayName,
-} from "@/components/features/DaySelector";
-import { ImportedDayPreview } from "@/components/features/ImportedDayPreview";
-import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
+import { PrimaryButton, SecondaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
 import { StateMessage } from "@/components/ui/StateMessage";
@@ -60,7 +54,12 @@ type MenuStyle = (typeof menuStyleOptions)[number]["id"];
 
 const defaultMenuStyles: MenuStyle[] = ["healthy_balanced"];
 const defaultElaborationLevel = 4;
-const elaborationLevels = [1, 2, 3, 4, 5, 6, 7] as const;
+// Etiquetas visibles mapeadas al valor 1-7 que espera /api/generate-menu.
+const elaborationOptions = [
+  { value: 2, label: "Sencillo" },
+  { value: 4, label: "Equilibrado" },
+  { value: 6, label: "Elaborado" },
+] as const;
 const useWeekSuccessDelayMs = 900;
 
 function isProfile(value: unknown): value is UserProfile {
@@ -167,20 +166,10 @@ export default function CreateMenuPage() {
   const [useWeekMessage, setUseWeekMessage] = useState("");
   const isApplyingWeekRef = useRef(false);
   const navigationTimeoutRef = useRef<number | null>(null);
-  const [selectedDayName, setSelectedDayName] = useState<DayName>("Lunes");
   const [targetIsoWeek, setTargetIsoWeek] = useState<IsoWeek | null>(null);
   const importedWeekDays = importedMenu
     ? importedMenuToWeekDays(importedMenu.days)
     : null;
-  const availableDayNames = useMemo(
-    () => new Set(importedWeekDays?.map((day) => day.day) ?? []),
-    [importedWeekDays],
-  );
-  const selectedDay = useMemo(
-    () =>
-      importedWeekDays?.find((day) => day.day === selectedDayName) ?? null,
-    [importedWeekDays, selectedDayName],
-  );
 
   useEffect(() => {
     setHasMounted(true);
@@ -288,11 +277,7 @@ export default function CreateMenuPage() {
         return;
       }
 
-      const processedMenu = data as ImportedMenuResponse;
-      const processedWeekDays = importedMenuToWeekDays(processedMenu.days);
-
-      setImportedMenu(processedMenu);
-      setSelectedDayName(getInitialSelectedDayName(processedWeekDays));
+      setImportedMenu(data as ImportedMenuResponse);
     } catch {
       setImportedMenu(null);
       setErrorMessage("Ha fallado la conexión al procesar el menú.");
@@ -418,7 +403,6 @@ export default function CreateMenuPage() {
       }
 
       const generatedMenu = data as GeneratedMenuApiResponse;
-      const generatedWeekDays = importedMenuToWeekDays(generatedMenu.days);
 
       if (currentGenerationRequestId) {
         try {
@@ -440,7 +424,6 @@ export default function CreateMenuPage() {
       }
 
       setImportedMenu(generatedMenu);
-      setSelectedDayName(getInitialSelectedDayName(generatedWeekDays));
     } catch {
       setImportedMenu(null);
       setGenerationRequestId(null);
@@ -736,39 +719,30 @@ export default function CreateMenuPage() {
             </fieldset>
 
             <fieldset className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <legend className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
-                  Nivel de elaboración deseado
-                </legend>
-                <span className="rounded-full bg-[color:var(--color-accent-soft)] px-2.5 py-1 text-[0.72rem] font-semibold text-[color:var(--color-foreground)]">
-                  {elaborationLevel}/7
-                </span>
-              </div>
-              <div className="grid grid-cols-7 gap-1.5 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1.5">
-                {elaborationLevels.map((level) => {
-                  const isSelected = elaborationLevel === level;
+              <legend className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+                Nivel de elaboración deseado
+              </legend>
+              <div className="grid grid-cols-3 gap-1.5 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1.5">
+                {elaborationOptions.map((option) => {
+                  const isSelected = elaborationLevel === option.value;
 
                   return (
                     <button
-                      key={level}
+                      key={option.value}
                       type="button"
                       disabled={isLoading}
-                      onClick={() => setElaborationLevel(level)}
+                      onClick={() => setElaborationLevel(option.value)}
                       aria-pressed={isSelected}
-                      className={`flex min-h-9 items-center justify-center rounded-[var(--radius-input)] text-[0.78rem] font-semibold transition-colors ${
+                      className={`flex min-h-11 items-center justify-center rounded-[var(--radius-input)] px-2 text-[0.78rem] font-semibold transition-colors ${
                         isSelected
                           ? "bg-[color:var(--color-accent)] text-white"
                           : "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-accent-soft)] hover:text-[color:var(--color-foreground)]"
                       } disabled:cursor-not-allowed disabled:opacity-60`}
                     >
-                      {level}
+                      {option.label}
                     </button>
                   );
                 })}
-              </div>
-              <div className="flex justify-between gap-3 text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)]">
-                <span>Poco elaborado</span>
-                <span>Muy elaborado</span>
               </div>
             </fieldset>
 
@@ -845,71 +819,96 @@ export default function CreateMenuPage() {
           </StateMessage>
         ) : null}
 
-        {importedMenu && importedWeekDays && selectedDay ? (
+        {importedMenu && importedWeekDays ? (
           <section className="space-y-4 border-t border-[color:var(--color-border)] pt-5 transition-opacity duration-200 ease-out motion-reduce:transition-none sm:space-y-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <DaySelector
-                ariaLabel="Selecciona un día importado"
-                availableDays={availableDayNames}
-                selectedDayName={selectedDayName}
-                onSelectDay={setSelectedDayName}
-              />
-              <div className="w-full sm:w-auto">
-                <TertiaryButton
-                  onClick={handleUseWeek}
-                  disabled={
-                    useWeekStatus === "applying" ||
-                    useWeekStatus === "success"
-                  }
-                  className={`w-full px-7 sm:w-auto ${
-                    useWeekStatus === "applying"
-                      ? "cursor-wait"
-                      : useWeekStatus === "success"
-                        ? "border-[color:var(--color-success)] bg-[color:var(--color-success-soft)] text-[color:var(--color-success-hover)] disabled:opacity-100 disabled:grayscale-0"
-                        : ""
-                  }`}
-                >
-                  {useWeekStatus === "applying" ? (
-                    <>
-                      <LoaderCircle
-                        aria-hidden="true"
-                        className="h-4 w-4 animate-spin motion-reduce:animate-none"
-                      />
-                      Aplicando menú...
-                    </>
-                  ) : useWeekStatus === "success" ? (
-                    <>
-                      <Check aria-hidden="true" className="h-4 w-4" />
-                      Menú aplicado
-                    </>
-                  ) : (
-                    "Usar este menú"
-                  )}
-                </TertiaryButton>
-                {useWeekMessage ? (
-                  <p
-                    className={`mt-2 text-center text-xs font-semibold sm:text-left ${
-                      useWeekStatus === "error"
-                        ? "text-[color:var(--color-danger)]"
-                        : "text-[color:var(--color-success-hover)]"
-                    }`}
-                    role={useWeekStatus === "error" ? "alert" : "status"}
-                    aria-live="polite"
-                  >
-                    {useWeekMessage}
-                  </p>
-                ) : null}
-              </div>
-            </div>
+            <Card className="overflow-hidden">
+              <ul className="divide-y divide-[color:var(--color-border)]">
+                {importedWeekDays.map((day) => (
+                  <li key={day.day} className="px-4 py-3 sm:px-5">
+                    <h3 className="text-sm font-semibold text-[color:var(--color-foreground)]">
+                      {day.day}
+                    </h3>
+                    <div className="mt-1.5 grid grid-cols-2 gap-3">
+                      {(
+                        [
+                          { label: "Comida", value: day.lunch },
+                          { label: "Cena", value: day.dinner },
+                        ] as const
+                      ).map((meal) => (
+                        <div key={meal.label} className="min-w-0">
+                          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-muted-foreground)]">
+                            {meal.label}
+                          </p>
+                          <p
+                            className={`mt-0.5 text-sm leading-5 ${
+                              meal.value === "LIBRE"
+                                ? "font-medium text-[color:var(--color-muted-foreground)]"
+                                : "font-semibold text-[color:var(--color-foreground)]"
+                            }`}
+                          >
+                            {meal.value === "LIBRE" ? "Libre" : meal.value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Card>
 
-            <ImportedDayPreview day={selectedDay} />
+            <div className="w-full">
+              <SecondaryButton
+                onClick={handleUseWeek}
+                disabled={
+                  useWeekStatus === "applying" ||
+                  useWeekStatus === "success"
+                }
+                className={`w-full px-7 sm:w-auto ${
+                  useWeekStatus === "applying"
+                    ? "cursor-wait"
+                    : useWeekStatus === "success"
+                      ? "border-[color:var(--color-success)] bg-[color:var(--color-success-soft)] text-[color:var(--color-success-hover)] disabled:opacity-100 disabled:grayscale-0"
+                      : ""
+                }`}
+              >
+                {useWeekStatus === "applying" ? (
+                  <>
+                    <LoaderCircle
+                      aria-hidden="true"
+                      className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                    />
+                    Aplicando menú...
+                  </>
+                ) : useWeekStatus === "success" ? (
+                  <>
+                    <Check aria-hidden="true" className="h-4 w-4" />
+                    Menú aplicado
+                  </>
+                ) : (
+                  "Usar este menú"
+                )}
+              </SecondaryButton>
+              {useWeekMessage ? (
+                <p
+                  className={`mt-2 text-center text-xs font-semibold sm:text-left ${
+                    useWeekStatus === "error"
+                      ? "text-[color:var(--color-danger)]"
+                      : "text-[color:var(--color-success-hover)]"
+                  }`}
+                  role={useWeekStatus === "error" ? "alert" : "status"}
+                  aria-live="polite"
+                >
+                  {useWeekMessage}
+                </p>
+              ) : null}
+            </div>
           </section>
         ) : (
           <StateMessage title="Tu semana aparecerá aquí." variant="empty">
             <p>
               {mode === "generate"
-                ? "Crea un menú semanal y podrás revisar cada día antes de guardarlo."
-                : "Pega el menú, procésalo y podrás revisar cada día antes de guardarlo."}
+                ? "Crea un menú semanal y podrás revisar la semana entera antes de guardarla."
+                : "Pega el menú, procésalo y podrás revisar la semana entera antes de guardarla."}
             </p>
           </StateMessage>
         )}
