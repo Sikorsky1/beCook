@@ -8,7 +8,12 @@ import {
   type OpenAIMenuGenerationTelemetry,
   type ImportedMenuResponse,
 } from "@/lib/importMenu";
-import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
+import {
+  logOpenAIModelUsage,
+  OPENAI_FALLBACK_MODEL,
+  OPENAI_MODEL,
+  OPENAI_REASONING_EFFORT,
+} from "@/lib/openai/config";
 import { estimateOpenAICostUsd } from "@/lib/openai/cost";
 
 export const runtime = "nodejs";
@@ -496,25 +501,98 @@ Devuelve exclusivamente JSON parseable con este shape:
 `.trim();
 }
 
+async function createMenuCompletion(openai: OpenAI, userPrompt: string) {
+  const createCompletionWithModel = (model: string) =>
+    openai.chat.completions.create({
+      model,
+      reasoning_effort: OPENAI_REASONING_EFFORT,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "generated_menu",
+          strict: true,
+          schema: importedMenuSchema,
+        },
+      },
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: userPrompt,
+        },
+      ],
+    });
+
+  const shouldUseFallback = (error: unknown) => {
+    if (!(error instanceof OpenAI.APIError)) {
+      return true;
+    }
+
+    const status = error.status;
+
+    return (
+      error.code === "model_not_found" ||
+      status === 404 ||
+      status === 409 ||
+      status === 429 ||
+      (typeof status === "number" && status >= 500)
+    );
+  };
+
+  try {
+    return {
+      completion: await createCompletionWithModel(OPENAI_MODEL),
+      modelUsed: OPENAI_MODEL,
+    };
+  } catch (primaryError) {
+    if (
+      OPENAI_FALLBACK_MODEL === OPENAI_MODEL ||
+      !shouldUseFallback(primaryError)
+    ) {
+      throw primaryError;
+    }
+
+    try {
+      return {
+        completion: await createCompletionWithModel(OPENAI_FALLBACK_MODEL),
+        modelUsed: OPENAI_FALLBACK_MODEL,
+      };
+    } catch (fallbackError) {
+      throw new AggregateError(
+        [primaryError, fallbackError],
+        "Han fallado los modelos principal y fallback de OpenAI.",
+      );
+    }
+  }
+}
+
 function buildOpenAITelemetry({
+  modelUsed,
   promptTokens,
+  cachedPromptTokens,
   completionTokens,
   totalTokens,
   responseTimeMs,
 }: {
+  modelUsed: string;
   promptTokens: number | null;
+  cachedPromptTokens: number | null;
   completionTokens: number | null;
   totalTokens: number | null;
   responseTimeMs: number;
 }): OpenAIMenuGenerationTelemetry {
   return {
-    modelUsed: OPENAI_MODEL,
+    modelUsed,
     promptTokens,
     completionTokens,
     totalTokens,
     estimatedCostUsd: estimateOpenAICostUsd({
-      model: OPENAI_MODEL,
+      model: modelUsed,
       promptTokens,
+      cachedPromptTokens,
       completionTokens,
     }),
     responseTimeMs,
@@ -550,39 +628,26 @@ export async function POST(request: Request) {
     const openai = new OpenAI({ apiKey });
     logOpenAIModelUsage("generate-menu");
 
-    const openAIRequestStartedAt = Date.now();
-    const completion = await openai.chat.completions.create({
-      model: OPENAI_MODEL,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "generated_menu",
-          strict: true,
-          schema: importedMenuSchema,
-        },
-      },
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: buildUserPrompt({
-            profile: body.profile ?? null,
-            pantryItems,
-            recentDishes,
-            peopleCount,
-            menuStyles,
-            elaborationLevel,
-            freeTextPrompt,
-          }),
-        },
-      ],
+    const userPrompt = buildUserPrompt({
+      profile: body.profile ?? null,
+      pantryItems,
+      recentDishes,
+      peopleCount,
+      menuStyles,
+      elaborationLevel,
+      freeTextPrompt,
     });
+    const openAIRequestStartedAt = Date.now();
+    const { completion, modelUsed } = await createMenuCompletion(
+      openai,
+      userPrompt,
+    );
     const responseTimeMs = Date.now() - openAIRequestStartedAt;
     const openaiTelemetry = buildOpenAITelemetry({
+      modelUsed,
       promptTokens: completion.usage?.prompt_tokens ?? null,
+      cachedPromptTokens:
+        completion.usage?.prompt_tokens_details?.cached_tokens ?? null,
       completionTokens: completion.usage?.completion_tokens ?? null,
       totalTokens: completion.usage?.total_tokens ?? null,
       responseTimeMs,
