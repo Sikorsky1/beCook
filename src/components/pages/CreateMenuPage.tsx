@@ -18,6 +18,7 @@ import {
 import {
   formatIsoWeekRange,
   getIsoWeekFromDate,
+  isSameIsoWeek,
   parseIsoWeek,
   type IsoWeek,
 } from "@/lib/isoWeek";
@@ -61,6 +62,20 @@ const elaborationOptions = [
   { value: 6, label: "Elaborado" },
 ] as const;
 const useWeekSuccessDelayMs = 900;
+
+const orderedDayNames = [
+  "Lunes",
+  "Martes",
+  "Miércoles",
+  "Jueves",
+  "Viernes",
+  "Sábado",
+  "Domingo",
+] as const;
+
+function getTodayDayName() {
+  return orderedDayNames[(new Date().getDay() + 6) % 7];
+}
 
 function isProfile(value: unknown): value is UserProfile {
   if (!value || typeof value !== "object") {
@@ -170,6 +185,10 @@ export default function CreateMenuPage() {
   const importedWeekDays = importedMenu
     ? importedMenuToWeekDays(importedMenu.days)
     : null;
+  const isCurrentTargetWeek = targetIsoWeek
+    ? isSameIsoWeek(targetIsoWeek, getIsoWeekFromDate())
+    : false;
+  const todayDayName = isCurrentTargetWeek ? getTodayDayName() : null;
 
   useEffect(() => {
     setHasMounted(true);
@@ -827,38 +846,64 @@ export default function CreateMenuPage() {
               Revisa tu semana
             </h2>
 
-            <Card className="overflow-hidden">
-              <ul className="divide-y divide-[color:var(--color-border)]">
-                {importedWeekDays.map((day) => (
-                  <li key={day.day} className="px-4 py-3 sm:px-5">
-                    <h3 className="t-h3 text-[color:var(--color-foreground)]">
-                      {day.day}
-                    </h3>
-                    <div className="mt-1.5 grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2.5">
+              {importedWeekDays.map((day) => {
+                const isToday = todayDayName === day.day;
+
+                return (
+                  <Card key={day.day} className="overflow-hidden">
+                    <div className="flex items-center gap-2 border-b border-[color:var(--color-border)] px-4 py-3">
+                      <h3 className="text-[1.05rem] font-semibold text-[color:var(--color-foreground)]">
+                        {day.day}
+                        <span className="ml-1.5 text-[0.85rem] font-normal text-[color:var(--color-muted-foreground)]">
+                          · {day.date}
+                        </span>
+                      </h3>
+                      {isToday ? (
+                        <span className="ml-auto shrink-0 rounded-full bg-[color:var(--color-accent-soft)] px-2.5 py-[3px] text-[0.64rem] font-bold uppercase tracking-[0.1em] text-[color:var(--color-accent)]">
+                          Hoy
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="grid grid-cols-2">
                       {(
                         [
                           { label: "Comida", value: day.lunch },
                           { label: "Cena", value: day.dinner },
                         ] as const
-                      ).map((meal) => (
-                        <div key={meal.label} className="min-w-0">
-                          <p className="t-micro">{meal.label}</p>
-                          <p
-                            className={`t-body-strong mt-1 ${
-                              meal.value === "LIBRE"
-                                ? "text-[color:var(--color-muted-foreground)]"
-                                : "text-[color:var(--color-foreground)]"
+                      ).map((meal, index) => {
+                        const isFree = meal.value === "LIBRE";
+
+                        return (
+                          <div
+                            key={meal.label}
+                            className={`min-w-0 px-3.5 py-3 ${
+                              index === 0
+                                ? "border-r border-[color:var(--color-border)]"
+                                : ""
                             }`}
                           >
-                            {meal.value === "LIBRE" ? "Libre" : meal.value}
-                          </p>
-                        </div>
-                      ))}
+                            <p className="mb-2 text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-muted-foreground)]">
+                              {meal.label}
+                            </p>
+                            <div
+                              className={`rounded-[var(--radius-input)] px-3 py-2.5 text-[0.88rem] font-medium leading-[1.4] ${
+                                isFree
+                                  ? "border border-dashed border-[color:var(--color-border)] italic text-[color:var(--color-muted-foreground)]"
+                                  : "bg-[color:var(--color-surface-muted)] text-[color:var(--color-foreground)]"
+                              }`}
+                            >
+                              {isFree ? "Libre" : meal.value}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </li>
-                ))}
-              </ul>
-            </Card>
+                  </Card>
+                );
+              })}
+            </div>
 
             <div className="w-full">
               <SecondaryButton

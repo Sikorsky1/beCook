@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { WeekDayCard } from "@/components/features/WeekDayCard";
 import { type MealKey, type WeekDay } from "@/data/mockWeek";
@@ -12,6 +12,7 @@ import {
   formatIsoWeekRange,
   getIsoWeekFromDate,
   getIsoWeekRange,
+  getIsoWeekStartDate,
   isSameIsoWeek,
   parseIsoWeek,
   type IsoWeek,
@@ -67,6 +68,16 @@ function formatTodayLabel() {
   })}`;
 }
 
+const dayStrip = [
+  { name: "Lunes", initial: "L" },
+  { name: "Martes", initial: "M" },
+  { name: "Miércoles", initial: "X" },
+  { name: "Jueves", initial: "J" },
+  { name: "Viernes", initial: "V" },
+  { name: "Sábado", initial: "S" },
+  { name: "Domingo", initial: "D" },
+] as const;
+
 function WeekPageContent() {
   const searchParams = useSearchParams();
   const isoYearParam = searchParams.get("isoYear");
@@ -75,12 +86,30 @@ function WeekPageContent() {
   const [selectedIsoWeek, setSelectedIsoWeek] = useState<IsoWeek | null>(null);
   const [weekDays, setWeekDays] = useState<WeekDay[] | null>(null);
   const [isLoadingWeek, setIsLoadingWeek] = useState(true);
+  const [activeDay, setActiveDay] = useState<number | null>(null);
+  const headerRef = useRef<HTMLElement | null>(null);
 
   const isCurrentWeek =
     selectedIsoWeek && currentIsoWeek
       ? isSameIsoWeek(selectedIsoWeek, currentIsoWeek)
       : false;
   const todayLabel = isCurrentWeek ? formatTodayLabel() : null;
+  const todayIndex = isCurrentWeek ? (new Date().getDay() + 6) % 7 : null;
+  const effectiveActiveDay = activeDay ?? todayIndex ?? 0;
+  const weekDayNumbers = useMemo(() => {
+    if (!selectedIsoWeek) {
+      return null;
+    }
+
+    const startDate = getIsoWeekStartDate(selectedIsoWeek);
+
+    return dayStrip.map((_, index) => {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + index);
+
+      return date.getDate();
+    });
+  }, [selectedIsoWeek]);
 
   useEffect(() => {
     const realCurrentIsoWeek = getIsoWeekFromDate();
@@ -175,9 +204,26 @@ function WeekPageContent() {
       return;
     }
 
+    setActiveDay(null);
     setSelectedIsoWeek((currentWeek) =>
       currentWeek ? addIsoWeeks(currentWeek, offset) : currentWeek,
     );
+  };
+
+  const handleSelectDay = (dayIndex: number) => {
+    setActiveDay(dayIndex);
+
+    const dayCard = document.getElementById(`week-day-${dayIndex}`);
+
+    if (!dayCard) {
+      return;
+    }
+
+    const headerOffset = (headerRef.current?.offsetHeight ?? 164) + 8;
+    const top =
+      dayCard.getBoundingClientRect().top + window.pageYOffset - headerOffset;
+
+    window.scrollTo({ top, behavior: "smooth" });
   };
 
   const handleMealChange = (
@@ -211,7 +257,10 @@ function WeekPageContent() {
       className={`${pageShellClass} px-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-6`}
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
-        <section className="sticky top-0 z-30 -mx-3 border-b border-[color:var(--color-border)] bg-[color:var(--color-background)]/90 px-3 pb-3 pt-3 backdrop-blur sm:-mx-6 sm:px-6">
+        <section
+          ref={headerRef}
+          className="sticky top-0 z-30 -mx-3 border-b border-[color:var(--color-border)] bg-[color:var(--color-background)]/90 px-3 pb-3 pt-3 backdrop-blur sm:-mx-6 sm:px-6"
+        >
           <div>
             <p className="t-eyebrow">Plan semanal</p>
             <div className="mt-1.5 flex items-center justify-between gap-2">
@@ -249,7 +298,10 @@ function WeekPageContent() {
               ) : selectedIsoWeek && currentIsoWeek ? (
                 <button
                   type="button"
-                  onClick={() => setSelectedIsoWeek(currentIsoWeek)}
+                  onClick={() => {
+                    setActiveDay(null);
+                    setSelectedIsoWeek(currentIsoWeek);
+                  }}
                   className="min-h-11 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-xs font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)]"
                 >
                   ↩ Volver a hoy
@@ -266,19 +318,61 @@ function WeekPageContent() {
                 </Link>
               ) : null}
             </div>
+
+            {selectedIsoWeek && weekDayNumbers ? (
+              <div
+                className="mt-2.5 grid grid-cols-7 gap-1.5"
+                role="group"
+                aria-label="Ir a un día de la semana"
+              >
+                {dayStrip.map((day, index) => {
+                  const isActive = effectiveActiveDay === index;
+                  const isTodayCell = todayIndex === index;
+
+                  return (
+                    <button
+                      key={day.name}
+                      type="button"
+                      onClick={() => handleSelectDay(index)}
+                      aria-label={`${day.name} ${weekDayNumbers[index]}`}
+                      aria-current={isActive ? "true" : undefined}
+                      className={`flex min-h-11 flex-col items-center justify-center rounded-xl border transition-colors ${
+                        isActive
+                          ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary)] text-white"
+                          : isTodayCell
+                            ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
+                            : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)] hover:border-[color:var(--color-border-strong)]"
+                      }`}
+                    >
+                      <span className="text-[0.82rem] font-bold leading-none">
+                        {day.initial}
+                      </span>
+                      <span className="mt-0.5 text-[0.62rem] font-semibold leading-none opacity-75">
+                        {weekDayNumbers[index]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         </section>
 
         <section>
           {weekDays ? (
             <div className="flex flex-col gap-2.5">
-              {weekDays.map((day) => (
-                <WeekDayCard
+              {weekDays.map((day, index) => (
+                <div
                   key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}-${day.day}`}
-                  day={day}
-                  isToday={todayLabel === day.date}
-                  onMealChange={handleMealChange}
-                />
+                  id={`week-day-${index}`}
+                  className="scroll-mt-[172px]"
+                >
+                  <WeekDayCard
+                    day={day}
+                    isToday={todayLabel === day.date}
+                    onMealChange={handleMealChange}
+                  />
+                </div>
               ))}
             </div>
           ) : (
