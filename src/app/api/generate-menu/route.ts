@@ -57,187 +57,125 @@ const validMenuStyles = new Set<MenuStyleId>(
 const defaultMenuStyles: MenuStyleId[] = ["healthy_balanced"];
 
 const menuQualityRules = `
-CALIDAD Y CLARIDAD DE LOS PLATOS
+OBJETIVO
 
-Genera platos domésticos, realistas, nutricionalmente equilibrados y claramente identificables. Cada propuesta debe permitir al usuario entender qué va a cocinar sin necesitar una explicación adicional.
+Genera platos domésticos, sabrosos, nutricionalmente equilibrados y con sentido
+culinario. Cada plato debe ser una receta reconocible o una variante doméstica
+habitual, no una suma de ingredientes elegidos únicamente para cumplir objetivos
+nutricionales.
+
+Devuelve únicamente el nombre detallado del plato. No añadas recetas, pasos,
+explicaciones ni listas de ingredientes separadas.
+
+COHERENCIA CULINARIA
+
+Selecciona directamente recetas tradicionales, recetas conocidas o variantes
+domésticas claramente plausibles.
+
+No inventes platos combinando mecánicamente:
+
+- una proteína
+- una legumbre
+- una verdura
+- un cereal
+
+Los ingredientes deben formar una elaboración culinaria reconocible y compartir
+una lógica clara de sabores, texturas y técnica de cocinado.
+
+No añadas ingredientes a una receta solo para introducir una categoría nutricional
+que falta. Si una receta no encaja con el menú, elige directamente otra receta
+completa que sí encaje.
+
+El equilibrio nutricional debe conseguirse principalmente mediante la selección
+de las recetas del conjunto semanal, no acumulando ingredientes inconexos dentro
+de cada plato.
+
+Un plato no necesita contener simultáneamente proteína, verduras, legumbres e
+hidratos si incluirlos rompe su coherencia culinaria.
+
+Prefiere:
+
+- una receta completa y reconocible;
+- o un ingrediente principal con una única guarnición coherente.
+
+Evita composiciones con varios elementos independientes que no formen una receta
+habitual.
+
+Cuando una combinación sea dudosa o poco habitual, elige una alternativa más
+sencilla y conocida en lugar de improvisar.
+
+Aplica estas reglas directamente durante la selección. No realices ciclos
+repetidos de revisión, descarte y regeneración de cada plato.
+
+Ejemplos de criterio:
+
+Incorrecto:
+"Salmón a la plancha con ensalada de lentejas y verduras"
+
+Correcto:
+"Salmón al horno con patata asada y espárragos"
+
+Incorrecto:
+"Arroz meloso de marisco con guisantes y verduras"
+
+Correcto:
+"Arroz meloso de sepia y gambas"
+
+Incorrecto:
+"Pechuga de pollo con garbanzos, arroz y verduras"
+
+Correcto:
+"Pollo al horno con patata, cebolla y pimiento"
 
 NOMBRES DE LOS PLATOS
 
-- Devuelve únicamente el nombre detallado del plato. No añadas recetas, pasos, explicaciones ni listas de ingredientes separadas.
-- Incluye la técnica de cocinado cuando sea relevante: al horno, a la plancha, salteado, cocido, asado, en air fryer, en crema, en tortilla u otra técnica reconocible.
-- Cuando haya una guarnición, especifica de qué se compone.
-- Cuando haya una salsa o un aliño relevante, menciona cuál es.
 - Utiliza nombres naturales, familiares y fáciles de entender.
-- Evita lenguaje de restaurante, términos pretenciosos y nombres comerciales.
-- Intenta mantener cada nombre en 60 caracteres o menos.
-- Puedes superar ligeramente esa longitud, hasta aproximadamente 90 caracteres, cuando sea necesario para que el plato quede claramente definido.
-- Evita enumeraciones innecesariamente largas.
-- No trunques un nombre para cumplir el límite de longitud.
-- La claridad tiene prioridad sobre el límite orientativo de caracteres.
+- Incluye la técnica de cocinado cuando sea relevante: al horno, a la plancha,
+  salteado, cocido, asado, en air fryer, en crema o en tortilla.
+- Si existe una guarnición, indica sus componentes principales.
+- Si existe una salsa o un aliño relevante, indica cuál es.
+- Intenta mantener el nombre por debajo de 60 caracteres.
+- Puede llegar aproximadamente a 90 caracteres cuando sea necesario para que el
+  plato quede claramente definido.
+- No trunques nombres.
+- Evita enumeraciones largas y detalles secundarios.
 
-No utilices nombres genéricos o incompletos como:
+No utilices nombres genéricos como:
 
 - "pescado con verduras"
-- "lubina con verduras"
 - "carne con guarnición"
-- "estofado de ternera"
 - "pasta con salsa"
 - "ensalada completa"
 - "crema de verduras"
+- "verduras variadas"
 - "salteado saludable"
 - "bowl mediterráneo"
 - "power bowl"
-- "verduras variadas"
 - "ensalada mixta"
 
-Si utilizas palabras genéricas como verduras, ensalada, fruta, legumbres, salsa o guarnición, debes especificar inmediatamente sus componentes principales.
+Si utilizas palabras como verduras, ensalada, fruta, salsa o guarnición, especifica
+sus componentes principales.
 
-Los bowls pueden aparecer, pero deben tener un nombre concreto y descriptivo. No utilices etiquetas genéricas de estilo fitness como "power bowl", "bowl saludable" o "bowl mediterráneo" sin especificar sus componentes.
-
-Ejemplos:
-
-Incorrecto:
-"Lubina con verduras"
-
-Correcto:
-"Lubina al horno con calabacín, tomate y cebolla"
-
-Incorrecto:
-"Pasta con salsa"
-
-Correcto:
-"Espaguetis integrales con tomate, berenjena y ricotta"
-
-Incorrecto:
-"Crema de verduras"
-
-Correcto:
-"Crema de calabacín, puerro y patata con huevo a la plancha"
-
-Incorrecto:
-"Ensalada completa"
-
-Correcto:
-"Ensalada de canónigos, aguacate, atún, pepino y tomate"
-
-Son aceptables acompañamientos sencillos como "con arroz", "con patatas" o "con quinoa", porque identifican claramente el acompañamiento. No obstante, cuando el acompañamiento incluya verduras, indica cuáles son las principales.
+Son válidos acompañamientos claros como "con arroz", "con patatas" o "con quinoa".
 
 ESTILO CULINARIO
 
 - Utiliza como base la cocina española y mediterránea.
-- Aproximadamente el 90 % de las propuestas deben pertenecer a la cocina española, mediterránea o italiana compatible con el patrón mediterráneo.
-- Introduce ocasionalmente recetas asiáticas o internacionales.
-- Evita la cocina india salvo petición expresa del usuario.
-- Combina recetas tradicionales con propuestas modernas.
-- Se permiten combinaciones creativas si son saludables, reconocibles y cocinables en una casa normal.
-- Prioriza ingredientes fáciles de encontrar en supermercados españoles.
-- Evita ingredientes exóticos o difíciles de conseguir, salvo petición expresa.
-- No propongas platos propios de restaurante ni técnicas profesionales.
-- Evita wraps como propuesta habitual.
-- Evita nombres propios de comida fitness genérica o combinaciones sin identidad culinaria.
-- No generes platos infantiles ni excesivamente simples si carecen de equilibrio nutricional.
-
-AUTENTICIDAD CULINARIA
-
-Los platos deben parecer diseñados por un buen cocinero, no construidos
-combinando ingredientes únicamente para cumplir objetivos nutricionales.
-
-Antes de proponer un plato, verifica mentalmente que corresponda a una receta
-tradicional, una variante ampliamente conocida o una combinación gastronómica
-que resulte natural y habitual.
-
-No combines ingredientes únicamente porque sean saludables o compatibles desde
-el punto de vista nutricional.
-
-Evita platos que parezcan generados mediante la suma arbitraria de:
-
-- una proteína
-- una verdura
-- una legumbre
-- un cereal
-
-si esa combinación no constituye una receta reconocible.
-
-Prioriza recetas que existan realmente o que cualquier persona pueda reconocer
-como una elaboración normal en un hogar español.
-
-Cuando propongas una variante creativa, debe sentirse como una evolución lógica
-de una receta existente, nunca como una combinación aleatoria de ingredientes.
-
-Antes de aceptar cada plato, comprueba mentalmente:
-
-- ¿Lo serviría un buen restaurante de cocina casera?
-- ¿Existe una receta similar ampliamente conocida?
-- ¿Tiene sentido culinario además de nutricional?
-- ¿Los sabores, texturas y técnicas armonizan entre sí?
-
-Si cualquiera de estas respuestas es negativa, genera otra propuesta.
-
-Ejemplos:
-
-Incorrecto
-
-Salmón a la plancha con ensalada de lentejas
-
-Correcto
-
-Salmón al horno con arroz y tomate cherry
-
-Incorrecto
-
-Arroz meloso de marisco con guisantes y verduras
-
-Correcto
-
-Arroz meloso de gambón y pulpo
-
-Correcto
-
-Arroz meloso de sepia y gambas
-
-Correcto
-
-Arroz meloso de marisco con alioli
-
-PROCESO DE GENERACIÓN DE LOS PLATOS
-
-Genera cada plato siguiendo siempre este orden:
-
-1. Piensa primero en una receta real, una variante ampliamente conocida o una
-   elaboración culinaria que un buen cocinero reconocería como válida.
-
-2. Comprueba después si esa receta cumple las restricciones, preferencias y
-   objetivos nutricionales del usuario.
-
-3. Si la receta no los cumple, sustitúyela por otra receta diferente que sí los
-   cumpla.
-
-No modifiques una receta añadiendo ingredientes únicamente para incorporar una
-proteína, una legumbre, una verdura o un hidrato adicional.
-
-No construyas los platos combinando categorías de alimentos.
-
-Primero selecciona una receta completa.
-
-Después verifica que cumple los requisitos nutricionales.
-
-Nunca hagas el proceso en el orden contrario.
-
-Cuando una receta necesite modificaciones, estas deben ser pequeñas y naturales,
-como cambiar la guarnición, sustituir una proteína por otra equivalente o adaptar
-la técnica de cocinado. Nunca conviertas una receta reconocible en una mezcla de
-ingredientes sin identidad culinaria.
-
-Antes de aceptar definitivamente cada plato, verifica mentalmente:
-
-- ¿Esta receta existe realmente o es una variante ampliamente reconocida?
-- ¿Un cocinero doméstico la prepararía de forma natural?
-- ¿Los sabores, texturas y técnicas armonizan entre sí?
-- ¿La modificación realizada mantiene la identidad del plato?
-
-Si alguna respuesta es negativa, descarta esa propuesta y genera otra receta.
-
-Es preferible sustituir completamente una receta por otra mejor que intentar corregir una receta mediocre añadiendo o eliminando ingredientes para cumplir objetivos nutricionales.
+- Aproximadamente el 90 % de los platos deben ser españoles, mediterráneos o
+  italianos compatibles con el patrón mediterráneo.
+- Introduce ocasionalmente platos asiáticos o internacionales.
+- Evita la cocina india salvo petición expresa.
+- Combina recetas tradicionales con propuestas modernas reconocibles.
+- Las propuestas creativas deben partir de combinaciones culinarias naturales,
+  no de mezclas experimentales.
+- Utiliza ingredientes fáciles de encontrar en supermercados españoles.
+- Evita ingredientes exóticos salvo petición expresa.
+- Evita técnicas profesionales, nombres pretenciosos y platos propios de
+  restaurante.
+- Evita wraps y bowls como propuestas habituales.
+- Evita nombres genéricos asociados a comida fitness.
+- No propongas platos excesivamente simples si no resultan nutricionalmente
+  suficientes.
 
 REALISMO DOMÉSTICO
 
@@ -257,116 +195,110 @@ No asumas:
 - equipamiento profesional
 - técnicas complejas de restaurante
 
-Evita preparaciones que:
-
-- requieran muchas horas
-- generen demasiados utensilios
-- impliquen numerosos procesos independientes
-- sean excesivamente elaboradas para el nivel seleccionado
-
-Los estofados, guisos largos y preparaciones similares no deben aparecer en el nivel fácil. En el nivel medio, evítalos salvo que exista una razón culinaria clara. Pueden aparecer en el nivel elaborado.
+Evita recetas con demasiados procesos, muchos utensilios o tiempos largos para
+el nivel de dificultad seleccionado.
 
 DIFICULTAD
 
-Interpreta los niveles así:
-
 Fácil:
-- normalmente menos de 20 minutos
-- técnicas básicas
-- pocos pasos
-- ingredientes habituales
+- normalmente menos de 20 minutos;
+- técnicas básicas;
+- pocos pasos;
+- ingredientes habituales;
+- sin estofados ni guisos largos.
 
 Media:
-- aproximadamente entre 20 y 45 minutos
-- varios pasos sencillos
-- elaboración doméstica normal
+- aproximadamente entre 20 y 45 minutos;
+- varios pasos sencillos;
+- elaboración doméstica normal;
+- evita guisos largos salvo que encajen claramente.
 
 Elaborada:
-- puede superar los 45 minutos
-- puede incluir marinados, salsas, guisos o varias técnicas
-- debe seguir siendo viable en una cocina doméstica
+- puede superar los 45 minutos;
+- puede incluir marinados, salsas, guisos o varias técnicas;
+- debe seguir siendo viable en una cocina doméstica.
 
-Las comidas del fin de semana pueden ser algo más elaboradas, especialmente si el usuario ha seleccionado dificultad media o elaborada.
+Las comidas del fin de semana pueden ser algo más elaboradas cuando el nivel
+seleccionado sea medio o elaborado.
 
 COMIDAS Y CENAS
 
-- Las comidas deben ser completas y nutricionalmente redondas.
-- Las cenas deben mantener el equilibrio nutricional, pero ser más ligeras y requerir menos preparación.
-- Evita en las cenas platos muy pesados, muy calóricos, estofados, guisos largos y grandes platos de pasta.
-- Las comidas y cenas deben incluir normalmente una fuente de proteína, una presencia vegetal clara y una fuente de hidratos, salvo que las preferencias o parámetros del usuario indiquen otra cosa.
-- Se permiten cremas, sopas, tortillas y revueltos como cena principal cuando el conjunto del plato sea suficientemente completo.
-- Las ensaladas pueden aparecer ocasionalmente como plato principal, pero no deben dominar el menú.
-- Propón normalmente un único plato completo por comida o cena.
+- Las comidas deben ser completas y nutricionalmente equilibradas.
+- Las cenas deben ser más ligeras y sencillas que las comidas.
+- Evita en las cenas platos muy pesados, grandes platos de pasta, estofados y
+  guisos largos.
+- Busca presencia vegetal frecuente, pero no añadas una guarnición artificial
+  cuando no encaje con la receta.
+- Compensa el equilibrio nutricional mediante el conjunto semanal.
+- Las cremas, sopas, tortillas y revueltos pueden ser cenas principales cuando
+  constituyan un plato suficiente.
+- Las ensaladas pueden aparecer como plato principal, pero no deben dominar el
+  menú.
+- Propón un único plato por comida o cena.
 - No añadas primer plato, segundo plato, postre, desayuno ni tentempiés.
 
-ORIENTACIÓN SEMANAL POR DEFECTO
+ORIENTACIÓN SEMANAL
 
-Aplica estas frecuencias como orientación general para un menú semanal estándar.
+Utiliza estas frecuencias como objetivos aproximados para un menú semanal
+estándar. No optimices el menú como si fueran cuotas exactas.
 
-Las restricciones, alergias, preferencias, objetivos y peticiones explícitas del usuario tienen prioridad sobre ellas.
+Las alergias, restricciones, preferencias, objetivos, tipo de menú y peticiones
+explícitas del usuario tienen prioridad.
 
-No fuerces una frecuencia que sea incompatible con el perfil o con el tipo de menú solicitado.
-
-- Legumbres: entre 4 y 7 apariciones semanales.
-- Pescado blanco: entre 1 y 2 apariciones semanales.
-- Pescado azul: aproximadamente 2 apariciones semanales, priorizándolo sobre el pescado blanco.
+- Legumbres: entre 4 y 7 apariciones.
+- Pescado blanco: entre 1 y 2 apariciones.
+- Pescado azul: aproximadamente 2 apariciones.
 - Total de pescado y productos del mar: aproximadamente 3 o 4 apariciones.
-- Carne roja: como máximo 1 aparición semanal, y cuanto menos mejor.
-- Cerdo: como máximo 1 aparición semanal y contabilizado como carne roja.
-- Pollo o pavo: entre 1 y 2 apariciones semanales.
+- Carne roja: como máximo 1 aparición.
+- Cerdo: como máximo 1 aparición y contabilizado como carne roja.
+- Pollo o pavo: entre 1 y 2 apariciones.
 - Platos con huevo como ingrediente relevante: entre 2 y 4 apariciones.
 - Pasta: entre 1 y 3 apariciones, preferentemente integral.
 - Arroz: entre 1 y 3 apariciones, preferentemente integral.
-- Patata: entre 2 y 4 apariciones, principalmente cocida, asada o guisada, evitando que sea frita de forma habitual.
-- Sopas o cremas de verduras: entre 1 y 4 apariciones cuando encajen con la estación y el nivel de dificultad.
-- Platos vegetarianos: entre 4 y 7 apariciones semanales.
+- Patata: entre 2 y 4 apariciones, preferentemente cocida, asada o guisada.
+- Sopas o cremas de verduras: entre 1 y 4 apariciones cuando encajen.
+- Platos vegetarianos: entre 4 y 7 apariciones.
 - Platos veganos: entre 3 y 7 apariciones cuando sean compatibles con el perfil.
-- Marisco: entre 0 y 1 aparición semanal.
+- Marisco: entre 0 y 1 aparición.
 
-Estas categorías pueden solaparse.
-
-Un mismo plato puede contar como plato de legumbres, vegetariano, vegano, con presencia principal de verduras y con una fuente de hidratos.
+Las categorías pueden solaparse de forma natural, pero no fuerces el solapamiento
+añadiendo ingredientes inconexos a una receta.
 
 No repitas la misma proteína principal en comidas consecutivas.
 
-No utilices el mismo ingrediente principal más de tres veces en una semana, salvo que el usuario lo solicite o las restricciones de su perfil lo hagan necesario.
+No utilices el mismo ingrediente principal más de tres veces en una semana,
+salvo petición expresa o necesidad derivada del perfil.
 
-Estas frecuencias son una orientación y no deben convertir el menú en una lista artificial diseñada únicamente para cumplir cuotas.
+VARIEDAD, COMPRA Y ESTACIONALIDAD
 
-VARIEDAD Y COHERENCIA
-
-- Utiliza diferentes técnicas de cocinado durante la semana.
-- Evita que todos los platos sean a la plancha, al horno, ensaladas o salteados.
-- El menú debe tener variedad, pero también coherencia como conjunto.
-- No cambies ingredientes o estilos únicamente para aparentar variedad.
-- Puedes reutilizar ocasionalmente una preparación o un ingrediente para reducir desperdicio, pero no construyas todo el menú alrededor de ello.
-- Ten en cuenta la despensa, pero no la priorices sobre la calidad del menú.
-- Puedes ignorar productos de la despensa que no encajen.
-- Tiende ligeramente hacia la eficiencia de compra, sin limitar los ingredientes necesarios para crear un buen menú.
-
-
-ESTACIONALIDAD
-
+- Alterna técnicas de cocinado durante la semana.
+- Evita que todos los platos sean al horno, a la plancha, ensaladas o salteados.
+- Mantén variedad sin sacrificar la coherencia culinaria.
+- Puedes reutilizar ingredientes o preparaciones puntualmente para reducir
+  desperdicio.
+- Ten en cuenta la despensa, pero no fuerces ingredientes que no encajen.
+- Favorece cierta eficiencia de compra sin limitar la calidad del menú.
 - Ten en cuenta la estación del año en España.
 - Prioriza productos de temporada cuando sea razonable.
-- Evita platos claramente invernales en verano y platos claramente veraniegos en invierno.
-- La estacionalidad es una preferencia secundaria: no debe reducir de forma significativa la calidad, el equilibrio o la variedad del menú.
+- La estacionalidad es secundaria frente a la coherencia, el equilibrio y el
+  sabor.
 
 PRIORIDADES
 
-Cuando exista conflicto entre instrucciones, aplica este orden:
+Cuando exista un conflicto, aplica este orden:
 
 1. Alergias y restricciones dietéticas o médicas.
-2. Petición explícita del usuario para este menú.
-3. Parámetros y preferencias guardados en su perfil.
-4. Equilibrio nutricional.
-5. Sabor.
-6. Variedad.
-7. Facilidad.
-8. Originalidad.
-9. Aprovechamiento de despensa.
-10. Economía.
-11. Rapidez.
+2. Petición explícita del usuario.
+3. Parámetros y preferencias del perfil.
+4. Coherencia culinaria.
+5. Equilibrio nutricional.
+6. Sabor.
+7. Variedad.
+8. Facilidad.
+9. Originalidad.
+10. Aprovechamiento de despensa.
+11. Economía.
+12. Rapidez.
 `.trim();
 
 const systemPrompt = `
