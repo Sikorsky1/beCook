@@ -237,6 +237,47 @@ COMIDAS Y CENAS
 - Propón un único plato por comida o cena.
 - No añadas primer plato, segundo plato, postre, desayuno ni tentempiés.
 
+PREFERENCIA PUNTUAL DE ESTA SEMANA
+
+El texto introducido en “¿Qué te apetece esta semana?” es, por defecto, una
+preferencia puntual para una parte del menú. No lo interpretes como una condición
+obligatoria para todas las comidas y cenas.
+
+- Refleja normalmente esta preferencia en aproximadamente 1–3 comidas o cenas,
+  según la naturaleza de la petición.
+- Conserva en el resto de la semana la variedad de ingredientes, proteínas,
+  estilos culinarios y técnicas de cocinado.
+- No apliques la preferencia en días consecutivos salvo que resulte natural o el
+  usuario lo solicite.
+- Si describe un ingrediente, una cocina, una receta o un tipo de plato, no lo
+  repitas automáticamente en todo el menú ni permitas que lo domine.
+- La preferencia puede influir de forma indirecta en algún plato relacionado,
+  pero sigue siendo puntual.
+- Si el usuario indica una cantidad o frecuencia concreta, respétala exactamente
+  siempre que sea compatible con sus alergias y restricciones.
+- Aplica la preferencia con alcance global únicamente cuando el usuario lo pida
+  de forma inequívoca mediante expresiones como “todos los días”, “en todas las
+  cenas”, “en cada comida”, “durante toda la semana”, “solo quiero” o equivalentes.
+- Las alergias y las restricciones médicas o dietéticas obligatorias sí tienen
+  alcance global y siempre prevalecen.
+- Si el alcance resulta ambiguo, elige la interpretación menos repetitiva y
+  conserva la variedad semanal.
+
+Ejemplos de interpretación:
+
+- “Me apetece comida italiana”: incluye uno o dos platos italianos; no conviertas
+  todo el menú en italiano.
+- “Quiero algo con aguacate”: incluye aguacate en uno o dos platos como máximo,
+  salvo indicación contraria.
+- “Me gustaría comer pescado”: asegura alguna aparición razonable de pescado sin
+  utilizarlo en todas las comidas.
+- “Quiero pescado tres veces esta semana”: inclúyelo exactamente tres veces si
+  las restricciones lo permiten.
+- “Quiero cenar pescado todos los días”: aplícalo a todas las cenas porque la
+  frecuencia es explícita.
+- “Esta semana solo quiero comida vegetariana”: trátalo como una condición global
+  explícita.
+
 ORIENTACIÓN SEMANAL
 
 Utiliza estas frecuencias como objetivos aproximados para un menú semanal
@@ -496,7 +537,8 @@ Genera un menú semanal de comidas y cenas con estos datos:
 Número de personas: ${peopleCount}
 Tipos de menú seleccionados: ${menuStyleLabels.join(", ")}
 Nivel de elaboración deseado: ${elaborationLevel}/7
-Preferencia libre del usuario: ${freeTextPrompt || "Sin preferencia adicional."}
+Preferencia puntual de esta semana (no obligatoria para todos los platos salvo alcance explícito):
+${freeTextPrompt || "Sin preferencia puntual adicional."}
 
 Contexto temporal en España:
 - Mes actual: ${temporalContext.month}
@@ -513,7 +555,9 @@ ${recentDishesContext}
 
 Instrucciones de adaptación:
 - Las alergias y restricciones dietéticas son obligatorias y prevalecen sobre cualquier otra instrucción.
-- Aplica la preferencia libre de este menú con prioridad sobre las preferencias generales y el perfil, salvo que contradiga una alergia o restricción dietética.
+- Interpreta la preferencia puntual de esta semana según las reglas de alcance del prompt: normalmente debe aparecer solo en 1–3 comidas o cenas y no dominar el menú.
+- Si esa preferencia especifica una cantidad, frecuencia o alcance global inequívoco, respétalo siempre que no contradiga una alergia o restricción dietética.
+- En los platos donde corresponda aplicarla, priorízala sobre las preferencias generales y el perfil.
 - Después de lo anterior, prioriza los objetivos, preferencias, alimentos no deseados y nivel de actividad del perfil sobre las frecuencias semanales generales.
 - Ajusta el menú a todos los tipos seleccionados, priorizando combinaciones coherentes. Los tipos seleccionados pueden modificar las frecuencias semanales generales.
 - Aplica realmente este nivel de elaboración a la complejidad de los platos: ${elaborationGuidance}
