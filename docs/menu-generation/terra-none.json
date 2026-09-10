@@ -1,0 +1,134 @@
+[
+  {
+    "id": "A",
+    "totalMs": 4783.681167,
+    "status": 200,
+    "calls": [
+      {
+        "model": "gpt-5.6-terra",
+        "effort": "none",
+        "inputChars": [
+          2224,
+          1370
+        ],
+        "start": 305.088625,
+        "ms": 4762.6844169999995,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 921,
+          "completion_tokens": 233,
+          "total_tokens": 1154,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "audio_tokens": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0,
+            "audio_tokens": 0,
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0
+          }
+        }
+      }
+    ],
+    "data": {
+      "week": "Semana creada con beCook",
+      "days": [
+        {
+          "dayName": "Lunes",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Lentejas estofadas con verduras"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Tortilla de patata con ensalada de canónigos y tomate"
+          }
+        },
+        {
+          "dayName": "Martes",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Salmón a la plancha con calabacín y patata cocida"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Ensalada de tomate, aguacate, zanahoria y anchoas"
+          }
+        },
+        {
+          "dayName": "Miércoles",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Pollo al limón con arroz y ensalada de tomate"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Bacalao a la plancha con pisto de calabacín y berenjena"
+          }
+        },
+        {
+          "dayName": "Jueves",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Garbanzos salteados con espinacas y huevo duro"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Revuelto de champiñones, espárragos y jamón"
+          }
+        },
+        {
+          "dayName": "Viernes",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Albóndigas de pollo en salsa de tomate con champiñones"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Tosta de ventresca con tomate rallado y aguacate"
+          }
+        },
+        {
+          "dayName": "Sábado",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Merluza a la plancha con ajos fritos y judías verdes"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Crema de calabacín con pechuga de pavo a la plancha"
+          }
+        },
+        {
+          "dayName": "Domingo",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Espaguetis con brócoli, ajo y aceite de oliva"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Ensalada de tomate y queso fresco con pan tostado"
+          }
+        }
+      ],
+      "openaiTelemetry": {
+        "modelUsed": "gpt-5.6-terra",
+        "reasoningEffort": "none",
+        "promptTokens": 921,
+        "completionTokens": 233,
+        "totalTokens": 1154,
+        "reasoningTokens": 0,
+        "cachedPromptTokens": 0,
+        "estimatedCostUsd": 0.004638,
+        "responseTimeMs": 4766,
+        "attempts": 1,
+        "fallbackUsed": false,
+        "preparationMs": 13,
+        "parseMs": 0,
+        "totalMs": 4780
+      }
+    }
+  }
+]

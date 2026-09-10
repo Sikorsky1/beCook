@@ -9,7 +9,10 @@
     "test:supabase:read-latest-week": "npx tsx scripts/test-read-latest-week.ts",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --require ./scripts/register-typescript.cjs --test tests/*.test.cjs",
+    "benchmark:menu": "node scripts/benchmark-menu.cjs"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",

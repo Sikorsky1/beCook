@@ -1,0 +1,170 @@
+{
+  "source": "recetas beCook.numbers",
+  "sheet": "Hoja 1",
+  "table": "Tabla 1",
+  "ingredientCoverage": "names_only",
+  "recipes": [
+    {
+      "id": "nutri-c10",
+      "sourceCell": "C10",
+      "name": "Filete de pollo plancha y acelgas rehogadas",
+      "slot": "lunch"
+    },
+    {
+      "id": "nutri-c21",
+      "sourceCell": "C21",
+      "name": "Albóndigas de pollo y champiñón salteado",
+      "slot": "lunch"
+    },
+    {
+      "id": "nutri-c22",
+      "sourceCell": "C22",
+      "name": "Pollo asado con batata",
+      "slot": "lunch"
+    },
+    {
+      "id": "nutri-c23",
+      "sourceCell": "C23",
+      "name": "Pollo al limón",
+      "slot": "lunch"
+    },
+    {
+      "id": "nutri-c24",
+      "sourceCell": "C24",
+      "name": "Paletilla de cordero al horno con patatas",
+      "slot": "lunch"
+    },
+    {
+      "id": "nutri-c34",
+      "sourceCell": "C34",
+      "name": "Lentejas estofadas",
+      "slot": "lunch"
+    },
+    {
+      "id": "nutri-c36",
+      "sourceCell": "C36",
+      "name": "Espaguetis a la boloñesa",
+      "slot": "lunch"
+    },
+    {
+      "id": "nutri-c37",
+      "sourceCell": "C37",
+      "name": "Espaguetis con gambas y chirlas",
+      "slot": "lunch"
+    },
+    {
+      "id": "nutri-c38",
+      "sourceCell": "C38",
+      "name": "Espaguetis con brócoli",
+      "slot": "lunch"
+    },
+    {
+      "id": "nutri-c39",
+      "sourceCell": "C39",
+      "name": "Espaguetis al pesto",
+      "slot": "lunch"
+    },
+    {
+      "id": "nutri-c52",
+      "sourceCell": "C52",
+      "name": "Judias verdes con patata y huevo duro",
+      "slot": "lunch"
+    },
+    {
+      "id": "nutri-e5",
+      "sourceCell": "E5",
+      "name": "Filete de pollo plancha y ensalada (canónigos y tomate)",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e6",
+      "sourceCell": "E6",
+      "name": "Filete de pavo plancha y ensalada (canónigos y tomate)",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e12",
+      "sourceCell": "E12",
+      "name": "Tosta de Jamón y aguacate",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e13",
+      "sourceCell": "E13",
+      "name": "Tosta de Salmón ahumado",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e15",
+      "sourceCell": "E15",
+      "name": "Tosta de Ventresca con tomate",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e18",
+      "sourceCell": "E18",
+      "name": "Salmón a la plancha",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e21",
+      "sourceCell": "E21",
+      "name": "Bacalao plancha con ajos fritos",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e22",
+      "sourceCell": "E22",
+      "name": "Merluza plancha con ajos fritos",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e24",
+      "sourceCell": "E24",
+      "name": "Pata de pulpo a la plancha con puré de patata",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e27",
+      "sourceCell": "E27",
+      "name": "Ensalada de tomates, zanahoria, aguacate y anchoas",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e29",
+      "sourceCell": "E29",
+      "name": "Espárragos, berenjena, calabacín y zanahoria plancha",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e32",
+      "sourceCell": "E32",
+      "name": "Ensalada de tomate y queso fresco",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e33",
+      "sourceCell": "E33",
+      "name": "Alcachofas con jamón",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e34",
+      "sourceCell": "E34",
+      "name": "Escalibada",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e38",
+      "sourceCell": "E38",
+      "name": "Revuelto de champiñón, espárragos y jamón",
+      "slot": "dinner"
+    },
+    {
+      "id": "nutri-e41",
+      "sourceCell": "E41",
+      "name": "Tortilla de patata",
+      "slot": "dinner"
+    }
+  ]
+}

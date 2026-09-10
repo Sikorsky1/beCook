@@ -307,6 +307,10 @@ export default function CreateMenuPage() {
   };
 
   const handleGenerateMenu = async () => {
+    const generationStartedAt = performance.now();
+    let preparationMs = 0;
+    let apiMs = 0;
+    let persistenceMs = 0;
     setIsLoading(true);
     setLoadingMode("generate");
     setErrorMessage("");
@@ -372,6 +376,8 @@ export default function CreateMenuPage() {
         );
       }
 
+      preparationMs = Math.round(performance.now() - generationStartedAt);
+      const apiStartedAt = performance.now();
       const response = await fetch("/api/generate-menu", {
         method: "POST",
         headers: {
@@ -391,6 +397,8 @@ export default function CreateMenuPage() {
       const data = (await response.json()) as
         | GeneratedMenuApiResponse
         | MenuGenerationApiErrorResponse;
+      apiMs = Math.round(performance.now() - apiStartedAt);
+      const persistenceStartedAt = performance.now();
 
       if (!response.ok) {
         setImportedMenu(null);
@@ -442,6 +450,7 @@ export default function CreateMenuPage() {
         }
       }
 
+      persistenceMs = Math.round(performance.now() - persistenceStartedAt);
       setImportedMenu(generatedMenu);
     } catch {
       setImportedMenu(null);
@@ -464,6 +473,12 @@ export default function CreateMenuPage() {
 
       setErrorMessage("Ha fallado la conexión al crear el menú.");
     } finally {
+      if (process.env.NODE_ENV === "development") {
+        console.info("menu_generation_browser", {
+          preparationMs, apiMs, persistenceMs,
+          totalMs: Math.round(performance.now() - generationStartedAt),
+        });
+      }
       setIsLoading(false);
       setLoadingMode(null);
     }

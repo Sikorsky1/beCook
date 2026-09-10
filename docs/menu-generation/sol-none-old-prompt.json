@@ -1,0 +1,126 @@
+[
+  {
+    "id": "A",
+    "totalMs": 8802.571292,
+    "status": 200,
+    "calls": [
+      {
+        "model": "gpt-5.6-sol",
+        "effort": "none",
+        "inputChars": [
+          11561,
+          3043
+        ],
+        "start": 454.700292,
+        "ms": 8763.862500000001,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 3582,
+          "completion_tokens": 417,
+          "total_tokens": 3999,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 3579,
+            "audio_tokens": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0,
+            "audio_tokens": 0,
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0
+          }
+        }
+      }
+    ],
+    "data": {
+      "week": "Semana creada con beCook",
+      "days": [
+        {
+          "dayName": "Lunes",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Garbanzos guisados con calabaza y espinacas"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Merluza al horno con calabacín y patata"
+          }
+        },
+        {
+          "dayName": "Martes",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Arroz integral con pollo, pimiento y judías verdes"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Crema de calabaza y zanahoria con huevo cocido"
+          }
+        },
+        {
+          "dayName": "Miércoles",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Lentejas estofadas con puerro, zanahoria y tomate"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Tortilla de calabacín y cebolla con tomate aliñado"
+          }
+        },
+        {
+          "dayName": "Jueves",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Pasta integral con atún, tomate y aceitunas"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Ensalada de garbanzos con pimiento asado y huevo"
+          }
+        },
+        {
+          "dayName": "Viernes",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Salmón a la plancha con patata cocida y brócoli"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Crema de calabacín y puerro con queso fresco"
+          }
+        },
+        {
+          "dayName": "Sábado",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Arroz meloso de sepia y gambas"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Berenjenas rellenas de lentejas y verduras"
+          }
+        },
+        {
+          "dayName": "Domingo",
+          "lunch": {
+            "status": "planned",
+            "dishName": "Pollo al horno con patata, cebolla y pimiento"
+          },
+          "dinner": {
+            "status": "planned",
+            "dishName": "Ensalada templada de alubias blancas y verduras asadas"
+          }
+        }
+      ],
+      "openaiTelemetry": {
+        "modelUsed": "gpt-5.6-sol",
+        "promptTokens": 3582,
+        "completionTokens": 417,
+        "totalTokens": 3999,
+        "estimatedCostUsd": 0.03042,
+        "responseTimeMs": 8767
+      }
+    }
+  }
+]

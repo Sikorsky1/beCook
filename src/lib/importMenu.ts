@@ -17,6 +17,14 @@ export type ImportedMenuResponse = {
 };
 
 export type OpenAIMenuGenerationTelemetry = {
+  reasoningEffort?: string;
+  reasoningTokens?: number | null;
+  cachedPromptTokens?: number | null;
+  attempts?: number;
+  fallbackUsed?: boolean;
+  preparationMs?: number;
+  parseMs?: number;
+  totalMs?: number;
   modelUsed: string;
   promptTokens: number | null;
   completionTokens: number | null;

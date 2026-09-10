@@ -38,7 +38,6 @@ export async function createMenuGenerationRequest({
   freeTextPrompt,
 }: CreateMenuGenerationRequestInput) {
   const client = ensureSupabaseClient();
-  console.log("Saving menu request with user:", userId ?? null);
 
   const { data: insertedRequest, error } = await client
     .from("menu_generation_requests")
