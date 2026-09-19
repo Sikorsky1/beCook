@@ -1,5 +1,10 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Secretos antes de un commit
+
+Ejecuta `npm run secrets:check` después de preparar los archivos con Git.
+Consulta [instalación, hook local y falsos positivos](docs/security/secret-detection.md).
+
 ## Getting Started
 
 First, run the development server:

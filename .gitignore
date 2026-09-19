@@ -47,3 +47,22 @@ node_modules
 dist
 build
 coverage
+
+# Recovery exports and local credentials (never commit real values).
+*recovery*codes*
+*backup*codes*
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+.aws/
+.config/gcloud/
+credentials.json
+service-account*.json
+/.tools/
+
+# Templates may be committed; the secret scanner still checks their contents.
+!.env.example
+!.env.sample
+!.env.template

@@ -10,6 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "secrets:check": "node scripts/check-secrets.cjs",
+    "secrets:test": "node --test tests/secrets.test.cjs",
     "typecheck": "tsc --noEmit",
     "test": "node --require ./scripts/register-typescript.cjs --test tests/*.test.cjs",
     "benchmark:menu": "node scripts/benchmark-menu.cjs"
