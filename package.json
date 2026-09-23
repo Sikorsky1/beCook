@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack --disable-source-maps",
-    "test:supabase": "node --env-file=.env.local scripts/test-supabase-week.ts",
-    "test:supabase:save-week": "npx tsx scripts/test-save-week.ts",
-    "test:supabase:read-latest-week": "npx tsx scripts/test-read-latest-week.ts",
+    "dev": "node scripts/local-supabase.cjs dev",
+    "test:supabase": "node --require ./scripts/register-typescript.cjs scripts/test-supabase-week.ts",
+    "test:supabase:save-week": "node --require ./scripts/register-typescript.cjs scripts/test-save-week.ts",
+    "test:supabase:read-latest-week": "node --require ./scripts/register-typescript.cjs scripts/test-read-latest-week.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -14,7 +14,14 @@
     "secrets:test": "node --test tests/secrets.test.cjs",
     "typecheck": "tsc --noEmit",
     "test": "node --require ./scripts/register-typescript.cjs --test tests/*.test.cjs",
-    "benchmark:menu": "node scripts/benchmark-menu.cjs"
+    "benchmark:menu": "node scripts/benchmark-menu.cjs",
+    "dev:local": "node scripts/local-supabase.cjs dev",
+    "db:start": "node scripts/local-supabase.cjs start",
+    "db:stop": "node scripts/local-supabase.cjs stop",
+    "db:reset": "node scripts/local-supabase.cjs reset",
+    "db:migrate": "node scripts/local-supabase.cjs migrate",
+    "db:seed": "node scripts/local-supabase.cjs seed",
+    "test:db": "node scripts/test-local-db.cjs"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",
@@ -38,6 +45,7 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
+    "supabase": "2.117.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

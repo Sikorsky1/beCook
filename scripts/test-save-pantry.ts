@@ -1,7 +1,4 @@
-import dotenv from "dotenv";
-
-dotenv.config({ path: ".env.local" });
-
+import "./legacy-supabase-disabled";
 async function main() {
   const { savePantryItemsToSupabase } = await import(
     "../src/lib/supabase/pantry"

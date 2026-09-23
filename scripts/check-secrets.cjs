@@ -24,7 +24,8 @@ function forbiddenFile(name) {
     /\.(pem|key|p12|pfx)$/i.test(base) ||
     /^(id_rsa|id_ed25519|credentials\.json|service-account.*\.json)$/i.test(base) ||
     /(^|\/)(\.aws|\.vercel)(\/|$)/.test(name) ||
-    /(^|\/)\.config\/gcloud\//.test(name);
+    /(^|\/)\.config\/gcloud\//.test(name) ||
+    /^(\.supabase-local\/|supabase\/\.(temp|branches)\/)/.test(name);
 }
 
 function main() {

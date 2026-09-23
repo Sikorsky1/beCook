@@ -6,6 +6,16 @@ const os = require("node:os");
 const path = require("node:path");
 const scanner = path.resolve(__dirname, "../scripts/check-secrets.cjs");
 
+test("forced Supabase local artifacts are blocked without exposing contents", () => fixture(({git,write,scan}) => {
+  write(".supabase-local/supabase/status.json", "synthetic local artifact");
+  write("supabase/.temp/project-ref", "synthetic project marker");
+  git("add", "-f", ".");
+  const result = scan();
+  assert.equal(result.status, 1);
+  assert.ok(result.stderr.includes("local-credential-file"));
+  assert.ok(!result.stderr.includes("synthetic local artifact"));
+}));
+
 function fixture(run) {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "becook-secrets-test-"));
   const git = (...args) => {

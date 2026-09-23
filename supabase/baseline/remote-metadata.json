@@ -1,0 +1,2409 @@
+{
+  "inspectedOn": "2026-09-23",
+  "columns": [
+    {
+      "table_name": "menu_generation_requests",
+      "name": "id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "gen_random_uuid()"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "profile_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "people_count",
+      "type": "integer",
+      "not_null": true,
+      "default_expr": "2"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "menu_style",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "free_text_prompt",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "status",
+      "type": "text",
+      "not_null": true,
+      "default_expr": "'draft'::text"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "created_week_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "user_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "model_used",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "prompt_tokens",
+      "type": "integer",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "completion_tokens",
+      "type": "integer",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "total_tokens",
+      "type": "integer",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "estimated_cost_usd",
+      "type": "numeric(10,6)",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "name": "response_time_ms",
+      "type": "integer",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "pantry_items",
+      "name": "id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "gen_random_uuid()"
+    },
+    {
+      "table_name": "pantry_items",
+      "name": "profile_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "pantry_items",
+      "name": "name",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "pantry_items",
+      "name": "category",
+      "type": "text",
+      "not_null": true,
+      "default_expr": "'otros'::text"
+    },
+    {
+      "table_name": "pantry_items",
+      "name": "active",
+      "type": "boolean",
+      "not_null": true,
+      "default_expr": "true"
+    },
+    {
+      "table_name": "pantry_items",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "pantry_items",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "pantry_items",
+      "name": "user_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "gen_random_uuid()"
+    },
+    {
+      "table_name": "profiles",
+      "name": "sex",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "birth_date",
+      "type": "date",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "height_cm",
+      "type": "integer",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "weight_kg",
+      "type": "integer",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "household_size",
+      "type": "integer",
+      "not_null": true,
+      "default_expr": "2"
+    },
+    {
+      "table_name": "profiles",
+      "name": "weekly_training_days",
+      "type": "integer",
+      "not_null": true,
+      "default_expr": "0"
+    },
+    {
+      "table_name": "profiles",
+      "name": "training_types",
+      "type": "text[]",
+      "not_null": true,
+      "default_expr": "'{}'::text[]"
+    },
+    {
+      "table_name": "profiles",
+      "name": "other_training_type",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "goal",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "dietary_restrictions",
+      "type": "text[]",
+      "not_null": true,
+      "default_expr": "'{}'::text[]"
+    },
+    {
+      "table_name": "profiles",
+      "name": "allergies",
+      "type": "text[]",
+      "not_null": true,
+      "default_expr": "'{}'::text[]"
+    },
+    {
+      "table_name": "profiles",
+      "name": "other_allergies",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "disliked_foods",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "profiles",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "profiles",
+      "name": "user_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "active_week_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "goals",
+      "type": "text[]",
+      "not_null": true,
+      "default_expr": "'{}'::text[]"
+    },
+    {
+      "table_name": "profiles",
+      "name": "other_goal",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "shopping_items",
+      "name": "id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "gen_random_uuid()"
+    },
+    {
+      "table_name": "shopping_items",
+      "name": "shopping_list_id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "shopping_items",
+      "name": "name",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "shopping_items",
+      "name": "quantity",
+      "type": "numeric",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "shopping_items",
+      "name": "unit",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "shopping_items",
+      "name": "category",
+      "type": "text",
+      "not_null": true,
+      "default_expr": "'otros'::text"
+    },
+    {
+      "table_name": "shopping_items",
+      "name": "checked",
+      "type": "boolean",
+      "not_null": true,
+      "default_expr": "false"
+    },
+    {
+      "table_name": "shopping_items",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "shopping_items",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "shopping_lists",
+      "name": "id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "gen_random_uuid()"
+    },
+    {
+      "table_name": "shopping_lists",
+      "name": "week_id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "shopping_lists",
+      "name": "generated_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "shopping_lists",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "shopping_lists",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "week_days",
+      "name": "id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "gen_random_uuid()"
+    },
+    {
+      "table_name": "week_days",
+      "name": "week_id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_days",
+      "name": "day_name",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_days",
+      "name": "position",
+      "type": "integer",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_days",
+      "name": "lunch_status",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_days",
+      "name": "lunch_dish_name",
+      "type": "text",
+      "not_null": true,
+      "default_expr": "''::text"
+    },
+    {
+      "table_name": "week_days",
+      "name": "dinner_status",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_days",
+      "name": "dinner_dish_name",
+      "type": "text",
+      "not_null": true,
+      "default_expr": "''::text"
+    },
+    {
+      "table_name": "week_days",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "not_null": false,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "weeks",
+      "name": "id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "gen_random_uuid()"
+    },
+    {
+      "table_name": "weeks",
+      "name": "title",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "weeks",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "not_null": false,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "weeks",
+      "name": "profile_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "weeks",
+      "name": "generation_request_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "weeks",
+      "name": "source",
+      "type": "text",
+      "not_null": true,
+      "default_expr": "'manual'::text"
+    },
+    {
+      "table_name": "weeks",
+      "name": "start_date",
+      "type": "date",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "weeks",
+      "name": "end_date",
+      "type": "date",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "weeks",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "weeks",
+      "name": "user_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "weeks",
+      "name": "iso_year",
+      "type": "integer",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "weeks",
+      "name": "iso_week",
+      "type": "integer",
+      "not_null": false,
+      "default_expr": null
+    }
+  ],
+  "tables": [
+    {
+      "relname": "week_days",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "profiles",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "pantry_items",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "shopping_lists",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "shopping_items",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "weeks",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "menu_generation_requests",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "weeks_pkey",
+      "table_name": "weeks",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "week_days_lunch_status_check",
+      "table_name": "week_days",
+      "definition": "CHECK ((lunch_status = ANY (ARRAY['planned'::text, 'free'::text])))"
+    },
+    {
+      "conname": "week_days_dinner_status_check",
+      "table_name": "week_days",
+      "definition": "CHECK ((dinner_status = ANY (ARRAY['planned'::text, 'free'::text])))"
+    },
+    {
+      "conname": "week_days_pkey",
+      "table_name": "week_days",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "week_days_week_id_fkey",
+      "table_name": "week_days",
+      "definition": "FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "profiles_sex_check",
+      "table_name": "profiles",
+      "definition": "CHECK ((sex = ANY (ARRAY['male'::text, 'female'::text])))"
+    },
+    {
+      "conname": "weeks_generation_request_id_fkey",
+      "table_name": "weeks",
+      "definition": "FOREIGN KEY (generation_request_id) REFERENCES menu_generation_requests(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "shopping_lists_pkey",
+      "table_name": "shopping_lists",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "shopping_lists_week_id_fkey",
+      "table_name": "shopping_lists",
+      "definition": "FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "profiles_height_cm_check",
+      "table_name": "profiles",
+      "definition": "CHECK (((height_cm >= 120) AND (height_cm <= 230)))"
+    },
+    {
+      "conname": "profiles_weight_kg_check",
+      "table_name": "profiles",
+      "definition": "CHECK (((weight_kg >= 45) AND (weight_kg <= 200)))"
+    },
+    {
+      "conname": "profiles_household_size_check",
+      "table_name": "profiles",
+      "definition": "CHECK (((household_size >= 1) AND (household_size <= 6)))"
+    },
+    {
+      "conname": "profiles_weekly_training_days_check",
+      "table_name": "profiles",
+      "definition": "CHECK (((weekly_training_days >= 0) AND (weekly_training_days <= 5)))"
+    },
+    {
+      "conname": "profiles_training_types_check",
+      "table_name": "profiles",
+      "definition": "CHECK ((training_types <@ ARRAY['strength'::text, 'crossfit'::text, 'hyrox'::text, 'running'::text, 'cycling'::text, 'padel'::text, 'swimming'::text, 'team_sports'::text, 'hiking'::text, 'yoga_pilates'::text, 'other'::text]))"
+    },
+    {
+      "conname": "profiles_goal_check",
+      "table_name": "profiles",
+      "definition": "CHECK ((goal = ANY (ARRAY['fat_loss'::text, 'maintenance'::text, 'muscle_gain'::text, 'sports_performance'::text, 'healthy_eating'::text])))"
+    },
+    {
+      "conname": "profiles_dietary_restrictions_check",
+      "table_name": "profiles",
+      "definition": "CHECK ((dietary_restrictions <@ ARRAY['none'::text, 'vegetarian'::text, 'vegan'::text, 'pescatarian'::text, 'no_pork'::text, 'no_alcohol'::text]))"
+    },
+    {
+      "conname": "profiles_allergies_check",
+      "table_name": "profiles",
+      "definition": "CHECK ((allergies <@ ARRAY['gluten'::text, 'lactose'::text, 'nuts'::text, 'shellfish'::text, 'egg'::text, 'other'::text]))"
+    },
+    {
+      "conname": "profiles_disliked_foods_check",
+      "table_name": "profiles",
+      "definition": "CHECK (((disliked_foods IS NULL) OR (char_length(disliked_foods) <= 150)))"
+    },
+    {
+      "conname": "profiles_pkey",
+      "table_name": "profiles",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "weeks_profile_id_fkey",
+      "table_name": "weeks",
+      "definition": "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "weeks_source_check",
+      "table_name": "weeks",
+      "definition": "CHECK ((source = ANY (ARRAY['manual'::text, 'imported'::text, 'generated'::text])))"
+    },
+    {
+      "conname": "menu_generation_requests_people_count_check",
+      "table_name": "menu_generation_requests",
+      "definition": "CHECK (((people_count >= 1) AND (people_count <= 10)))"
+    },
+    {
+      "conname": "menu_generation_requests_free_text_prompt_check",
+      "table_name": "menu_generation_requests",
+      "definition": "CHECK (((free_text_prompt IS NULL) OR (char_length(free_text_prompt) <= 500)))"
+    },
+    {
+      "conname": "menu_generation_requests_status_check",
+      "table_name": "menu_generation_requests",
+      "definition": "CHECK ((status = ANY (ARRAY['draft'::text, 'generating'::text, 'generated'::text, 'failed'::text, 'applied'::text])))"
+    },
+    {
+      "conname": "menu_generation_requests_pkey",
+      "table_name": "menu_generation_requests",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "menu_generation_requests_profile_id_fkey",
+      "table_name": "menu_generation_requests",
+      "definition": "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "menu_generation_requests_created_week_id_fkey",
+      "table_name": "menu_generation_requests",
+      "definition": "FOREIGN KEY (created_week_id) REFERENCES weeks(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "shopping_items_quantity_check",
+      "table_name": "shopping_items",
+      "definition": "CHECK (((quantity IS NULL) OR (quantity >= (0)::numeric)))"
+    },
+    {
+      "conname": "shopping_items_pkey",
+      "table_name": "shopping_items",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "shopping_items_shopping_list_id_fkey",
+      "table_name": "shopping_items",
+      "definition": "FOREIGN KEY (shopping_list_id) REFERENCES shopping_lists(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "pantry_items_pkey",
+      "table_name": "pantry_items",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "pantry_items_profile_id_fkey",
+      "table_name": "pantry_items",
+      "definition": "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "profiles_user_id_fkey",
+      "table_name": "profiles",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "weeks_user_id_fkey",
+      "table_name": "weeks",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "menu_generation_requests_user_id_fkey",
+      "table_name": "menu_generation_requests",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "pantry_items_user_id_fkey",
+      "table_name": "pantry_items",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "profiles_active_week_id_fkey",
+      "table_name": "profiles",
+      "definition": "FOREIGN KEY (active_week_id) REFERENCES weeks(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "profiles_user_id_unique",
+      "table_name": "profiles",
+      "definition": "UNIQUE (user_id)"
+    },
+    {
+      "conname": "weeks_iso_week_range_chk",
+      "table_name": "weeks",
+      "definition": "CHECK ((((iso_year IS NULL) AND (iso_week IS NULL)) OR (((iso_year >= 2000) AND (iso_year <= 2100)) AND ((iso_week >= 1) AND (iso_week <= 53)))))"
+    },
+    {
+      "conname": "menu_generation_requests_openai_usage_non_negative_chk",
+      "table_name": "menu_generation_requests",
+      "definition": "CHECK ((((prompt_tokens IS NULL) OR (prompt_tokens >= 0)) AND ((completion_tokens IS NULL) OR (completion_tokens >= 0)) AND ((total_tokens IS NULL) OR (total_tokens >= 0)) AND ((estimated_cost_usd IS NULL) OR (estimated_cost_usd >= (0)::numeric)) AND ((response_time_ms IS NULL) OR (response_time_ms >= 0))))"
+    },
+    {
+      "conname": "profiles_goals_allowed_chk",
+      "table_name": "profiles",
+      "definition": "CHECK ((goals <@ ARRAY['fat_loss'::text, 'muscle_gain'::text, 'sports_performance'::text, 'healthy_eating'::text, 'other'::text]))"
+    },
+    {
+      "conname": "profiles_other_goal_length_chk",
+      "table_name": "profiles",
+      "definition": "CHECK (((other_goal IS NULL) OR (char_length(other_goal) <= 150)))"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "week_days",
+      "indexname": "week_days_pkey",
+      "indexdef": "CREATE UNIQUE INDEX week_days_pkey ON public.week_days USING btree (id)"
+    },
+    {
+      "tablename": "week_days",
+      "indexname": "week_days_week_id_idx",
+      "indexdef": "CREATE INDEX week_days_week_id_idx ON public.week_days USING btree (week_id)"
+    },
+    {
+      "tablename": "week_days",
+      "indexname": "week_days_position_idx",
+      "indexdef": "CREATE INDEX week_days_position_idx ON public.week_days USING btree (\"position\")"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_user_id_unique_idx",
+      "indexdef": "CREATE UNIQUE INDEX profiles_user_id_unique_idx ON public.profiles USING btree (user_id) WHERE (user_id IS NOT NULL)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_pkey",
+      "indexdef": "CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_created_at_idx",
+      "indexdef": "CREATE INDEX profiles_created_at_idx ON public.profiles USING btree (created_at DESC)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_user_id_idx",
+      "indexdef": "CREATE INDEX profiles_user_id_idx ON public.profiles USING btree (user_id)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_active_week_id_idx",
+      "indexdef": "CREATE INDEX profiles_active_week_id_idx ON public.profiles USING btree (active_week_id)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_user_id_unique",
+      "indexdef": "CREATE UNIQUE INDEX profiles_user_id_unique ON public.profiles USING btree (user_id)"
+    },
+    {
+      "tablename": "pantry_items",
+      "indexname": "pantry_items_pkey",
+      "indexdef": "CREATE UNIQUE INDEX pantry_items_pkey ON public.pantry_items USING btree (id)"
+    },
+    {
+      "tablename": "pantry_items",
+      "indexname": "pantry_items_profile_id_idx",
+      "indexdef": "CREATE INDEX pantry_items_profile_id_idx ON public.pantry_items USING btree (profile_id)"
+    },
+    {
+      "tablename": "pantry_items",
+      "indexname": "pantry_items_active_idx",
+      "indexdef": "CREATE INDEX pantry_items_active_idx ON public.pantry_items USING btree (active)"
+    },
+    {
+      "tablename": "pantry_items",
+      "indexname": "pantry_items_user_id_idx",
+      "indexdef": "CREATE INDEX pantry_items_user_id_idx ON public.pantry_items USING btree (user_id)"
+    },
+    {
+      "tablename": "shopping_lists",
+      "indexname": "shopping_lists_pkey",
+      "indexdef": "CREATE UNIQUE INDEX shopping_lists_pkey ON public.shopping_lists USING btree (id)"
+    },
+    {
+      "tablename": "shopping_lists",
+      "indexname": "shopping_lists_week_id_idx",
+      "indexdef": "CREATE INDEX shopping_lists_week_id_idx ON public.shopping_lists USING btree (week_id)"
+    },
+    {
+      "tablename": "shopping_items",
+      "indexname": "shopping_items_pkey",
+      "indexdef": "CREATE UNIQUE INDEX shopping_items_pkey ON public.shopping_items USING btree (id)"
+    },
+    {
+      "tablename": "shopping_items",
+      "indexname": "shopping_items_shopping_list_id_idx",
+      "indexdef": "CREATE INDEX shopping_items_shopping_list_id_idx ON public.shopping_items USING btree (shopping_list_id)"
+    },
+    {
+      "tablename": "shopping_items",
+      "indexname": "shopping_items_category_idx",
+      "indexdef": "CREATE INDEX shopping_items_category_idx ON public.shopping_items USING btree (category)"
+    },
+    {
+      "tablename": "weeks",
+      "indexname": "weeks_pkey",
+      "indexdef": "CREATE UNIQUE INDEX weeks_pkey ON public.weeks USING btree (id)"
+    },
+    {
+      "tablename": "weeks",
+      "indexname": "weeks_profile_id_idx",
+      "indexdef": "CREATE INDEX weeks_profile_id_idx ON public.weeks USING btree (profile_id)"
+    },
+    {
+      "tablename": "weeks",
+      "indexname": "weeks_generation_request_id_idx",
+      "indexdef": "CREATE INDEX weeks_generation_request_id_idx ON public.weeks USING btree (generation_request_id)"
+    },
+    {
+      "tablename": "weeks",
+      "indexname": "weeks_created_at_idx",
+      "indexdef": "CREATE INDEX weeks_created_at_idx ON public.weeks USING btree (created_at DESC)"
+    },
+    {
+      "tablename": "weeks",
+      "indexname": "weeks_user_id_idx",
+      "indexdef": "CREATE INDEX weeks_user_id_idx ON public.weeks USING btree (user_id)"
+    },
+    {
+      "tablename": "weeks",
+      "indexname": "weeks_user_iso_week_unique_idx",
+      "indexdef": "CREATE UNIQUE INDEX weeks_user_iso_week_unique_idx ON public.weeks USING btree (user_id, iso_year, iso_week) WHERE ((user_id IS NOT NULL) AND (iso_year IS NOT NULL) AND (iso_week IS NOT NULL))"
+    },
+    {
+      "tablename": "weeks",
+      "indexname": "weeks_user_iso_lookup_idx",
+      "indexdef": "CREATE INDEX weeks_user_iso_lookup_idx ON public.weeks USING btree (user_id, iso_year, iso_week)"
+    },
+    {
+      "tablename": "weeks",
+      "indexname": "weeks_user_created_at_idx",
+      "indexdef": "CREATE INDEX weeks_user_created_at_idx ON public.weeks USING btree (user_id, created_at DESC)"
+    },
+    {
+      "tablename": "menu_generation_requests",
+      "indexname": "menu_generation_requests_pkey",
+      "indexdef": "CREATE UNIQUE INDEX menu_generation_requests_pkey ON public.menu_generation_requests USING btree (id)"
+    },
+    {
+      "tablename": "menu_generation_requests",
+      "indexname": "menu_generation_requests_profile_id_idx",
+      "indexdef": "CREATE INDEX menu_generation_requests_profile_id_idx ON public.menu_generation_requests USING btree (profile_id)"
+    },
+    {
+      "tablename": "menu_generation_requests",
+      "indexname": "menu_generation_requests_created_week_id_idx",
+      "indexdef": "CREATE INDEX menu_generation_requests_created_week_id_idx ON public.menu_generation_requests USING btree (created_week_id)"
+    },
+    {
+      "tablename": "menu_generation_requests",
+      "indexname": "menu_generation_requests_user_id_idx",
+      "indexdef": "CREATE INDEX menu_generation_requests_user_id_idx ON public.menu_generation_requests USING btree (user_id)"
+    }
+  ],
+  "policies": [
+    {
+      "tablename": "week_days",
+      "policyname": "week_days_delete_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM weeks\n  WHERE ((weeks.id = week_days.week_id) AND (weeks.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "tablename": "week_days",
+      "policyname": "week_days_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(EXISTS ( SELECT 1\n   FROM weeks\n  WHERE ((weeks.id = week_days.week_id) AND (weeks.user_id = auth.uid()))))"
+    },
+    {
+      "tablename": "week_days",
+      "policyname": "week_days_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM weeks\n  WHERE ((weeks.id = week_days.week_id) AND (weeks.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "tablename": "week_days",
+      "policyname": "week_days_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM weeks\n  WHERE ((weeks.id = week_days.week_id) AND (weeks.user_id = auth.uid()))))",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM weeks\n  WHERE ((weeks.id = week_days.week_id) AND (weeks.user_id = auth.uid()))))"
+    },
+    {
+      "tablename": "profiles",
+      "policyname": "profiles_delete_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "profiles",
+      "policyname": "profiles_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    },
+    {
+      "tablename": "profiles",
+      "policyname": "profiles_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "profiles",
+      "policyname": "profiles_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    },
+    {
+      "tablename": "pantry_items",
+      "policyname": "pantry_items_delete_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "pantry_items",
+      "policyname": "pantry_items_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    },
+    {
+      "tablename": "pantry_items",
+      "policyname": "pantry_items_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "pantry_items",
+      "policyname": "pantry_items_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    },
+    {
+      "tablename": "shopping_lists",
+      "policyname": "shopping_lists_delete_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM weeks\n  WHERE ((weeks.id = shopping_lists.week_id) AND (weeks.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "tablename": "shopping_lists",
+      "policyname": "shopping_lists_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(EXISTS ( SELECT 1\n   FROM weeks\n  WHERE ((weeks.id = shopping_lists.week_id) AND (weeks.user_id = auth.uid()))))"
+    },
+    {
+      "tablename": "shopping_lists",
+      "policyname": "shopping_lists_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM weeks\n  WHERE ((weeks.id = shopping_lists.week_id) AND (weeks.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "tablename": "shopping_lists",
+      "policyname": "shopping_lists_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM weeks\n  WHERE ((weeks.id = shopping_lists.week_id) AND (weeks.user_id = auth.uid()))))",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM weeks\n  WHERE ((weeks.id = shopping_lists.week_id) AND (weeks.user_id = auth.uid()))))"
+    },
+    {
+      "tablename": "shopping_items",
+      "policyname": "shopping_items_delete_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM (shopping_lists\n     JOIN weeks ON ((weeks.id = shopping_lists.week_id)))\n  WHERE ((shopping_lists.id = shopping_items.shopping_list_id) AND (weeks.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "tablename": "shopping_items",
+      "policyname": "shopping_items_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(EXISTS ( SELECT 1\n   FROM (shopping_lists\n     JOIN weeks ON ((weeks.id = shopping_lists.week_id)))\n  WHERE ((shopping_lists.id = shopping_items.shopping_list_id) AND (weeks.user_id = auth.uid()))))"
+    },
+    {
+      "tablename": "shopping_items",
+      "policyname": "shopping_items_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM (shopping_lists\n     JOIN weeks ON ((weeks.id = shopping_lists.week_id)))\n  WHERE ((shopping_lists.id = shopping_items.shopping_list_id) AND (weeks.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "tablename": "shopping_items",
+      "policyname": "shopping_items_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM (shopping_lists\n     JOIN weeks ON ((weeks.id = shopping_lists.week_id)))\n  WHERE ((shopping_lists.id = shopping_items.shopping_list_id) AND (weeks.user_id = auth.uid()))))",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM (shopping_lists\n     JOIN weeks ON ((weeks.id = shopping_lists.week_id)))\n  WHERE ((shopping_lists.id = shopping_items.shopping_list_id) AND (weeks.user_id = auth.uid()))))"
+    },
+    {
+      "tablename": "weeks",
+      "policyname": "weeks_delete_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "weeks",
+      "policyname": "weeks_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    },
+    {
+      "tablename": "weeks",
+      "policyname": "weeks_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "weeks",
+      "policyname": "weeks_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    },
+    {
+      "tablename": "menu_generation_requests",
+      "policyname": "menu_generation_requests_delete_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "menu_generation_requests",
+      "policyname": "menu_generation_requests_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    },
+    {
+      "tablename": "menu_generation_requests",
+      "policyname": "menu_generation_requests_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "menu_generation_requests",
+      "policyname": "menu_generation_requests_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    }
+  ],
+  "triggers": [
+    {
+      "table_name": "weeks",
+      "definition": "CREATE TRIGGER set_weeks_updated_at BEFORE UPDATE ON public.weeks FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "table_name": "profiles",
+      "definition": "CREATE TRIGGER set_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "definition": "CREATE TRIGGER set_menu_generation_requests_updated_at BEFORE UPDATE ON public.menu_generation_requests FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "table_name": "shopping_lists",
+      "definition": "CREATE TRIGGER set_shopping_lists_updated_at BEFORE UPDATE ON public.shopping_lists FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "table_name": "shopping_items",
+      "definition": "CREATE TRIGGER set_shopping_items_updated_at BEFORE UPDATE ON public.shopping_items FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "table_name": "pantry_items",
+      "definition": "CREATE TRIGGER set_pantry_items_updated_at BEFORE UPDATE ON public.pantry_items FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    }
+  ],
+  "functions": [
+    {
+      "proname": "rls_auto_enable",
+      "definition": "CREATE OR REPLACE FUNCTION public.rls_auto_enable()\n RETURNS event_trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nDECLARE\n  cmd record;\nBEGIN\n  FOR cmd IN\n    SELECT *\n    FROM pg_event_trigger_ddl_commands()\n    WHERE command_tag IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')\n      AND object_type IN ('table','partitioned table')\n  LOOP\n     IF cmd.schema_name IS NOT NULL AND cmd.schema_name IN ('public') AND cmd.schema_name NOT IN ('pg_catalog','information_schema') AND cmd.schema_name NOT LIKE 'pg_toast%' AND cmd.schema_name NOT LIKE 'pg_temp%' THEN\n      BEGIN\n        EXECUTE format('alter table if exists %s enable row level security', cmd.object_identity);\n        RAISE LOG 'rls_auto_enable: enabled RLS on %', cmd.object_identity;\n      EXCEPTION\n        WHEN OTHERS THEN\n          RAISE LOG 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;\n      END;\n     ELSE\n        RAISE LOG 'rls_auto_enable: skip % (either system schema or not in enforced list: %.)', cmd.object_identity, cmd.schema_name;\n     END IF;\n  END LOOP;\nEND;\n$function$\n"
+    },
+    {
+      "proname": "set_updated_at",
+      "definition": "CREATE OR REPLACE FUNCTION public.set_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  new.updated_at = now();\n  return new;\nend;\n$function$\n"
+    }
+  ],
+  "grants": [
+    {
+      "table_name": "week_days",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "anon",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "anon",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "anon",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "anon",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "anon",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "anon",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "anon",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "authenticated",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "authenticated",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "authenticated",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "authenticated",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "authenticated",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "authenticated",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "week_days",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "anon",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "anon",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "anon",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "anon",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "anon",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "anon",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "anon",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "authenticated",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "authenticated",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "authenticated",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "authenticated",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "authenticated",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "authenticated",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "profiles",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "anon",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "anon",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "anon",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "anon",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "anon",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "anon",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "anon",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "authenticated",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "authenticated",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "authenticated",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "authenticated",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "authenticated",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "authenticated",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "pantry_items",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "anon",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "anon",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "anon",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "anon",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "anon",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "anon",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "anon",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "authenticated",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "authenticated",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "authenticated",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "authenticated",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "authenticated",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "authenticated",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "shopping_lists",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "anon",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "anon",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "anon",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "anon",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "anon",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "anon",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "anon",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "authenticated",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "authenticated",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "authenticated",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "authenticated",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "authenticated",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "authenticated",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "shopping_items",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "anon",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "anon",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "anon",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "anon",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "anon",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "anon",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "anon",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "authenticated",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "authenticated",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "authenticated",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "authenticated",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "authenticated",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "authenticated",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "weeks",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "anon",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "anon",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "anon",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "anon",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "anon",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "anon",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "anon",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "authenticated",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "authenticated",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "authenticated",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "authenticated",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "authenticated",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "authenticated",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "menu_generation_requests",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    }
+  ],
+  "other_relations": null,
+  "enums": null,
+  "events": [
+    {
+      "evtname": "ensure_rls",
+      "evtevent": "ddl_command_end",
+      "evtenabled": "O",
+      "evttags": [
+        "CREATE TABLE",
+        "CREATE TABLE AS",
+        "SELECT INTO"
+      ],
+      "function_name": "rls_auto_enable"
+    }
+  ],
+  "function_grants": [
+    {
+      "routine_name": "rls_auto_enable",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "rls_auto_enable",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "rls_auto_enable",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "rls_auto_enable",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "rls_auto_enable",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_updated_at",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_updated_at",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_updated_at",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_updated_at",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_updated_at",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    }
+  ],
+  "schema_grants": "{pg_database_owner=UC/pg_database_owner,=U/pg_database_owner,postgres=U/pg_database_owner,anon=U/pg_database_owner,authenticated=U/pg_database_owner,service_role=U/pg_database_owner}",
+  "defaults": [
+    {
+      "defaclrole": "postgres",
+      "defaclobjtype": "r",
+      "defaclacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}"
+    },
+    {
+      "defaclrole": "postgres",
+      "defaclobjtype": "f",
+      "defaclacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "defaclrole": "postgres",
+      "defaclobjtype": "S",
+      "defaclacl": "{postgres=rwU/postgres,anon=rwU/postgres,authenticated=rwU/postgres,service_role=rwU/postgres}"
+    },
+    {
+      "defaclrole": "supabase_admin",
+      "defaclobjtype": "S",
+      "defaclacl": "{postgres=rwU/supabase_admin,anon=rwU/supabase_admin,authenticated=rwU/supabase_admin,service_role=rwU/supabase_admin}"
+    },
+    {
+      "defaclrole": "supabase_admin",
+      "defaclobjtype": "r",
+      "defaclacl": "{postgres=arwdDxtm/supabase_admin,anon=arwdDxtm/supabase_admin,authenticated=arwdDxtm/supabase_admin,service_role=arwdDxtm/supabase_admin}"
+    },
+    {
+      "defaclrole": "supabase_admin",
+      "defaclobjtype": "f",
+      "defaclacl": "{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}"
+    }
+  ],
+  "extensions": [
+    {
+      "extname": "plpgsql",
+      "nspname": "pg_catalog"
+    },
+    {
+      "extname": "pg_stat_statements",
+      "nspname": "extensions"
+    },
+    {
+      "extname": "uuid-ossp",
+      "nspname": "extensions"
+    },
+    {
+      "extname": "pgcrypto",
+      "nspname": "extensions"
+    },
+    {
+      "extname": "supabase_vault",
+      "nspname": "vault"
+    }
+  ]
+}

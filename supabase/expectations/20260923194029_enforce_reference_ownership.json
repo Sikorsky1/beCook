@@ -1,0 +1,87 @@
+{
+  "migration": "20260923194029_enforce_reference_ownership",
+  "constraints": [
+    {
+      "conname": "profiles_id_user_id_key",
+      "table_name": "profiles",
+      "definition": "UNIQUE (id, user_id)"
+    },
+    {
+      "conname": "weeks_id_user_id_key",
+      "table_name": "weeks",
+      "definition": "UNIQUE (id, user_id)"
+    },
+    {
+      "conname": "menu_generation_requests_id_user_id_key",
+      "table_name": "menu_generation_requests",
+      "definition": "UNIQUE (id, user_id)"
+    },
+    {
+      "conname": "weeks_references_require_owner_chk",
+      "table_name": "weeks",
+      "definition": "CHECK (((user_id IS NOT NULL) OR ((profile_id IS NULL) AND (generation_request_id IS NULL))))"
+    },
+    {
+      "conname": "pantry_items_references_require_owner_chk",
+      "table_name": "pantry_items",
+      "definition": "CHECK (((user_id IS NOT NULL) OR (profile_id IS NULL)))"
+    },
+    {
+      "conname": "menu_generation_requests_references_require_owner_chk",
+      "table_name": "menu_generation_requests",
+      "definition": "CHECK (((user_id IS NOT NULL) OR ((profile_id IS NULL) AND (created_week_id IS NULL))))"
+    },
+    {
+      "conname": "profiles_references_require_owner_chk",
+      "table_name": "profiles",
+      "definition": "CHECK (((user_id IS NOT NULL) OR (active_week_id IS NULL)))"
+    },
+    {
+      "conname": "weeks_profile_id_owner_fkey",
+      "table_name": "weeks",
+      "definition": "FOREIGN KEY (profile_id, user_id) REFERENCES profiles(id, user_id) ON DELETE SET NULL (profile_id)"
+    },
+    {
+      "conname": "weeks_generation_request_id_owner_fkey",
+      "table_name": "weeks",
+      "definition": "FOREIGN KEY (generation_request_id, user_id) REFERENCES menu_generation_requests(id, user_id) ON DELETE SET NULL (generation_request_id)"
+    },
+    {
+      "conname": "pantry_items_profile_id_owner_fkey",
+      "table_name": "pantry_items",
+      "definition": "FOREIGN KEY (profile_id, user_id) REFERENCES profiles(id, user_id) ON DELETE SET NULL (profile_id)"
+    },
+    {
+      "conname": "menu_generation_requests_profile_id_owner_fkey",
+      "table_name": "menu_generation_requests",
+      "definition": "FOREIGN KEY (profile_id, user_id) REFERENCES profiles(id, user_id) ON DELETE SET NULL (profile_id)"
+    },
+    {
+      "conname": "menu_generation_requests_created_week_id_owner_fkey",
+      "table_name": "menu_generation_requests",
+      "definition": "FOREIGN KEY (created_week_id, user_id) REFERENCES weeks(id, user_id) ON DELETE SET NULL (created_week_id)"
+    },
+    {
+      "conname": "profiles_active_week_id_owner_fkey",
+      "table_name": "profiles",
+      "definition": "FOREIGN KEY (active_week_id, user_id) REFERENCES weeks(id, user_id) ON DELETE SET NULL (active_week_id)"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_id_user_id_key",
+      "indexdef": "CREATE UNIQUE INDEX profiles_id_user_id_key ON public.profiles USING btree (id, user_id)"
+    },
+    {
+      "tablename": "weeks",
+      "indexname": "weeks_id_user_id_key",
+      "indexdef": "CREATE UNIQUE INDEX weeks_id_user_id_key ON public.weeks USING btree (id, user_id)"
+    },
+    {
+      "tablename": "menu_generation_requests",
+      "indexname": "menu_generation_requests_id_user_id_key",
+      "indexdef": "CREATE UNIQUE INDEX menu_generation_requests_id_user_id_key ON public.menu_generation_requests USING btree (id, user_id)"
+    }
+  ]
+}

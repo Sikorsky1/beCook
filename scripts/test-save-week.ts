@@ -1,7 +1,6 @@
-import dotenv from "dotenv";
+import "./legacy-supabase-disabled";
 import type { SupabaseWeek } from "../src/lib/supabase/weeks";
 
-dotenv.config({ path: ".env.local" });
 
 const testWeek: SupabaseWeek = {
   title: "Test full week from beCook",
