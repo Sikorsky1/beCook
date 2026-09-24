@@ -1,5 +1,9 @@
 # beCook: desarrollo y pruebas con Supabase local
 
+El proyecto alojado de pruebas tiene un procedimiento separado en
+[Supabase alojado y Vercel Preview](hosted-preview.md). Estos comandos locales
+no se redirigen al remoto y GitHub Actions continúa usando Docker.
+
 Este entorno usa exclusivamente el proyecto Docker `becook-iteration02`.
 No necesita cuenta Supabase, enlace remoto, clave de producción ni OpenAI.
 Requiere Node 24 (ver `.nvmrc`), npm y Docker Desktop arrancado, o Docker Engine
