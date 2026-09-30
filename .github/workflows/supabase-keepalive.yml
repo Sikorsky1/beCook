@@ -1,0 +1,138 @@
+name: Supabase keepalive
+
+on:
+  schedule:
+    - cron: '17 6,14,22 * * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Project to ping
+        required: true
+        default: both
+        type: choice
+        options: [both, preview, production]
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive-production:
+    if: github.event_name == 'schedule' || inputs.target == 'both' || inputs.target == 'production'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    env:
+      KEEPALIVE_TARGET: production
+      EXPECTED_PROJECT_ID: wejvptpkxlllfpskyisu
+      SUPABASE_URL: ${{ vars.SUPABASE_PROD_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PROD_PUBLISHABLE_KEY }}
+      KEEPALIVE_EMAIL: ${{ vars.SUPABASE_PROD_KEEPALIVE_EMAIL }}
+      KEEPALIVE_PASSWORD: ${{ secrets.SUPABASE_PROD_KEEPALIVE_PASSWORD }}
+    steps: &keepalive-steps
+      - name: Authenticate and SELECT one week under RLS
+        shell: python3 {0}
+        run: |
+          import base64
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          # No SDK, retries, redirects, checkout, response dumps or token outputs.
+          PROJECTS = {
+              "production": ("wejvptpkxlllfpskyisu", "keepalive-production@example.invalid"),
+              "preview": ("qdhpdhnpcsfhmygjofqb", "keepalive-preview@example.invalid"),
+          }
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          class CheckFailed(Exception):
+              pass
+
+          def require(condition, reason="response validation"):
+              if not condition:
+                  raise CheckFailed(reason)
+
+          def main():
+              project, expected_email = PROJECTS[os.environ["KEEPALIVE_TARGET"]]
+              url = os.environ["SUPABASE_URL"]
+              key = os.environ["SUPABASE_PUBLISHABLE_KEY"]
+              email = os.environ["KEEPALIVE_EMAIL"]
+              password = os.environ["KEEPALIVE_PASSWORD"]
+              expected_url = "https://" + project + ".supabase.co"
+
+              # First destination check: fixed target mapping plus explicit job ID.
+              require(os.environ["EXPECTED_PROJECT_ID"] == project, "project ID mismatch")
+              require(url == expected_url, "project URL mismatch")
+              require(key.startswith("sb_publishable_"), "publishable key missing or wrong type")
+              require(email == expected_email, "technical email mismatch")
+              require(len(password) >= 32, "password must have at least 32 characters")
+
+              opener = urllib.request.build_opener(NoRedirect())
+
+              def request_json(request, stage):
+                  with opener.open(request, timeout=30) as response:
+                      require(response.status == 200)
+                      body = response.read(1024 * 1024 + 1)
+                      require(len(body) <= 1024 * 1024)
+                      result = json.loads(body)
+                  print(stage + ": HTTP 200; valid JSON")
+                  return result
+
+              auth = request_json(urllib.request.Request(
+                  url + "/auth/v1/token?grant_type=password",
+                  data=json.dumps({"email": email, "password": password}).encode(),
+                  headers={"apikey": key, "Content-Type": "application/json"},
+                  method="POST",
+              ), "Auth")
+              token = auth["access_token"]
+              require(isinstance(token, str) and len(token.split(".")) == 3)
+              payload = token.split(".")[1]
+              claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+              # Sanity checks on the TLS Auth response; PostgREST verifies the JWT.
+              require(claims["role"] == "authenticated")
+              require(claims["iss"] == expected_url + "/auth/v1")
+              require(claims["email"] == expected_email)
+              require(claims["sub"] == auth["user"]["id"])
+              require(auth["user"]["email"] == expected_email)
+
+              # Second destination check immediately before the only Data API GET.
+              require(url == "https://" + os.environ["EXPECTED_PROJECT_ID"] + ".supabase.co")
+              rows = request_json(urllib.request.Request(
+                  url + "/rest/v1/weeks?select=id&limit=1",
+                  headers={"apikey": key, "Authorization": "Bearer " + token},
+                  method="GET",
+              ), "SELECT weeks")
+              require(isinstance(rows, list) and len(rows) <= 1)
+              # These dedicated users must have no application data.
+              require(rows == [])
+              print("Keepalive OK: authenticated role; empty result; one SELECT; no business writes")
+
+          try:
+              main()
+          except CheckFailed as error:
+              # Only static, developer-defined reasons; never response content.
+              print("Keepalive failed: " + str(error), file=sys.stderr)
+              sys.exit(1)
+          except urllib.error.HTTPError as error:
+              print("Keepalive failed: HTTP " + str(error.code), file=sys.stderr)
+              sys.exit(1)
+          except Exception:
+              # Never log exceptions, bodies, headers, passwords or JWTs.
+              print("Keepalive failed: configuration, network or response validation", file=sys.stderr)
+              sys.exit(1)
+
+  keepalive-preview:
+    if: github.event_name == 'schedule' || inputs.target == 'both' || inputs.target == 'preview'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    env:
+      KEEPALIVE_TARGET: preview
+      EXPECTED_PROJECT_ID: qdhpdhnpcsfhmygjofqb
+      SUPABASE_URL: ${{ vars.SUPABASE_PREVIEW_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PREVIEW_PUBLISHABLE_KEY }}
+      KEEPALIVE_EMAIL: ${{ vars.SUPABASE_PREVIEW_KEEPALIVE_EMAIL }}
+      KEEPALIVE_PASSWORD: ${{ secrets.SUPABASE_PREVIEW_KEEPALIVE_PASSWORD }}
+    steps: *keepalive-steps
