@@ -13,12 +13,22 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Diagnóstico de datos incompatibles en producción | ✅ | Ver `supabase/hosted/production/2026-10-05-reconcile-ownership.sql` |
 | Propuesta de cuotas de IA | ✅ | Aprobada (D3); se implementa en A4 |
 
+## Iteración A2 — Dependencias ✅ (2026-10-06)
+| Tarea | Estado | Nota |
+|---|---|---|
+| Reauditoría `npm audit` | ✅ | Antes: 17 (1 crítico Next, 11 altos, 2 moderados, 3 bajos) |
+| Next + eslint-config-next 16.3.8 (fijadas exactas) | ✅ | Guía 16.3 revisada: sin cambios de código (no usa `revalidateTag`, `next/image`, `next/og`, proxy) |
+| @supabase/supabase-js ^2.117.2 (auth-js 2.117.2) | ✅ | Requiere Node ≥ 22 (`.nvmrc` = 24) |
+| Transitivas dentro de rango (`npm update`) | ✅ | postcss, nanoid, @babel/core, browserslist, brace-expansion, js-yaml, @humanfs/node, baseline-browser-mapping; sharp 0.35.5 vía Next |
+| Comprobaciones | ✅ | lint, typecheck, test (22/22), build, db:start + test:db (282/282); login y rutas principales en `npm run dev` |
+| Riesgo residual aceptado | ⚠️ | 5 avisos altos: `braces` 3.0.3 sin parche ← micromatch ← fast-glob 3.3.1 (fijado por @next/eslint-plugin-next) ← eslint-config-next. Solo lint/dev, no runtime. Revisar en próximas versiones de Next |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
 | 01 Credenciales de recuperación | A1 | ✅ | Archivo retirado + gitleaks (`f6555fd`); códigos regenerados (confirmado por Sergio 2026-10-05) |
 | 02 Entorno de pruebas y cambios reproducibles | A1 | ✅ | Local + preview + CI; producción reconciliada y con `enforce_reference_ownership` (2026-10-06); esquemas prod = preview |
-| 03 Dependencias | A2 | ⏳ | |
+| 03 Dependencias | A2 | ✅ | 2026-10-06: next/eslint-config-next 16.2.1→16.3.8, supabase-js 2.49.4→2.117.2 + transitivas; audit 17→5 (riesgo residual aceptado, ver A2) |
 | 04 Rutas de IA protegidas | A3 | ⏳ | Decisión D2: IA solo con sesión |
 | 05 Cuotas y trazabilidad de IA | A4 | ⏳ | Decisión D5: cuotas en tabla Supabase |
 | 06 Datos locales por identidad | B1 | ⏳ | |
