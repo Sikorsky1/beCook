@@ -23,6 +23,7 @@ import {
 } from "@/lib/shoppingList";
 import {
   generateAndCacheShoppingListForWeek,
+  ShoppingListApiError,
   getWeekSignature,
   readShoppingListCache,
   saveShoppingListCache,
@@ -284,7 +285,11 @@ export default function ShoppingListPage() {
           return;
         }
 
-        setErrorMessage("Ha fallado la conexión al generar la lista de la compra.");
+        setErrorMessage(
+          error instanceof ShoppingListApiError
+            ? error.message
+            : "Ha fallado la conexión al generar la lista de la compra.",
+        );
       } finally {
         setIsLoadingList(false);
       }

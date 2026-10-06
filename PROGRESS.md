@@ -33,7 +33,22 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | UX invitado | ✅ | Aviso «Inicia sesión para generar con IA» en Crear menú (generar e importar) y Compra; `/login?next=` solo rutas internas; borrador del formulario en `sessionStorage` |
 | Tests | ✅ | `tests/ai-routes.test.cjs` (24; 19 fallan con el código anterior); test HTTP de menú usa sesión; `test:db` valida token real y manipulado contra Auth local |
 | Comprobaciones | ✅ | lint, typecheck, test 46/46, build, test:db 284/284; manual invitado → login → vuelta con borrador, e identificado (llega a OpenAI; local sin clave → 500 esperado) |
-| Pendiente para A4 | ⏳ | Cuotas, concurrencia, límite por IP y registro de uso en servidor |
+| Pendiente para A4 | ✅ | Hecho en A4 |
+
+## Iteración A4 — Cuotas y trazabilidad de IA 🟡 (2026-10-06)
+| Tarea | Estado | Nota |
+|---|---|---|
+| Migración `20261006090000_ai_usage_quotas` (aditiva) | ✅ local | `ai_usage_events` (RLS sin políticas; sin permisos anon/authenticated) + `ai_begin_request(…, p_limits)` / `ai_finish_request(…, p_reason)` solo `service_role`, `pg_advisory_xact_lock` por usuario e IP. Expectativas en `supabase/expectations/` |
+| Orden de comprobación | ✅ | Presupuesto global del mes → concurrencia (caducidad de `started` a 2 min) → cuota diaria/mensual por flujo → 30/h por IP. Día/mes en Europe/Madrid. Fallos sin tokens no consumen cuota |
+| Servidor (`src/lib/server/ai-usage.ts`) | ✅ | `SUPABASE_SERVICE_ROLE_KEY` solo servidor; cifras D3 por `AI_*`; `ip_hash` HMAC-SHA256 con `AI_IP_HASH_SALT`; 429 + `Retry-After` por motivo; 503 por presupuesto o sin configuración; `X-Request-Id` |
+| Rutas | ✅ | begin → OpenAI → finish en `finally` (error, timeout, cancelación `client_aborted`). Importar 25 s y compra 35 s, máx. 1 reintento (timeout/conexión/5xx), coste con `cost.ts`, `store:false`; errores del modelo 502 |
+| Logs | ✅ | `ai_usage` {flow, requestId, status, reason, model, costUsd, latencyMs, attempts}; `ai_budget_threshold` al cruzar 50/80 %; eliminados logs con respuesta del modelo |
+| UI | ✅ | Compra muestra el mensaje del servidor; Crear menú oculta la pista de reintento en 429/503 |
+| Telemetría `menu_generation_requests` | ✅ | Sin cambios |
+| Tests | ✅ | `tests/ai-usage.test.cjs` (39); `test:db` +19 (cuotas, concurrencia real en paralelo, IP, presupuesto, caducidad, permisos SQL y Data API) |
+| Comprobaciones | ✅ | lint, typecheck, test 85/85, build, test:db 303/303 (también desde `db:reset`); manual con OpenAI simulado local: 4 menús + 5.º 429, concurrencia 429, presupuesto 503, mensajes en UI |
+| Aplicar en becook-preview + variables Vercel | ⏳ | Sergio desde Cowork; pasos en `docs/development/hosted-preview.md` §A4. Hasta entonces la IA del Preview responde 503 |
+| Producción | ⏳ | Con OK, backup y variables propias antes del merge a `main` |
 
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
@@ -42,7 +57,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | 02 Entorno de pruebas y cambios reproducibles | A1 | ✅ | Local + preview + CI; producción reconciliada y con `enforce_reference_ownership` (2026-10-06); esquemas prod = preview |
 | 03 Dependencias | A2 | ✅ | 2026-10-06: next/eslint-config-next 16.2.1→16.3.8, supabase-js 2.49.4→2.117.2 + transitivas; audit 17→5 (riesgo residual aceptado, ver A2) |
 | 04 Rutas de IA protegidas | A3 | ✅ | 2026-10-06: sesión verificada en servidor (401), límites 413/415/400, UX invitado con retorno; ver A3 |
-| 05 Cuotas y trazabilidad de IA | A4 | ⏳ | Decisión D5: cuotas en tabla Supabase |
+| 05 Cuotas y trazabilidad de IA | A4 | 🟡 | Código y migración listos y probados en local (2026-10-06); falta aplicar en becook-preview + variables Vercel (Sergio) y validar Preview |
 | 06 Datos locales por identidad | B1 | ⏳ | |
 | 07 Fuente de verdad y sincronización | B1 | ⏳ | |
 | 08 Contrato perfil ↔ BD | B2 | ⏳ | |
@@ -83,6 +98,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | preview_bootstrap / baseline | ✅ | ✅ 20260924112904 | n/a (esquema previo) |
 | reconcile_ownership (datos) | n/a | n/a | ✅ 2026-10-06 (SQL Editor, fuera del ledger) |
 | enforce_reference_ownership | ✅ | ✅ 20260924112917 | ✅ 20261005220924 |
+| ai_usage_quotas (20261006090000) | ✅ | ⏳ (Sergio) | ⏳ |
 
 ## Decisiones
 | # | Decisión | Fecha |

@@ -7,6 +7,7 @@ const {createMenuCompletion} = require("../src/lib/menu-generation/runtime.ts");
 const {isImportedMenuResponse, importedMenuToWeekDays} = require("../src/lib/importMenu.ts");
 const {weekDaysToSupabaseWeek, withWeekDates} = require("../src/lib/weekStorage.ts");
 const {estimateOpenAICostUsd} = require("../src/lib/openai/cost.ts");
+const {installFakeBackends, aiRequest} = require("./helpers/fake-backends.cjs");
 const profile = readMenuProfile(null);
 const selection = {
  lunches: ["Pollo asado con batata", "Lentejas estofadas", "Arroz meloso de sepia", "Espaguetis con setas", "Garbanzos con espinacas", "Merluza al horno", "Paella de pollo"],
@@ -62,40 +63,28 @@ test("transport: one call normally, one fallback on 503, none on 429/400; SDK re
  }
 });
 test("HTTP route rejects invalid input before billing and invalid output without regeneration", async () => {
- const previousEnv = {OPENAI_API_KEY: process.env.OPENAI_API_KEY, NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY};
- const previousFetch = global.fetch;
- process.env.OPENAI_API_KEY = "synthetic-test-key";
- process.env.NEXT_PUBLIC_SUPABASE_URL = "http://supabase.test";
- process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "synthetic-anon-key";
- let calls = 0;
  let responseSelection = selection;
- global.fetch = async (url) => {
-  // Synthetic verified session (A3): the route only bills after Auth accepts the token.
-  if (String(url).startsWith("http://supabase.test/auth/v1/user")) return Response.json({id:"00000000-0000-4000-8000-000000000001",aud:"authenticated",role:"authenticated",app_metadata:{},user_metadata:{},created_at:"2026-01-01T00:00:00Z"});
-  calls++;
-  return Response.json({choices:[{finish_reason:"stop",message:{content:JSON.stringify(responseSelection)}}],usage:{prompt_tokens:100,completion_tokens:100,total_tokens:200}});
- };
+ // Synthetic verified session (A3) and usage ledger (A4): the route only bills after both accept.
+ const fakes = installFakeBackends(() => Response.json({choices:[{finish_reason:"stop",message:{content:JSON.stringify(responseSelection)}}],usage:{prompt_tokens:100,completion_tokens:100,total_tokens:200}}));
  try {
   const {POST} = require("../src/app/api/generate-menu/route.ts");
-  const request = body => new Request("http://localhost/api/generate-menu",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer header.synthetic-valid.signature"},body:JSON.stringify(body)});
+  const request = body => aiRequest("generate-menu", body);
   assert.equal((await POST(request({peopleCount:8}))).status,400);
   assert.equal((await POST(request({peopleCount:2,profile:{allergies:"nuts"}}))).status,400);
-  assert.equal(calls,0);
+  assert.equal(fakes.openAICalls,0);
+  assert.equal(fakes.begin.length,0, "invalid input never opens a usage record");
   const success = await POST(request({peopleCount:2}));
   assert.equal(success.status,200);
   assert.ok(success.headers.get("Server-Timing"));
   assert.equal((await success.json()).days.length,7);
   responseSelection = {...selection,lunches:[]};
   assert.equal((await POST(request({peopleCount:2}))).status,422);
-  assert.equal(calls,2);
+  assert.equal(fakes.openAICalls,2);
   responseSelection = selection;
   assert.equal((await POST(request({peopleCount:2,profile:{dietaryRestrictions:["vegetarian"]}}))).status,422);
-  assert.equal(calls,3);
+  assert.equal(fakes.openAICalls,3);
+  assert.deepEqual(fakes.finish.map(f => f.p_status), ["succeeded","failed","failed"]);
  } finally {
-  global.fetch = previousFetch;
-  for (const [key, value] of Object.entries(previousEnv)) {
-   if(value === undefined) delete process.env[key];
-   else process.env[key] = value;
-  }
+  fakes.restore();
  }
 });

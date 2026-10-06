@@ -8,10 +8,14 @@ import {
   type ImportedMenuResponse,
 } from "@/lib/importMenu";
 import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
+import { estimateOpenAICostUsd } from "@/lib/openai/cost";
+import { importTimeoutMs, withOneRetry } from "@/lib/openai/retry";
 import { aiRequestLimits } from "@/lib/server/ai-limits";
 import { guardAiRequest } from "@/lib/server/ai-request";
+import { beginAiUsage, withRequestId, type AiUsageOutcome } from "@/lib/server/ai-usage";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const systemPrompt = `
 Eres un asistente que interpreta menús semanales en español.
@@ -75,49 +79,95 @@ export async function POST(request: Request) {
     );
   }
 
+  const begin = await beginAiUsage(request, { userId: guard.user.id, flow: "import" });
+
+  if (!begin.ok) {
+    return begin.response;
+  }
+
+  const { usage } = begin;
+  const outcome: AiUsageOutcome = { status: "failed", reason: "error", model: OPENAI_MODEL };
+  let attempts = 0;
+
   try {
-    const openai = new OpenAI({ apiKey });
+    const openai = new OpenAI({ apiKey, maxRetries: 0, timeout: importTimeoutMs });
     logOpenAIModelUsage("import-menu");
 
-    const completion = await openai.chat.completions.create({
-      model: OPENAI_MODEL,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "imported_menu",
-          strict: true,
-          schema: importedMenuSchema,
-        },
-      },
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: `Interpreta este menú semanal y devuélvelo en JSON:\n\n${text}`,
-        },
-      ],
+    const completion = await withOneRetry(
+      () =>
+        openai.chat.completions.create(
+          {
+            model: OPENAI_MODEL,
+            store: false,
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "imported_menu",
+                strict: true,
+                schema: importedMenuSchema,
+              },
+            },
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt,
+              },
+              {
+                role: "user",
+                content: `Interpreta este menú semanal y devuélvelo en JSON:\n\n${text}`,
+              },
+            ],
+          },
+          { signal: request.signal },
+        ),
+      { signal: request.signal, onAttempt: () => attempts++ },
+    );
+
+    const promptTokens = completion.usage?.prompt_tokens ?? null;
+    const completionTokens = completion.usage?.completion_tokens ?? null;
+    const cachedPromptTokens =
+      completion.usage?.prompt_tokens_details?.cached_tokens ?? null;
+    Object.assign(outcome, {
+      model: completion.model || OPENAI_MODEL,
+      promptTokens,
+      completionTokens,
+      costUsd: estimateOpenAICostUsd({
+        model: OPENAI_MODEL,
+        promptTokens,
+        cachedPromptTokens,
+        completionTokens,
+      }),
     });
 
     const content = completion.choices[0]?.message?.content;
 
     if (!content) {
-      return NextResponse.json(
-        { error: "OpenAI no devolvió contenido para interpretar el menú." },
-        { status: 500 },
+      outcome.reason = "empty_output";
+      return withRequestId(
+        NextResponse.json(
+          { error: "OpenAI no devolvió contenido para interpretar el menú." },
+          { status: 502 },
+        ),
+        usage.requestId,
       );
     }
 
-    const parsedJson = JSON.parse(content) as unknown;
+    let parsedJson: unknown;
+
+    try {
+      parsedJson = JSON.parse(content);
+    } catch {
+      parsedJson = null;
+    }
 
     if (!isImportedMenuResponse(parsedJson)) {
-      console.error("Respuesta de menú con formato inesperado:", parsedJson);
-
-      return NextResponse.json(
-        { error: "La respuesta del modelo no tiene el formato esperado." },
-        { status: 500 },
+      outcome.reason = "invalid_output";
+      return withRequestId(
+        NextResponse.json(
+          { error: "La respuesta del modelo no tiene el formato esperado." },
+          { status: 502 },
+        ),
+        usage.requestId,
       );
     }
 
@@ -127,26 +177,27 @@ export async function POST(request: Request) {
       days: completeImportedMenuDays(text, parsedMenu.days),
     };
 
-    console.log("Import menu days:", {
-      modelDays: parsedMenu.days.length,
-      finalDays: completedMenu.days.length,
-    });
+    outcome.status = "succeeded";
+    outcome.reason = undefined;
 
-    return NextResponse.json(completedMenu);
+    return withRequestId(NextResponse.json(completedMenu), usage.requestId);
   } catch (error) {
-    console.error("Error al importar menú:", error);
+    outcome.reason = request.signal.aborted
+      ? "client_aborted"
+      : error instanceof OpenAI.APIConnectionTimeoutError
+        ? "timeout"
+        : error instanceof OpenAI.APIError
+          ? `openai_${error.status ?? "error"}`
+          : "error";
 
-    const errorMessage =
-      error instanceof Error ? error.message : "Error desconocido";
-
-    return NextResponse.json(
-      {
-        error:
-          process.env.NODE_ENV === "development"
-            ? `Ha fallado el procesamiento del menú: ${errorMessage}`
-            : "Ha fallado el procesamiento del menú. Inténtalo de nuevo.",
-      },
-      { status: 500 },
+    return withRequestId(
+      NextResponse.json(
+        { error: "Ha fallado el procesamiento del menú. Inténtalo de nuevo." },
+        { status: 502 },
+      ),
+      usage.requestId,
     );
+  } finally {
+    await usage.finish({ ...outcome, attempts });
   }
 }

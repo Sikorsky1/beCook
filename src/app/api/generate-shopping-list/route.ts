@@ -8,10 +8,14 @@ import {
   type GeneratedShoppingListResponse,
 } from "@/lib/shoppingList";
 import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
+import { estimateOpenAICostUsd } from "@/lib/openai/cost";
+import { shoppingTimeoutMs, withOneRetry } from "@/lib/openai/retry";
 import { aiRequestLimits } from "@/lib/server/ai-limits";
 import { guardAiRequest } from "@/lib/server/ai-request";
+import { beginAiUsage, withRequestId, type AiUsageOutcome } from "@/lib/server/ai-usage";
 
 export const runtime = "nodejs";
+export const maxDuration = 80;
 
 const systemPrompt = `
 Eres un asistente que genera listas de la compra semanales en español.
@@ -94,59 +98,112 @@ export async function POST(request: Request) {
     );
   }
 
+  const begin = await beginAiUsage(request, { userId: guard.user.id, flow: "shopping" });
+
+  if (!begin.ok) {
+    return begin.response;
+  }
+
+  const { usage } = begin;
+  const outcome: AiUsageOutcome = { status: "failed", reason: "error", model: OPENAI_MODEL };
+  let attempts = 0;
+
   try {
-    const openai = new OpenAI({ apiKey });
+    const openai = new OpenAI({ apiKey, maxRetries: 0, timeout: shoppingTimeoutMs });
     logOpenAIModelUsage("generate-shopping-list");
 
-    const response = await openai.responses.create({
-      model: OPENAI_MODEL,
-      instructions: systemPrompt,
-      input: `Genera una lista de la compra semanal a partir de esta semana estructurada:\n\n${JSON.stringify(week, null, 2)}`,
-      text: {
-        format: {
-          type: "json_schema",
-          name: "shopping_list",
-          strict: true,
-          schema: generatedShoppingListSchema,
-          description:
-            "Lista de la compra semanal estructurada por ingredientes comprables.",
-        },
-      },
+    const response = await withOneRetry(
+      () =>
+        openai.responses.create(
+          {
+            model: OPENAI_MODEL,
+            store: false,
+            instructions: systemPrompt,
+            input: `Genera una lista de la compra semanal a partir de esta semana estructurada:\n\n${JSON.stringify(week, null, 2)}`,
+            text: {
+              format: {
+                type: "json_schema",
+                name: "shopping_list",
+                strict: true,
+                schema: generatedShoppingListSchema,
+                description:
+                  "Lista de la compra semanal estructurada por ingredientes comprables.",
+              },
+            },
+          },
+          { signal: request.signal },
+        ),
+      { signal: request.signal, onAttempt: () => attempts++ },
+    );
+
+    const promptTokens = response.usage?.input_tokens ?? null;
+    const completionTokens = response.usage?.output_tokens ?? null;
+    Object.assign(outcome, {
+      model: response.model || OPENAI_MODEL,
+      promptTokens,
+      completionTokens,
+      costUsd: estimateOpenAICostUsd({
+        model: OPENAI_MODEL,
+        promptTokens,
+        cachedPromptTokens: response.usage?.input_tokens_details?.cached_tokens ?? null,
+        completionTokens,
+      }),
     });
 
     if (!response.output_text) {
-      return NextResponse.json(
-        { error: "OpenAI no devolvió contenido para la lista de la compra." },
-        { status: 500 },
+      outcome.reason = "empty_output";
+      return withRequestId(
+        NextResponse.json(
+          { error: "OpenAI no devolvió contenido para la lista de la compra." },
+          { status: 502 },
+        ),
+        usage.requestId,
       );
     }
 
-    const parsedJson = JSON.parse(response.output_text) as unknown;
+    let parsedJson: unknown;
+
+    try {
+      parsedJson = JSON.parse(response.output_text);
+    } catch {
+      parsedJson = null;
+    }
 
     if (!isGeneratedShoppingListResponse(parsedJson)) {
-      console.error("Respuesta de lista de la compra con formato inesperado:", parsedJson);
-
-      return NextResponse.json(
-        { error: "La respuesta del modelo no tiene el formato esperado." },
-        { status: 500 },
+      outcome.reason = "invalid_output";
+      return withRequestId(
+        NextResponse.json(
+          { error: "La respuesta del modelo no tiene el formato esperado." },
+          { status: 502 },
+        ),
+        usage.requestId,
       );
     }
 
-    return NextResponse.json(parsedJson as GeneratedShoppingListResponse);
-  } catch (error) {
-    console.error("Error al generar la lista de la compra:", error);
+    outcome.status = "succeeded";
+    outcome.reason = undefined;
 
-    const errorMessage =
-      error instanceof Error ? error.message : "Error desconocido";
-
-    return NextResponse.json(
-      {
-        error:
-          process.env.NODE_ENV === "development"
-            ? `Ha fallado la generación de la lista: ${errorMessage}`
-            : "Ha fallado la generación de la lista de la compra. Inténtalo de nuevo.",
-      },
-      { status: 500 },
+    return withRequestId(
+      NextResponse.json(parsedJson as GeneratedShoppingListResponse),
+      usage.requestId,
     );
+  } catch (error) {
+    outcome.reason = request.signal.aborted
+      ? "client_aborted"
+      : error instanceof OpenAI.APIConnectionTimeoutError
+        ? "timeout"
+        : error instanceof OpenAI.APIError
+          ? `openai_${error.status ?? "error"}`
+          : "error";
+
+    return withRequestId(
+      NextResponse.json(
+        { error: "Ha fallado la generación de la lista de la compra. Inténtalo de nuevo." },
+        { status: 502 },
+      ),
+      usage.requestId,
+    );
+  } finally {
+    await usage.finish({ ...outcome, attempts });
   }
 }

@@ -4,6 +4,7 @@ const path = require("node:path");
 const { ROOT, sql, verifiedContainer, localApi } = require("./local-supabase.cjs");
 const { fingerprintSql, probeSql } = require("./db-test-probe.cjs");
 const { runOwnershipTests } = require("./reference-ownership-tests.cjs");
+const { runAiUsageTests } = require("./ai-usage-db-tests.cjs");
 const { createClient } = require("@supabase/supabase-js");
 const id = (prefix, n) => prefix + "0000000-0000-4000-8000-00000000000" + n;
 let failures = 0, passed = 0;
@@ -30,8 +31,13 @@ async function main() {
   verifiedContainer();
   const expected = JSON.parse(fs.readFileSync(path.join(ROOT,"supabase/baseline/remote-metadata.json"),"utf8"));
   const initialState = sql(fingerprintSql);
-  const delta = JSON.parse(fs.readFileSync(path.join(ROOT,"supabase/expectations/20260923194029_enforce_reference_ownership.json"),"utf8"));
-  for (const key of ["constraints","indexes"]) expected[key].push(...delta[key]);
+  // Every additive migration ships the metadata it adds; the schema must match exactly.
+  const delta = { constraints: [] };
+  for (const file of fs.readdirSync(path.join(ROOT,"supabase/expectations")).filter(f => f.endsWith(".json")).sort()) {
+    const migrationDelta = JSON.parse(fs.readFileSync(path.join(ROOT,"supabase/expectations",file),"utf8"));
+    for (const [key, rows] of Object.entries(migrationDelta)) if (Array.isArray(rows)) (expected[key] ||= []).push(...rows);
+    delta.constraints.push(...(migrationDelta.constraints || []));
+  }
   const current = JSON.parse(sql(fs.readFileSync(path.join(ROOT,"supabase/baseline/inspect.sql"),"utf8")));
   for (const key of ["columns","tables","constraints","indexes","policies","functions","triggers","grants","other_relations","enums"]) {
     check("schema metadata: " + key, () => assert.deepEqual(sorted(current[key]), sorted(expected[key])));
@@ -128,6 +134,12 @@ async function main() {
     await client.auth.signOut({scope:"local"});
   }
   await supabase.auth.signOut({scope:"local"});
+  // A4: AI usage ledger. A fresh fixture session proves authenticated users are refused too.
+  const userClient = createClient(api.url,api.key,{auth:{persistSession:false,autoRefreshToken:false}});
+  const fixtureLogin = await userClient.auth.signInWithPassword({email:"fixture-1@example.invalid",password:"Local-fixture-only-2026!"});
+  check("AI usage fixture session", () => assert.equal(fixtureLogin.error,null));
+  await runAiUsageTests({check, sql, id, api, createClient, userClient});
+  await userClient.auth.signOut({scope:"local"});
   console.log(passed + " passed; " + failures + " failed. No production connection; SQL probes rolled back.");
   process.exitCode = failures ? 1 : 0;
 }

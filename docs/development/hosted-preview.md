@@ -280,3 +280,35 @@ cambios manuales, rebuild y verificaciones anteriores. No se ha aplicado ni vali
 la corrección en producción. Los problemas de datos reales documentados en 02B
 siguen requiriendo reconciliación autorizada por separado. No hay push autorizado.
 GitHub Actions de estos cambios todavía no se ha ejecutado remotamente.
+
+## A4: cuotas y registro de uso de IA (pendiente de aplicar en remoto)
+
+La migración `supabase/migrations/20261006090000_ai_usage_quotas.sql` crea
+`public.ai_usage_events` y las funciones `ai_begin_request` / `ai_finish_request`
+(solo `service_role`). Es aditiva. Claude Code **no** la aplica en ningún remoto.
+
+Las tres rutas de IA fallan cerradas (503) sin registro de uso. Mientras no se
+complete lo siguiente, la IA del Preview de `audit-opt` responde 503:
+
+1. Aplicar la migración en `becook-preview` (`qdhpdhnpcsfhmygjofqb`) y registrarla
+   en `supabase/hosted/applied-preview.json` con su SHA-256. El delta de metadatos
+   esperado está en `supabase/expectations/20261006090000_ai_usage_quotas.json`.
+2. En Vercel, solo para el Preview de `audit-opt` del proyecto que use becook-preview:
+   - `SUPABASE_SERVICE_ROLE_KEY`: la clave de servicio de **becook-preview**. Nunca
+     con prefijo `NEXT_PUBLIC_` ni en el ámbito Production.
+   - `AI_IP_HASH_SALT`: valor aleatorio largo (por ejemplo `openssl rand -hex 32`),
+     distinto del de producción.
+   - Opcionales (por defecto, decisión D3): `AI_QUOTA_MENU_DAILY=4`,
+     `AI_QUOTA_MENU_MONTHLY=20`, `AI_QUOTA_IMPORT_DAILY=10`,
+     `AI_QUOTA_SHOPPING_DAILY=10`, `AI_MAX_CONCURRENT=1`, `AI_IP_HOURLY=30`,
+     `AI_MONTHLY_BUDGET_USD=25`. Un valor no numérico provoca 503.
+3. Redesplegar el Preview y comprobar: 429 con `Retry-After` al superar la cuota,
+   y filas en `ai_usage_events` sin IP en claro (`ip_hash` de 64 caracteres).
+
+Producción solo cuando se autorice: backup previo, migración, registro en
+`applied-production.json` y las mismas variables con la clave y un salt propios
+de producción, **antes** del merge a `main`; si no, la IA de producción daría 503.
+Los días y meses de cuota y presupuesto se cuentan en hora de Europe/Madrid. El
+presupuesto suma el coste estimado de peticiones terminadas (las que están en curso
+no cuentan todavía); los avisos `ai_budget_threshold` se registran al cruzar el 50 %
+y el 80 %.

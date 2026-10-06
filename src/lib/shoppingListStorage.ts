@@ -135,6 +135,14 @@ export async function syncShoppingListToSupabase(
   await saveShoppingListToSupabase(targetWeekId, shoppingItems);
 }
 
+// A message from the server meant for the user (quota, budget, invalid week).
+export class ShoppingListApiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ShoppingListApiError";
+  }
+}
+
 export async function generateShoppingListForWeek(
   weekDays: WeekDay[],
   signal?: AbortSignal,
@@ -151,7 +159,7 @@ export async function generateShoppingListForWeek(
 
   if (!response.ok) {
     const fallbackMessage = "No se pudo generar la lista de la compra.";
-    throw new Error(
+    throw new ShoppingListApiError(
       "error" in data ? data.error ?? fallbackMessage : fallbackMessage,
     );
   }

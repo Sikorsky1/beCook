@@ -7,6 +7,7 @@ import { selectionToMenu } from "@/lib/menu-generation/validation";
 import { createMenuCompletion, menuReasoningEffort, menuTimeoutMs, type MenuAttempt } from "@/lib/menu-generation/runtime";
 import { aiRequestLimits } from "@/lib/server/ai-limits";
 import { guardAiRequest } from "@/lib/server/ai-request";
+import { beginAiUsage, withRequestId } from "@/lib/server/ai-usage";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
@@ -26,6 +27,10 @@ export async function POST(request: Request) {
   }
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({error: "Falta configurar OpenAI en el servidor."}, {status: 500});
+  const begin = await beginAiUsage(request, {userId: guard.user.id, flow: "menu"});
+  if (!begin.ok) return begin.response;
+  const aiUsage = begin.usage;
+  let failureReason = "error";
   try {
     const openai = new OpenAI({apiKey, maxRetries: 0, timeout: menuTimeoutMs});
     preparationMs = Math.round(performance.now() - startedAt);
@@ -43,22 +48,34 @@ export async function POST(request: Request) {
     };
     const choice = completion.choices[0];
     if (choice?.finish_reason !== "stop" || choice.message.refusal || !choice.message.content) {
-      return NextResponse.json({error: "No se ha podido completar un menú válido. Inténtalo de nuevo.", openaiTelemetry: telemetry}, {status: 502});
+      failureReason = "incomplete_output";
+      return withRequestId(NextResponse.json({error: "No se ha podido completar un menú válido. Inténtalo de nuevo.", openaiTelemetry: telemetry}, {status: 502}), aiUsage.requestId);
     }
     const parseStartedAt = performance.now();
     let menu;
     try { menu = selectionToMenu(JSON.parse(choice.message.content), input.profile); } catch {
       parseMs = Math.round(performance.now() - parseStartedAt);
-      return NextResponse.json({error: "El menú no ha superado las comprobaciones de formato, variedad o restricciones. Inténtalo de nuevo.", openaiTelemetry: telemetry}, {status: 422});
+      failureReason = "invalid_output";
+      return withRequestId(NextResponse.json({error: "El menú no ha superado las comprobaciones de formato, variedad o restricciones. Inténtalo de nuevo.", openaiTelemetry: telemetry}, {status: 422}), aiUsage.requestId);
     }
     parseMs = Math.round(performance.now() - parseStartedAt);
     outcome = "success";
     const totalMs = Math.round(performance.now() - startedAt);
     const response: GeneratedMenuApiResponse = {...menu, openaiTelemetry: {...telemetry, preparationMs, parseMs, totalMs}};
-    return NextResponse.json(response, {headers: {"Server-Timing": `prepare;dur=${preparationMs}, openai;dur=${telemetry.responseTimeMs}, parse;dur=${parseMs}, total;dur=${totalMs}`}});
-  } catch {
-    return NextResponse.json({error: "Ha fallado la generación del menú. Inténtalo de nuevo.", ...(telemetry ? {openaiTelemetry: telemetry} : {})}, {status: 502});
+    return withRequestId(NextResponse.json(response, {headers: {"Server-Timing": `prepare;dur=${preparationMs}, openai;dur=${telemetry.responseTimeMs}, parse;dur=${parseMs}, total;dur=${totalMs}`}}), aiUsage.requestId);
+  } catch (error) {
+    failureReason = request.signal.aborted ? "client_aborted" : error instanceof OpenAI.APIConnectionTimeoutError ? "timeout" : error instanceof OpenAI.APIError ? `openai_${error.status ?? "error"}` : "error";
+    return withRequestId(NextResponse.json({error: "Ha fallado la generación del menú. Inténtalo de nuevo.", ...(telemetry ? {openaiTelemetry: telemetry} : {})}, {status: 502}), aiUsage.requestId);
   } finally {
+    await aiUsage.finish({
+      status: outcome === "success" ? "succeeded" : "failed",
+      reason: outcome === "success" ? undefined : failureReason,
+      model: telemetry?.modelUsed ?? attempts.at(-1)?.model ?? null,
+      promptTokens: telemetry?.promptTokens ?? null,
+      completionTokens: telemetry?.completionTokens ?? null,
+      costUsd: telemetry?.estimatedCostUsd ?? null,
+      attempts: attempts.length,
+    });
     // No prompts, dishes, profile data, IDs, API errors or secrets in logs.
     console.info("menu_generation", {outcome, preparationMs, parseMs, totalMs: Math.round(performance.now() - startedAt), attempts, telemetry});
   }

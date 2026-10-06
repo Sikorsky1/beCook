@@ -91,7 +91,8 @@ function localApi() {
   const status = JSON.parse(cli(["status", "-o", "json"]));
   if (status.API_URL !== "http://127.0.0.1:54321") throw new Error("Unexpected local API address.");
   if (!status.ANON_KEY) throw new Error("Missing locally generated anon key.");
-  return { url: status.API_URL, key: status.ANON_KEY };
+  if (!status.SERVICE_ROLE_KEY) throw new Error("Missing locally generated service role key.");
+  return { url: status.API_URL, key: status.ANON_KEY, serviceKey: status.SERVICE_ROLE_KEY };
 }
 async function main(command) {
   if (command === "start") {
@@ -125,7 +126,8 @@ async function main(command) {
     console.log("Local Supabase stopped; volumes preserved.");
   } else if (command === "dev") {
     const api = localApi();
-    const env = { ...safeEnv(), NEXT_PUBLIC_SUPABASE_URL: api.url, NEXT_PUBLIC_SUPABASE_ANON_KEY: api.key, OPENAI_API_KEY: "", NEXT_TELEMETRY_DISABLED: "1" };
+    // Local-only service key and salt: the AI usage ledger runs against the dedicated container.
+    const env = { ...safeEnv(), NEXT_PUBLIC_SUPABASE_URL: api.url, NEXT_PUBLIC_SUPABASE_ANON_KEY: api.key, SUPABASE_SERVICE_ROLE_KEY: api.serviceKey, AI_IP_HASH_SALT: "local-dev-only-salt", OPENAI_API_KEY: "", NEXT_TELEMETRY_DISABLED: "1" };
     const child = spawnSync(process.execPath, [path.join(ROOT, "node_modules/next/dist/bin/next"), "dev", "--webpack", "--disable-source-maps"], { cwd: ROOT, env, stdio: "inherit" });
     process.exitCode = child.status ?? 1;
   } else throw new Error("Use start, migrate, reset, seed, stop or dev. Arbitrary CLI arguments are forbidden.");

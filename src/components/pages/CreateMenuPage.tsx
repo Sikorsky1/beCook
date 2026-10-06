@@ -185,6 +185,8 @@ export default function CreateMenuPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMode, setLoadingMode] = useState<CreateMenuMode | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  // Quota and budget responses (429/503): retrying or tweaking preferences will not help.
+  const [errorIsLimit, setErrorIsLimit] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
   const [useWeekStatus, setUseWeekStatus] = useState<UseWeekStatus>("idle");
   const [useWeekMessage, setUseWeekMessage] = useState("");
@@ -328,6 +330,7 @@ export default function CreateMenuPage() {
     setIsLoading(true);
     setLoadingMode("import");
     setErrorMessage("");
+    setErrorIsLimit(false);
     setUseWeekStatus("idle");
     setUseWeekMessage("");
     setGenerationRequestId(null);
@@ -341,6 +344,7 @@ export default function CreateMenuPage() {
 
       if (!response.ok) {
         setImportedMenu(null);
+        setErrorIsLimit(response.status === 429 || response.status === 503);
         const fallbackMessage = "No se pudo procesar el menú.";
         setErrorMessage(
           "error" in data ? data.error ?? fallbackMessage : fallbackMessage,
@@ -376,6 +380,7 @@ export default function CreateMenuPage() {
     setIsLoading(true);
     setLoadingMode("generate");
     setErrorMessage("");
+    setErrorIsLimit(false);
     setUseWeekStatus("idle");
     setUseWeekMessage("");
     setGenerationRequestId(null);
@@ -459,6 +464,7 @@ export default function CreateMenuPage() {
       if (!response.ok) {
         setImportedMenu(null);
         setGenerationRequestId(null);
+        setErrorIsLimit(response.status === 429 || response.status === 503);
 
         if (currentGenerationRequestId) {
           try {
@@ -925,11 +931,13 @@ export default function CreateMenuPage() {
             variant="error"
           >
             <p>{errorMessage}</p>
-            <p className="mt-1">
-              {mode === "generate"
-                ? "Vuelve a intentarlo o ajusta un poco las preferencias."
-                : "Revisa que el texto incluya días y platos, y vuelve a intentarlo."}
-            </p>
+            {errorIsLimit ? null : (
+              <p className="mt-1">
+                {mode === "generate"
+                  ? "Vuelve a intentarlo o ajusta un poco las preferencias."
+                  : "Revisa que el texto incluya días y platos, y vuelve a intentarlo."}
+              </p>
+            )}
           </StateMessage>
         ) : null}
 
