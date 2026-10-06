@@ -22,6 +22,16 @@
       "source": "supabase/migrations/20260923194029_enforce_reference_ownership.sql",
       "sha256": "ec7608fc491f7e9967619a3f55a5b16ea45e93141f7db145acdf6ead5e46747c",
       "verification": "Columnas, constraints, índices, políticas, triggers y funciones idénticos a becook-preview (huella md5 por categoría). Diferencias aceptadas: grants y representación de weeks_iso_week_range_chk."
+    },
+    {
+      "appliedAt": "2026-10-06",
+      "type": "migration",
+      "ledger": true,
+      "version": "20261006171007",
+      "name": "ai_usage_quotas",
+      "source": "supabase/migrations/20261006090000_ai_usage_quotas.sql",
+      "sha256": "72df3cc5ef6bf020acb35ba6eae2956606655c08e2bfa51edf46ad51a994c5d9",
+      "verification": "RLS activo; sin permisos anon/authenticated sobre tabla y funciones; EXECUTE solo service_role. Sin backup externo (D6b: datos irrelevantes; migración solo aditiva)."
     }
   ]
 }

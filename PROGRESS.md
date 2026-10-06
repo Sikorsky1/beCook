@@ -101,7 +101,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | preview_bootstrap / baseline | ✅ | ✅ 20260924112904 | n/a (esquema previo) |
 | reconcile_ownership (datos) | n/a | n/a | ✅ 2026-10-06 (SQL Editor, fuera del ledger) |
 | enforce_reference_ownership | ✅ | ✅ 20260924112917 | ✅ 20261005220924 |
-| ai_usage_quotas | ✅ | ✅ 20261006115739 | ⏳ antes del merge a `main` |
+| ai_usage_quotas | ✅ | ✅ 20261006115739 | ✅ 20261006171007 |
 
 ## Decisiones
 | # | Decisión | Fecha |
