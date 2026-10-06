@@ -53,6 +53,8 @@ visibles en las pruebas hasta una corrección autorizada.
 - Cualquier otra rama Preview usa las variables generales (Supabase de producción): no desplegar
   ramas nuevas sin variables propias. Los secretos de Preview siempre con rama; nunca Preview sin rama.
 - Un cambio de variables solo se aplica al redesplegar ese entorno (push o Redeploy).
+- Si un despliegue queda en QUEUED más de 10 minutos sin otro build delante, cancelarlo y
+  redesplegar el mismo commit (conector de Vercel, o `git commit --allow-empty` + push).
 - Antes del merge a `main`, producción necesita: migración `ai_usage_quotas` aplicada en becook,
   `SUPABASE_SERVICE_ROLE_KEY` de becook y un `AI_IP_HASH_SALT` propio (solo Production).
   Sin ellos la IA de producción responde 503.
