@@ -64,6 +64,17 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Efecto visible | Los invitados dejan de tener IA (D2) |
 | Pendiente | Generación real con sesión en producción (manual, Sergio) |
 
+## Hotfix A4.1 — Timeout de la lista de la compra 🟡 (2026-10-06, en audit-opt; pendiente de validar en Preview)
+| Elemento | Detalle |
+|---|---|
+| Hallazgo (producción) | La compra tardó 67 s y luego falló dos veces por timeout a 70 s (35 s × 2 intentos; `ai_usage_events`). La ruta usaba `OPENAI_MODEL` (gpt-5.6-sol) por Responses **sin `reasoning`** → esfuerzo por defecto del modelo; `OPENAI_REASONING_EFFORT` no lo usa ninguna ruta |
+| Arreglo (solo `/api/generate-shopping-list`) | `reasoning: {effort: "low"}` (solo modelos gpt-5*); timeout 55 s por intento; **sin reintento tras timeout**; un reintento solo si el fallo (conexión o 5xx) llega en ≤ 10 s; `maxDuration` 80 → 90 s. Menú e importación sin cambios |
+| Medición OpenAI simulado | Colgado: antes 2 intentos, 70,0 s, 502 · después 1 intento, 55,1 s, 502. Respuesta inmediata: igual (200, 1 intento) |
+| Medición OpenAI real (local, semana de 7 días, gpt-5.6-sol) | Antes: 19,0 s y 34,7 s; razonamiento 516 y 1.659 tokens; 0,028 y 0,052 $ · Después: 10,2 s y 8,2 s; razonamiento 278 y 211; 0,024 y 0,021 $; 33–36 artículos (antes 35–37) |
+| Tests | `tests/openai-retry.test.cjs` (5; 4 fallan con el código anterior): política de reintento, `reasoning` low en compra y ausente en importar, `maxDuration` cubre el peor caso |
+| Comprobaciones | lint, typecheck, test 90/90, build |
+| Pendiente | Validar en Preview de `audit-opt` y, después, merge a `main` |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|

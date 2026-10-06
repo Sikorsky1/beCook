@@ -9,13 +9,19 @@ import {
 } from "@/lib/shoppingList";
 import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
 import { estimateOpenAICostUsd } from "@/lib/openai/cost";
-import { shoppingTimeoutMs, withOneRetry } from "@/lib/openai/retry";
+import {
+  shoppingQuickFailureMs,
+  shoppingReasoningEffort,
+  shoppingTimeoutMs,
+  withOneRetry,
+} from "@/lib/openai/retry";
 import { aiRequestLimits } from "@/lib/server/ai-limits";
 import { guardAiRequest } from "@/lib/server/ai-request";
 import { beginAiUsage, withRequestId, type AiUsageOutcome } from "@/lib/server/ai-usage";
 
 export const runtime = "nodejs";
-export const maxDuration = 80;
+// Worst case: quick failure (<= 10 s) + one 55 s attempt + ledger calls.
+export const maxDuration = 90;
 
 const systemPrompt = `
 Eres un asistente que genera listas de la compra semanales en español.
@@ -118,6 +124,9 @@ export async function POST(request: Request) {
           {
             model: OPENAI_MODEL,
             store: false,
+            ...(/^gpt-5/.test(OPENAI_MODEL)
+              ? { reasoning: { effort: shoppingReasoningEffort } }
+              : {}),
             instructions: systemPrompt,
             input: `Genera una lista de la compra semanal a partir de esta semana estructurada:\n\n${JSON.stringify(week, null, 2)}`,
             text: {
@@ -133,7 +142,12 @@ export async function POST(request: Request) {
           },
           { signal: request.signal },
         ),
-      { signal: request.signal, onAttempt: () => attempts++ },
+      {
+        signal: request.signal,
+        onAttempt: () => attempts++,
+        retryOnTimeout: false,
+        maxFailureMsForRetry: shoppingQuickFailureMs,
+      },
     );
 
     const promptTokens = response.usage?.input_tokens ?? null;
