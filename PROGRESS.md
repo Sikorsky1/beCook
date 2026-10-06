@@ -64,7 +64,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Efecto visible | Los invitados dejan de tener IA (D2) |
 | Pendiente | Generación real con sesión en producción (manual, Sergio) |
 
-## Hotfix A4.1 — Timeout de la lista de la compra 🟡 (2026-10-06, en audit-opt; pendiente de validar en Preview)
+## Hotfix A4.1 — Timeout de la lista de la compra ✅ (2026-10-06, en producción)
 | Elemento | Detalle |
 |---|---|
 | Hallazgo (producción) | La compra tardó 67 s y luego falló dos veces por timeout a 70 s (35 s × 2 intentos; `ai_usage_events`). La ruta usaba `OPENAI_MODEL` (gpt-5.6-sol) por Responses **sin `reasoning`** → esfuerzo por defecto del modelo; `OPENAI_REASONING_EFFORT` no lo usa ninguna ruta |
@@ -73,7 +73,8 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Medición OpenAI real (local, semana de 7 días, gpt-5.6-sol) | Antes: 19,0 s y 34,7 s; razonamiento 516 y 1.659 tokens; 0,028 y 0,052 $ · Después: 10,2 s y 8,2 s; razonamiento 278 y 211; 0,024 y 0,021 $; 33–36 artículos (antes 35–37) |
 | Tests | `tests/openai-retry.test.cjs` (5; 4 fallan con el código anterior): política de reintento, `reasoning` low en compra y ausente en importar, `maxDuration` cubre el peor caso |
 | Comprobaciones | lint, typecheck, test 90/90, build |
-| Pendiente | Validar en Preview de `audit-opt` y, después, merge a `main` |
+| Producción | [PR #7](https://github.com/Sikorsky1/beCook/pull/7), merge commit `bb47993` (2026-10-06 21:22 UTC), checks en verde. Despliegue be-cook `dpl_BhB2LfQCNEZWGn1pBHv1HQ81XAc3` READY en `www.becook.xyz` (anterior para rollback: `dpl_HuitjA7FscP4fN6h3i4RuEATGbxe`). `/login` 200 · `POST /api/generate-shopping-list` sin sesión 401 · extra `POST /api/generate-menu` sin sesión 401. `audit-opt` = `main` por fast-forward |
+| Pendiente | Generar una lista real con sesión en producción y revisar su latencia en `ai_usage_events` (Sergio) |
 
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
