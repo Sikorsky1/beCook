@@ -13,17 +13,18 @@ import { CheckboxItem } from "@/components/ui/CheckboxItem";
 import { IconButton } from "@/components/ui/IconButton";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { TextInput } from "@/components/ui/TextInput";
+import { useIdentity } from "@/components/session/IdentityProvider";
+import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
+import { loadPantry, readCachedPantry, savePantry } from "@/lib/data/repositories";
 import { pageShellClass } from "@/lib/ui";
 import {
   capitalizePantryItemName,
   normalizePantryItemName,
-  readPantryItems,
-  savePantryItems,
+  normalizePantryItems,
+  pantryItemsOrDefault,
   type PantryCategory,
   type PantryStorageItem,
 } from "@/lib/pantryStorage";
-
-const PROFILE_STORAGE_KEY = "becook-profile";
 
 type PantryCategoryGroup = {
   category: PantryCategory;
@@ -56,64 +57,6 @@ function groupPantryItems(items: PantryStorageItem[]): PantryCategoryGroup[] {
         firstItem.name.localeCompare(secondItem.name, "es"),
       ),
   }));
-}
-
-function getProfileIdFromLocalStorage() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const savedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-
-  if (!savedProfile) {
-    return null;
-  }
-
-  try {
-    const parsedProfile = JSON.parse(savedProfile) as { id?: unknown };
-
-    return typeof parsedProfile.id === "string" && parsedProfile.id
-      ? parsedProfile.id
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function syncPantryToSupabase(
-  items: PantryStorageItem[],
-  profileId: string | null,
-) {
-  try {
-    const pantryItems = items.map((item) => ({
-      name: item.name,
-      category: item.category,
-      active: item.active,
-    }));
-
-    void import("@/lib/supabase/pantry")
-      .then(async ({ replacePantryItemsInSupabase }) => {
-        const { getCurrentUser } = await import("@/lib/supabase/auth");
-        const currentUser = await getCurrentUser();
-
-        return replacePantryItemsInSupabase(
-          pantryItems,
-          profileId ?? undefined,
-          currentUser?.id,
-        );
-      })
-      .catch((error: unknown) => {
-        console.warn(
-          "No se pudo sincronizar la despensa con Supabase:",
-          error instanceof Error ? error.message : error,
-        );
-      });
-  } catch (error: unknown) {
-    console.warn(
-      "No se pudo sincronizar la despensa con Supabase:",
-      error instanceof Error ? error.message : error,
-    );
-  }
 }
 
 type PantryProgressProps = {
@@ -307,8 +250,9 @@ function PantryItemsForCategory({
 
 export default function PantryPage() {
   const [pantryItems, setPantryItems] = useState<PantryStorageItem[]>([]);
-  const [profileId, setProfileId] = useState<string | null>(null);
+  const [syncState, setSyncState] = useState<SyncState>({});
   const [hasLoadedPantry, setHasLoadedPantry] = useState(false);
+  const identity = useIdentity();
   const [draftItemName, setDraftItemName] = useState("");
   const [addingCategory, setAddingCategory] = useState<PantryCategory | null>(
     null,
@@ -318,47 +262,49 @@ export default function PantryPage() {
   const selectedCount = pantryItems.filter((item) => item.active).length;
 
   useEffect(() => {
-    // Leemos localStorage solo al montar para evitar diferencias con el HTML inicial.
-    const loadPantry = window.setTimeout(() => {
-      const localProfileId = getProfileIdFromLocalStorage();
-
-      setProfileId(localProfileId);
-      setPantryItems(readPantryItems());
-      setHasLoadedPantry(true);
-
-      if (!localProfileId) {
-        void import("@/lib/supabase/profiles")
-          .then(({ getLatestProfileFromSupabase }) =>
-            getLatestProfileFromSupabase(),
-          )
-          .then((latestProfile) => {
-            if (latestProfile?.id) {
-              setProfileId(latestProfile.id);
-            }
-          })
-          .catch((error: unknown) => {
-            console.warn(
-              "No se pudo recuperar el perfil para la despensa:",
-              error instanceof Error ? error.message : error,
-            );
-          });
-      }
-    }, 0);
-
-    return () => window.clearTimeout(loadPantry);
-  }, []);
-
-  useEffect(() => {
-    if (!hasLoadedPantry) {
+    // Identity first; the pantry shown always belongs to the current identity.
+    if (identity.status !== "ready") {
       return;
     }
 
-    savePantryItems(pantryItems);
-  }, [hasLoadedPantry, pantryItems]);
+    let isCancelled = false;
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    const loadTimer = window.setTimeout(() => {
+      setSyncState({});
+      setPantryItems(pantryItemsOrDefault(readCachedPantry(dataIdentity)));
+      setHasLoadedPantry(true);
+
+      void loadPantry(dataIdentity).then((result) => {
+        if (isCancelled) {
+          return;
+        }
+
+        setPantryItems(pantryItemsOrDefault(result.data));
+        setSyncState({
+          offline: result.offline,
+          discardedLocalChanges: result.discardedLocalChanges,
+          pending: result.pending,
+        });
+      });
+    }, 0);
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(loadTimer);
+    };
+  }, [identity.status, identity.scope, identity.userId, identity.epoch]);
 
   const persistPantryItems = (nextPantryItems: PantryStorageItem[]) => {
-    setPantryItems(nextPantryItems);
-    syncPantryToSupabase(nextPantryItems, profileId);
+    const normalizedItems = normalizePantryItems(nextPantryItems);
+    setPantryItems(normalizedItems);
+    void savePantry({ scope: identity.scope, userId: identity.userId }, normalizedItems).then((result) => {
+      if (result.status === "conflict") {
+        setPantryItems(pantryItemsOrDefault(result.remoteData));
+        setSyncState({ conflict: true });
+      } else {
+        setSyncState(result.status === "pending" ? { pending: true } : {});
+      }
+    });
   };
 
   const showAddItem = (category: PantryCategory) => {
@@ -482,6 +428,8 @@ export default function PantryPage() {
             ) : null}
           </div>
         </StickyPageHeader>
+
+        {identity.userId ? <SyncNotice state={syncState} /> : null}
 
         <section className="transition-opacity duration-200 ease-out motion-reduce:transition-none">
           {!hasLoadedPantry ? (

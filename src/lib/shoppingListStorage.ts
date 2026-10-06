@@ -1,13 +1,12 @@
 import { postAi } from "@/lib/ai-client";
+import { writeShoppingCache, type DataIdentity } from "@/lib/data/repositories";
+import type { IsoWeek } from "@/lib/isoWeek";
 import type { WeekDay } from "@/data/mockWeek";
 import {
   groupShoppingListItems,
-  isGeneratedShoppingListResponse,
   type GeneratedShoppingListResponse,
   type ShoppingListItem,
 } from "@/lib/shoppingList";
-
-const SHOPPING_LIST_CACHE_KEY = "becook-shopping-list-cache";
 
 export type ShoppingListCache = {
   weekSignature: string;
@@ -17,58 +16,6 @@ export type ShoppingListCache = {
 
 export function getWeekSignature(week: WeekDay[]) {
   return JSON.stringify(week);
-}
-
-export function readShoppingListCache(): ShoppingListCache | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const savedCache = window.localStorage.getItem(SHOPPING_LIST_CACHE_KEY);
-
-  if (!savedCache) {
-    return null;
-  }
-
-  try {
-    const parsedCache = JSON.parse(savedCache) as Partial<ShoppingListCache>;
-
-    if (
-      typeof parsedCache.weekSignature !== "string" ||
-      !Array.isArray(parsedCache.checkedItemIds) ||
-      !parsedCache.checkedItemIds.every((itemId) => typeof itemId === "string") ||
-      !isGeneratedShoppingListResponse({ items: parsedCache.items })
-    ) {
-      return null;
-    }
-
-    const parsedItems =
-      parsedCache.items as GeneratedShoppingListResponse["items"];
-
-    return {
-      weekSignature: parsedCache.weekSignature,
-      items: parsedItems,
-      checkedItemIds: parsedCache.checkedItemIds,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function saveShoppingListCache(cache: ShoppingListCache) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(SHOPPING_LIST_CACHE_KEY, JSON.stringify(cache));
-}
-
-export function clearShoppingListCache() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.removeItem(SHOPPING_LIST_CACHE_KEY);
 }
 
 export function getShoppingItemsForSupabase(
@@ -86,53 +33,22 @@ export function getShoppingItemsForSupabase(
   }));
 }
 
-async function getLatestWeekIdFromSupabase() {
-  const { supabase } = await import("@/lib/supabase/client");
-
-  if (!supabase) {
-    throw new Error(
-      "Supabase client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.",
-    );
-  }
-
-  const { data: latestWeek, error: latestWeekError } = await supabase
-    .from("weeks")
-    .select("id")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<{ id: string }>();
-
-  if (latestWeekError) {
-    throw new Error(`Could not read latest week id: ${latestWeekError.message}`);
-  }
-
-  return latestWeek?.id ?? null;
-}
-
+// The list always belongs to an explicit remote week; there is no "latest week" fallback (H7).
 export async function syncShoppingListToSupabase(
   items: ShoppingListItem[],
   checkedItemIds: string[],
-  weekId?: string | null,
+  weekId: string | null,
 ) {
-  if (items.length === 0) {
+  if (items.length === 0 || !weekId) {
     return;
   }
 
   const shoppingItems = getShoppingItemsForSupabase(items, checkedItemIds);
-  const targetWeekId = weekId ?? (await getLatestWeekIdFromSupabase());
-
-  if (!targetWeekId) {
-    console.warn(
-      "No se pudo sincronizar la lista de la compra con Supabase: no hay semana remota.",
-    );
-    return;
-  }
-
   const { saveShoppingListToSupabase } = await import(
     "@/lib/supabase/shopping-lists"
   );
 
-  await saveShoppingListToSupabase(targetWeekId, shoppingItems);
+  await saveShoppingListToSupabase(weekId, shoppingItems);
 }
 
 // A message from the server meant for the user (quota, budget, invalid week).
@@ -168,6 +84,8 @@ export async function generateShoppingListForWeek(
 }
 
 export async function generateAndCacheShoppingListForWeek(
+  identity: DataIdentity,
+  isoWeek: IsoWeek,
   weekDays: WeekDay[],
   signal?: AbortSignal,
 ) {
@@ -177,7 +95,7 @@ export async function generateAndCacheShoppingListForWeek(
     (group) => group.items,
   );
 
-  saveShoppingListCache({
+  writeShoppingCache(identity, isoWeek, {
     weekSignature,
     items: generatedResponse.items,
     checkedItemIds: [],

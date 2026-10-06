@@ -18,6 +18,8 @@ export type SupabaseWeek = {
   title?: string;
   isoYear?: number | null;
   isoWeek?: number | null;
+  // Remote updated_at, used as the version for local cache revalidation.
+  updatedAt?: string | null;
   days: SupabaseWeekDay[];
 };
 
@@ -26,6 +28,7 @@ type WeekRow = {
   title: string | null;
   iso_year?: number | null;
   iso_week?: number | null;
+  updated_at?: string | null;
 };
 
 type WeekDayRow = {
@@ -279,7 +282,7 @@ export async function getWeekFromSupabaseByIsoWeek({
 
   let query = supabase
     .from("weeks")
-    .select("id,title,iso_year,iso_week")
+    .select("id,title,iso_year,iso_week,updated_at")
     .eq("iso_year", isoYear)
     .eq("iso_week", isoWeek)
     .order("created_at", { ascending: false })
@@ -304,6 +307,7 @@ export async function getWeekFromSupabaseByIsoWeek({
     title: week.title ?? "",
     isoYear: week.iso_year ?? null,
     isoWeek: week.iso_week ?? null,
+    updatedAt: week.updated_at ?? null,
     days: await readWeekDays(week.id),
   };
 }

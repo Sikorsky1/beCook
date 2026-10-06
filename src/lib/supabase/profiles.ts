@@ -354,3 +354,34 @@ export async function getLatestProfileFromSupabase(): Promise<UserProfile | null
 
   return rowToProfile(latestProfile);
 }
+
+// The signed-in user's own profile and its remote version (updated_at).
+export async function getProfileForUserFromSupabase(
+  userId: string,
+): Promise<{ profile: UserProfile; updatedAt: string | null } | null> {
+  if (!supabase) {
+    throw new Error(
+      "Supabase client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.",
+    );
+  }
+
+  const { data: profileRow, error: profileError } = await supabase
+    .from("profiles")
+    .select(
+      "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,goals,other_goal,dietary_restrictions,allergies,other_allergies,disliked_foods,updated_at",
+    )
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<ProfileRow & { updated_at: string | null }>();
+
+  if (profileError) {
+    throw new Error(`Could not read profile: ${profileError.message}`);
+  }
+
+  if (!profileRow) {
+    return null;
+  }
+
+  return { profile: rowToProfile(profileRow), updatedAt: profileRow.updated_at ?? null };
+}

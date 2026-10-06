@@ -64,7 +64,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Efecto visible | Los invitados dejan de tener IA (D2) |
 | Pendiente | Generación real con sesión en producción (manual, Sergio) |
 
-## Hotfix A4.1 — Timeout de la lista de la compra 🟡 (2026-10-06, en audit-opt; pendiente de validar en Preview)
+## Hotfix A4.1 — Timeout de la lista de la compra ✅ (2026-10-06, en producción)
 | Elemento | Detalle |
 |---|---|
 | Hallazgo (producción) | La compra tardó 67 s y luego falló dos veces por timeout a 70 s (35 s × 2 intentos; `ai_usage_events`). La ruta usaba `OPENAI_MODEL` (gpt-5.6-sol) por Responses **sin `reasoning`** → esfuerzo por defecto del modelo; `OPENAI_REASONING_EFFORT` no lo usa ninguna ruta |
@@ -73,7 +73,22 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Medición OpenAI real (local, semana de 7 días, gpt-5.6-sol) | Antes: 19,0 s y 34,7 s; razonamiento 516 y 1.659 tokens; 0,028 y 0,052 $ · Después: 10,2 s y 8,2 s; razonamiento 278 y 211; 0,024 y 0,021 $; 33–36 artículos (antes 35–37) |
 | Tests | `tests/openai-retry.test.cjs` (5; 4 fallan con el código anterior): política de reintento, `reasoning` low en compra y ausente en importar, `maxDuration` cubre el peor caso |
 | Comprobaciones | lint, typecheck, test 90/90, build |
-| Pendiente | Validar en Preview de `audit-opt` y, después, merge a `main` |
+| Producción | [PR #7](https://github.com/Sikorsky1/beCook/pull/7), merge commit `bb47993` (2026-10-06 21:22 UTC), checks en verde. Despliegue be-cook `dpl_BhB2LfQCNEZWGn1pBHv1HQ81XAc3` READY en `www.becook.xyz` (anterior para rollback: `dpl_HuitjA7FscP4fN6h3i4RuEATGbxe`). `/login` 200 · `POST /api/generate-shopping-list` sin sesión 401 · extra `POST /api/generate-menu` sin sesión 401. `audit-opt` = `main` por fast-forward |
+| Pendiente | Generar una lista real con sesión en producción y revisar su latencia en `ai_usage_events` (Sergio) |
+
+## Iteración B1 — Identidad y fuente de verdad 🟡 (2026-10-06, en audit-opt; sin merge a main)
+| Elemento | Detalle |
+|---|---|
+| Defecto reproducido | Con el código anterior, B veía el perfil de A (`becook-profile` con su alergia), su semana y su despensa tras A → logout → B. En el navegador, `fixture-1` veía un perfil local antiguo (hombre, 174 cm) en vez del suyo (mujer, 165 cm) |
+| Identidad | `src/lib/session/identity.ts` + `IdentityProvider`/`useIdentity` en el layout: `resolving` → `ready`; `epoch` en cada login, logout, cambio de usuario o caducidad. Logout explícito borra la caché del usuario (confirmación si hay pendientes); caducidad la conserva y muestra aviso |
+| Claves | `becook:<guest|u_userId>:<entidad>[:YYYY-Www]`, sobre `{v:1, data, savedAt, remoteVersion, pending}` (`src/lib/storage/scoped-storage.ts`). Sin accesos directos a `localStorage` fuera de esa capa |
+| Fuente de verdad | Repositorios (`src/lib/data/`): caché propia + revalidación filtrada por `user_id` de perfil, semana, despensa y compra; nada vacío sin confirmación remota. Conflictos: **gana el remoto** (versión = `updated_at`), pendientes reenviados solo si la base no cambió, guardados serializados por entidad, `overwrite` solo tras confirmar «reemplazar semana» |
+| Origen de los 30 registros cruzados | La despensa y Crear menú tomaban el `profileId` del perfil local de otra cuenta. Ahora el perfil es siempre del ámbito actual y la despensa enlaza el perfil propio leído del servidor |
+| Compra (parte de H7) | Caché por semana → lista remota de esa semana → IA. Eliminado el «última semana» por defecto al sincronizar |
+| Datos antiguos | Movidos a invitado con `legacy-origin`; oferta explícita «¿Quieres añadirlos a tu cuenta?» que solo añade lo que la cuenta no tiene; rechazo → quedan como invitado |
+| Tests | `tests/session-isolation.test.cjs` (16; mutaciones: claves sin ámbito → 5 fallos, logout sin borrar → falla H3); `test:db` +4 contra Auth/RLS reales |
+| Comprobaciones | lint, typecheck, test 106/106, build, test:db 307/307 (tras `db:reset`). Manual con fixtures A y B: migración de claves antiguas, oferta e importación (9 semanas añadidas, perfil y despensa conservados), perfil de A correcto, logout sin rastro de A, B solo ve lo suyo, cambio desde un segundo dispositivo visible al recargar |
+| Pendiente | Validar en Preview y merge a `main` cuando lo autorice Sergio |
 
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
@@ -83,8 +98,8 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | 03 Dependencias | A2 | ✅ | 2026-10-06: next/eslint-config-next 16.2.1→16.3.8, supabase-js 2.49.4→2.117.2 + transitivas; audit 17→5 (riesgo residual aceptado, ver A2) |
 | 04 Rutas de IA protegidas | A3 | ✅ | 2026-10-06: sesión verificada en servidor (401), límites 413/415/400, UX invitado con retorno; ver A3 |
 | 05 Cuotas y trazabilidad de IA | A4 | ✅ | En producción desde 2026-10-06 (PR #6) |
-| 06 Datos locales por identidad | B1 | ⏳ | |
-| 07 Fuente de verdad y sincronización | B1 | ⏳ | |
+| 06 Datos locales por identidad | B1 | 🟡 | 2026-10-06 en `audit-opt` (sin merge): claves con ámbito, identidad antes que datos; ver B1 |
+| 07 Fuente de verdad y sincronización | B1 | 🟡 | 2026-10-06 en `audit-opt`: remoto canónico, política de conflictos en `docs/development/data-sync.md` |
 | 08 Contrato perfil ↔ BD | B2 | ⏳ | |
 | 09 Calendario ISO | B3 | ⏳ | |
 | 10 Escrituras de semana seguras | B4 | ⏳ | |

@@ -1,6 +1,6 @@
 import { pantryBaseItems } from "@/data/mockPantry";
 
-const PANTRY_STORAGE_KEY = "becook-pantry-base";
+// Pure pantry helpers. Persistence lives in @/lib/data/repositories (scoped by identity).
 
 export type PantryCategory =
   | "básicos"
@@ -127,29 +127,16 @@ function parsePantryStorageItems(value: unknown): PantryStorageItem[] {
   );
 }
 
-export function readPantryItems(): PantryStorageItem[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
-  const savedPantryBase = window.localStorage.getItem(PANTRY_STORAGE_KEY);
-
-  if (!savedPantryBase) {
+// Stored data (or none yet) -> the list shown, including the default base items.
+export function pantryItemsOrDefault(value: unknown): PantryStorageItem[] {
+  if (value === null || value === undefined) {
     return getLegacyPantryItems([]);
   }
 
-  try {
-    return parsePantryStorageItems(JSON.parse(savedPantryBase));
-  } catch {
-    return getLegacyPantryItems([]);
-  }
+  return parsePantryStorageItems(value);
 }
 
-export function savePantryItems(items: PantryStorageItem[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
+export function normalizePantryItems(items: PantryStorageItem[]): PantryStorageItem[] {
   const itemMap = new Map<string, PantryStorageItem>();
 
   for (const item of items) {
@@ -165,22 +152,13 @@ export function savePantryItems(items: PantryStorageItem[]) {
     );
   }
 
-  window.localStorage.setItem(
-    PANTRY_STORAGE_KEY,
-    JSON.stringify(Array.from(itemMap.values())),
-  );
+  return Array.from(itemMap.values());
 }
 
-export function readPantryBase(): string[] {
-  return readPantryItems()
+export function activePantryNames(items: PantryStorageItem[]): string[] {
+  return items
     .filter((item) => item.active)
     .map((item) => normalizePantryItemName(item.name));
-}
-
-export function savePantryBase(items: string[]) {
-  savePantryItems(
-    getLegacyPantryItems(items.map((item) => normalizePantryItemName(item))),
-  );
 }
 
 export function pantryHasItem(pantryItems: string[], itemName: string) {

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { AiLoginNotice } from "@/components/features/AiLoginNotice";
+import { useIdentity } from "@/components/session/IdentityProvider";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
@@ -25,22 +26,26 @@ import {
   parseIsoWeek,
   type IsoWeek,
 } from "@/lib/isoWeek";
-import { readPantryItems } from "@/lib/pantryStorage";
 import {
-  clearShoppingListCache,
+  clearShoppingCache,
+  getRemoteWeekId,
+  loadPantry,
+  loadProfile,
+  readCachedPantry,
+  readCachedProfile,
+  readSelectedWeek,
+  saveWeek,
+  writeSelectedWeek,
+} from "@/lib/data/repositories";
+import { pantryItemsOrDefault } from "@/lib/pantryStorage";
+import {
   generateAndCacheShoppingListForWeek,
   syncShoppingListToSupabase,
 } from "@/lib/shoppingListStorage";
 import { getAccessToken } from "@/lib/supabase/auth";
 import type { UserProfile } from "@/lib/supabase/profiles";
 import { pageContentClass, pageShellClass } from "@/lib/ui";
-import {
-  readSelectedIsoWeek,
-  saveSelectedIsoWeek,
-  saveWeekWithSupabaseSync,
-} from "@/lib/weekStorage";
 
-const PROFILE_STORAGE_KEY = "becook-profile";
 const freeTextPromptMaxLength = 300;
 
 type CreateMenuMode = "import" | "generate";
@@ -107,34 +112,8 @@ function isProfile(value: unknown): value is UserProfile {
   );
 }
 
-function readSavedProfile() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const savedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-
-  if (!savedProfile) {
-    return null;
-  }
-
-  try {
-    const parsedProfile = JSON.parse(savedProfile);
-
-    return isProfile(parsedProfile) ? parsedProfile : null;
-  } catch {
-    return null;
-  }
-}
-
 function normalizePeopleCount(value: number) {
   return Math.min(Math.max(value, 1), 6);
-}
-
-function readActivePantryItemNames() {
-  return readPantryItems()
-    .filter((item) => item.active)
-    .map((item) => item.name);
 }
 
 function getMenuStylesForGeneration(menuStyles: MenuStyle[]) {
@@ -188,6 +167,8 @@ export default function CreateMenuPage() {
   // Quota and budget responses (429/503): retrying or tweaking preferences will not help.
   const [errorIsLimit, setErrorIsLimit] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
+  const identity = useIdentity();
+  const [activePantryItemNames, setActivePantryItemNames] = useState<string[]>([]);
   const [useWeekStatus, setUseWeekStatus] = useState<UseWeekStatus>("idle");
   const [useWeekMessage, setUseWeekMessage] = useState("");
   const isApplyingWeekRef = useRef(false);
@@ -202,6 +183,12 @@ export default function CreateMenuPage() {
   const todayDayName = isCurrentTargetWeek ? getTodayDayName() : null;
 
   useEffect(() => {
+    // Identity first: profile, pantry and selected week belong to the current identity.
+    if (identity.status !== "ready") {
+      return;
+    }
+
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
     setHasMounted(true);
 
     const weekFromUrl = parseIsoWeek({
@@ -209,7 +196,7 @@ export default function CreateMenuPage() {
       isoWeek: isoWeekParam,
     });
     const weekForMenu =
-      weekFromUrl ?? readSelectedIsoWeek() ?? getIsoWeekFromDate();
+      weekFromUrl ?? readSelectedWeek(dataIdentity) ?? getIsoWeekFromDate();
 
     if (
       (rawStartDateParam && !startDateParam) ||
@@ -221,7 +208,7 @@ export default function CreateMenuPage() {
     }
 
     setTargetIsoWeek(weekForMenu);
-    saveSelectedIsoWeek(weekForMenu);
+    writeSelectedWeek(dataIdentity, weekForMenu);
 
     let isCancelled = false;
     const draft = consumeCreateMenuDraft();
@@ -236,51 +223,41 @@ export default function CreateMenuPage() {
       setElaborationLevel(draft.elaborationLevel);
     }
 
-    void getAccessToken().then((accessToken) => {
-      if (!isCancelled) {
-        setNeedsLogin(!accessToken);
+    setNeedsLogin(!dataIdentity.userId);
+
+    const applyProfile = (value: unknown) => {
+      const nextProfile = isProfile(value) ? value : null;
+      setProfile(nextProfile);
+      if (nextProfile && !draft) {
+        setPeopleCount(normalizePeopleCount(nextProfile.householdSize));
       }
+    };
+    const applyPantry = (value: unknown) => {
+      setActivePantryItemNames(
+        pantryItemsOrDefault(value)
+          .filter((item) => item.active)
+          .map((item) => item.name),
+      );
+    };
+
+    // Cached copy first, then the account (signed-in users); never another identity's data.
+    applyProfile(readCachedProfile(dataIdentity));
+    applyPantry(readCachedPantry(dataIdentity));
+    void loadProfile(dataIdentity).then((result) => {
+      if (!isCancelled) applyProfile(result.data);
     });
-
-    async function loadProfile() {
-      const savedProfile = readSavedProfile();
-
-      if (savedProfile) {
-        setProfile(savedProfile);
-        if (!draft) {
-          setPeopleCount(normalizePeopleCount(savedProfile.householdSize));
-        }
-        return;
-      }
-
-      try {
-        const { getLatestProfileFromSupabase } = await import(
-          "@/lib/supabase/profiles"
-        );
-        const latestProfile = await getLatestProfileFromSupabase();
-
-        if (!latestProfile || isCancelled) {
-          return;
-        }
-
-        setProfile(latestProfile);
-        if (!draft) {
-          setPeopleCount(normalizePeopleCount(latestProfile.householdSize));
-        }
-      } catch (error: unknown) {
-        console.warn(
-          "No se pudo recuperar el perfil para crear menú:",
-          error instanceof Error ? error.message : error,
-        );
-      }
-    }
-
-    void loadProfile();
+    void loadPantry(dataIdentity).then((result) => {
+      if (!isCancelled) applyPantry(result.data);
+    });
 
     return () => {
       isCancelled = true;
     };
   }, [
+    identity.status,
+    identity.scope,
+    identity.userId,
+    identity.epoch,
     endDateParam,
     isoWeekParam,
     isoYearParam,
@@ -386,24 +363,19 @@ export default function CreateMenuPage() {
     setGenerationRequestId(null);
 
     const trimmedFreeTextPrompt = freeTextPrompt.trim();
-    const profileForGeneration = profile ?? readSavedProfile();
-    const pantryItemsForGeneration = readActivePantryItemNames();
+    const profileForGeneration = profile;
+    const pantryItemsForGeneration = activePantryItemNames;
     const menuStylesForGeneration = getMenuStylesForGeneration(menuStyles);
     const weekForGeneration = targetIsoWeek ?? getIsoWeekFromDate();
     let currentGenerationRequestId: string | null = null;
     let recentDishes: string[] = [];
-
-    if (!profile && profileForGeneration) {
-      setProfile(profileForGeneration);
-    }
 
     try {
       try {
         const { createMenuGenerationRequest } = await import(
           "@/lib/supabase/menu-generation-requests"
         );
-        const { getCurrentUser } = await import("@/lib/supabase/auth");
-        const currentUser = await getCurrentUser();
+        const currentUser = identity.userId ? { id: identity.userId } : null;
 
         if (currentUser?.id) {
           try {
@@ -568,18 +540,18 @@ export default function CreateMenuPage() {
     const weekForUse = targetIsoWeek ?? getIsoWeekFromDate();
     const weekHref = `/week?isoYear=${weekForUse.isoYear}&isoWeek=${weekForUse.isoWeek}`;
 
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
+
     try {
-      const { getCurrentUser } = await import("@/lib/supabase/auth");
       const { getWeekFromSupabaseByIsoWeek } = await import(
         "@/lib/supabase/weeks"
       );
-      const currentUser = await getCurrentUser();
 
-      if (currentUser?.id) {
+      if (dataIdentity.userId) {
         const existingWeek = await getWeekFromSupabaseByIsoWeek({
           isoYear: weekForUse.isoYear,
           isoWeek: weekForUse.isoWeek,
-          userId: currentUser.id,
+          userId: dataIdentity.userId,
         });
 
         if (existingWeek) {
@@ -596,22 +568,29 @@ export default function CreateMenuPage() {
       }
 
       console.log("Guardando semana importada:", importedWeekDays.length);
-      saveSelectedIsoWeek(weekForUse);
-      clearShoppingListCache();
+      writeSelectedWeek(dataIdentity, weekForUse);
+      clearShoppingCache(dataIdentity, weekForUse);
 
-      const weekIdPromise = saveWeekWithSupabaseSync(importedWeekDays, {
+      // The user already confirmed replacing any existing week for this date.
+      const weekIdPromise = saveWeek(dataIdentity, weekForUse, importedWeekDays, {
         generationRequestId,
-        isoYear: weekForUse.isoYear,
-        isoWeek: weekForUse.isoWeek,
-        replaceExisting: true,
-      });
+        overwrite: true,
+      }).then((result) =>
+        result.status === "synced"
+          ? getRemoteWeekId(dataIdentity, weekForUse).catch(() => null)
+          : null,
+      );
       let generatedItems:
         | Awaited<ReturnType<typeof generateAndCacheShoppingListForWeek>>
         | null = null;
 
       try {
         generatedItems =
-          await generateAndCacheShoppingListForWeek(importedWeekDays);
+          await generateAndCacheShoppingListForWeek(
+            dataIdentity,
+            weekForUse,
+            importedWeekDays,
+          );
       } catch (error: unknown) {
         console.warn(
           "No se pudo generar automáticamente la lista de la compra:",
