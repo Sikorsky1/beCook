@@ -47,7 +47,8 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Telemetría `menu_generation_requests` | ✅ | Sin cambios |
 | Tests | ✅ | `tests/ai-usage.test.cjs` (39); `test:db` +19 (cuotas, concurrencia real en paralelo, IP, presupuesto, caducidad, permisos SQL y Data API) |
 | Comprobaciones | ✅ | lint, typecheck, test 85/85, build, test:db 303/303 (también desde `db:reset`); manual con OpenAI simulado local: 4 menús + 5.º 429, concurrencia 429, presupuesto 503, mensajes en UI |
-| Aplicar en becook-preview + variables Vercel | ⏳ | Sergio desde Cowork; pasos en `docs/development/hosted-preview.md` §A4. Hasta entonces la IA del Preview responde 503 |
+| Aplicar en becook-preview | ✅ | 20261006115739 (2026-10-06, Cowork). Permisos verificados: sin acceso anon/authenticated; EXECUTE solo service_role |
+| Variables en Vercel (Preview `audit-opt`) | ⏳ | Sergio: `SUPABASE_SERVICE_ROLE_KEY` (preview) y `AI_IP_HASH_SALT`. Hasta entonces la IA del Preview responde 503 |
 | Producción | ⏳ | Con OK, backup y variables propias antes del merge a `main` |
 
 ## Pasos del roadmap
@@ -98,7 +99,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | preview_bootstrap / baseline | ✅ | ✅ 20260924112904 | n/a (esquema previo) |
 | reconcile_ownership (datos) | n/a | n/a | ✅ 2026-10-06 (SQL Editor, fuera del ledger) |
 | enforce_reference_ownership | ✅ | ✅ 20260924112917 | ✅ 20261005220924 |
-| ai_usage_quotas (20261006090000) | ✅ | ⏳ (Sergio) | ⏳ |
+| ai_usage_quotas | ✅ | ✅ 20261006115739 | ⏳ antes del merge a `main` |
 
 ## Decisiones
 | # | Decisión | Fecha |

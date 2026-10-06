@@ -312,3 +312,5 @@ Los días y meses de cuota y presupuesto se cuentan en hora de Europe/Madrid. El
 presupuesto suma el coste estimado de peticiones terminadas (las que están en curso
 no cuentan todavía); los avisos `ai_budget_threshold` se registran al cruzar el 50 %
 y el 80 %.
+
+> **Actualización 2026-10-06:** el proyecto Vercel duplicado `be_cook` se ha eliminado. Las referencias a `be_cook` de este documento son históricas; el único proyecto es `be-cook` (ver `AGENTS.md`, sección Vercel).
