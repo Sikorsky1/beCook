@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-06 · Rama: `audit-opt` · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-06 · Rama: `audit-opt` (= `main` tras PR #6) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -35,7 +35,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Comprobaciones | ✅ | lint, typecheck, test 46/46, build, test:db 284/284; manual invitado → login → vuelta con borrador, e identificado (llega a OpenAI; local sin clave → 500 esperado) |
 | Pendiente para A4 | ✅ | Hecho en A4 |
 
-## Iteración A4 — Cuotas y trazabilidad de IA ✅ en preview (2026-10-06)
+## Iteración A4 — Cuotas y trazabilidad de IA ✅ (2026-10-06, en producción)
 | Tarea | Estado | Nota |
 |---|---|---|
 | Migración `20261006090000_ai_usage_quotas` (aditiva) | ✅ local | `ai_usage_events` (RLS sin políticas; sin permisos anon/authenticated) + `ai_begin_request(…, p_limits)` / `ai_finish_request(…, p_reason)` solo `service_role`, `pg_advisory_xact_lock` por usuario e IP. Expectativas en `supabase/expectations/` |
@@ -51,7 +51,29 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Variables en Vercel (Preview `audit-opt`, proyecto `be-cook`) | ✅ | `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `AI_IP_HASH_SALT` con rama `audit-opt` |
 | Prueba de punta a punta en Preview | ✅ | 2026-10-06: invitado → aviso de login; menú (0,009 $, 7,5 s) y compra (0,03–0,04 $, 20–28 s) registrados con ip_hash de 64 hex; 5.º menú → 429 «límite de 4 menús por hoy» (`daily_quota`). Registros sintéticos de la prueba anulados (`synthetic_quota_test_reset`) |
 | Hallazgo para B6 | ⚠️ | La compra se generó 2 veces en 1 min al navegar (defecto H7/H14 de la auditoría) |
-| Producción | ⏳ | Con OK, backup y variables propias antes del merge a `main` |
+| Producción | ✅ | Migración 20261006171007; `AI_IP_HASH_SALT` y `SUPABASE_SERVICE_ROLE_KEY` (sensible, solo Production) en Vercel be-cook |
+
+## Bloque A en producción ✅ (2026-10-06)
+| Elemento | Resultado |
+|---|---|
+| PR | [#6](https://github.com/Sikorsky1/beCook/pull/6) `audit-opt` → `main`, merge commit (sin squash/rebase); checks de la PR en verde; sin conflictos (keepalive d108e75 = ac22a3a) |
+| Commit de merge | `512206d` (2026-10-06 17:28 UTC); `audit-opt` sincronizada por fast-forward |
+| Despliegue be-cook | `dpl_HuitjA7FscP4fN6h3i4RuEATGbxe` READY, alias `www.becook.xyz` y `becook.xyz`. Anterior (rollback): `dpl_BXcpRGFHQwxqifzEF2FmpgrrTEsA` (d108e75) |
+| Variables Production | `SUPABASE_SERVICE_ROLE_KEY` de `wejvptpkxlllfpskyisu` (verificada por ref y rol, pasada por stdin, tipo Secret); `AI_IP_HASH_SALT`. Preview solo con copia de rama `audit-opt` |
+| Comprobaciones | `/login` 200 · `POST /api/generate-menu` sin sesión 401 · `POST /api/generate-shopping-list` sin sesión 401 · extra: `POST /api/import-menu` 401; `/week`, `/create-menu`, `/shopping/list` 200 |
+| Efecto visible | Los invitados dejan de tener IA (D2) |
+| Pendiente | Generación real con sesión en producción (manual, Sergio) |
+
+## Hotfix A4.1 — Timeout de la lista de la compra 🟡 (2026-10-06, en audit-opt; pendiente de validar en Preview)
+| Elemento | Detalle |
+|---|---|
+| Hallazgo (producción) | La compra tardó 67 s y luego falló dos veces por timeout a 70 s (35 s × 2 intentos; `ai_usage_events`). La ruta usaba `OPENAI_MODEL` (gpt-5.6-sol) por Responses **sin `reasoning`** → esfuerzo por defecto del modelo; `OPENAI_REASONING_EFFORT` no lo usa ninguna ruta |
+| Arreglo (solo `/api/generate-shopping-list`) | `reasoning: {effort: "low"}` (solo modelos gpt-5*); timeout 55 s por intento; **sin reintento tras timeout**; un reintento solo si el fallo (conexión o 5xx) llega en ≤ 10 s; `maxDuration` 80 → 90 s. Menú e importación sin cambios |
+| Medición OpenAI simulado | Colgado: antes 2 intentos, 70,0 s, 502 · después 1 intento, 55,1 s, 502. Respuesta inmediata: igual (200, 1 intento) |
+| Medición OpenAI real (local, semana de 7 días, gpt-5.6-sol) | Antes: 19,0 s y 34,7 s; razonamiento 516 y 1.659 tokens; 0,028 y 0,052 $ · Después: 10,2 s y 8,2 s; razonamiento 278 y 211; 0,024 y 0,021 $; 33–36 artículos (antes 35–37) |
+| Tests | `tests/openai-retry.test.cjs` (5; 4 fallan con el código anterior): política de reintento, `reasoning` low en compra y ausente en importar, `maxDuration` cubre el peor caso |
+| Comprobaciones | lint, typecheck, test 90/90, build |
+| Pendiente | Validar en Preview de `audit-opt` y, después, merge a `main` |
 
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
@@ -60,7 +82,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | 02 Entorno de pruebas y cambios reproducibles | A1 | ✅ | Local + preview + CI; producción reconciliada y con `enforce_reference_ownership` (2026-10-06); esquemas prod = preview |
 | 03 Dependencias | A2 | ✅ | 2026-10-06: next/eslint-config-next 16.2.1→16.3.8, supabase-js 2.49.4→2.117.2 + transitivas; audit 17→5 (riesgo residual aceptado, ver A2) |
 | 04 Rutas de IA protegidas | A3 | ✅ | 2026-10-06: sesión verificada en servidor (401), límites 413/415/400, UX invitado con retorno; ver A3 |
-| 05 Cuotas y trazabilidad de IA | A4 | 🟡 | ✅ en preview y probado de punta a punta (2026-10-06). Falta producción antes del merge a `main` |
+| 05 Cuotas y trazabilidad de IA | A4 | ✅ | En producción desde 2026-10-06 (PR #6) |
 | 06 Datos locales por identidad | B1 | ⏳ | |
 | 07 Fuente de verdad y sincronización | B1 | ⏳ | |
 | 08 Contrato perfil ↔ BD | B2 | ⏳ | |
