@@ -191,3 +191,33 @@ export async function replacePantryItemsInSupabase(
 
   return savePantryItemsToSupabase(items, profileId, userId);
 }
+
+// The signed-in user's pantry and its version (latest updated_at; null when empty).
+export async function getPantryForUserFromSupabase(
+  userId: string,
+): Promise<{ items: PantryItem[]; version: string | null }> {
+  if (!supabase) {
+    throw new Error(
+      "Supabase client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.",
+    );
+  }
+
+  const { data: rows, error } = await supabase
+    .from("pantry_items")
+    .select("id,profile_id,user_id,name,category,active,updated_at")
+    .eq("user_id", userId)
+    .order("category", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(`Could not read pantry items: ${error.message}`);
+  }
+
+  const typedRows = (rows ?? []) as (PantryItemRow & { updated_at: string | null })[];
+  const version = typedRows.reduce<string | null>(
+    (latest, row) => (row.updated_at && (!latest || row.updated_at > latest) ? row.updated_at : latest),
+    null,
+  );
+
+  return { items: typedRows.map(rowToPantryItem), version };
+}

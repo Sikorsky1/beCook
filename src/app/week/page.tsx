@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { WeekDayCard } from "@/components/features/WeekDayCard";
+import { useIdentity } from "@/components/session/IdentityProvider";
+import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
 import { type MealKey, type WeekDay } from "@/data/mockWeek";
 import {
   addIsoWeeks,
@@ -17,32 +19,14 @@ import {
   parseIsoWeek,
   type IsoWeek,
 } from "@/lib/isoWeek";
-import type { SupabaseMealSlot, SupabaseWeek } from "@/lib/supabase/weeks";
-import { pageShellClass } from "@/lib/ui";
 import {
-  clearSavedWeek,
-  readSavedWeek,
-  saveSelectedIsoWeek,
+  loadWeek,
+  readCachedWeek,
   saveWeek,
-  saveWeekWithSupabaseSync,
-  withWeekDates,
-} from "@/lib/weekStorage";
-
-function supabaseMealSlotToWeekMeal(slot: SupabaseMealSlot) {
-  return slot.status === "free" ? "LIBRE" : slot.dishName;
-}
-
-function supabaseWeekToWeekDays(week: SupabaseWeek, isoWeek: IsoWeek): WeekDay[] {
-  return withWeekDates(
-    week.days.map((day) => ({
-      day: day.dayName,
-      date: "",
-      lunch: supabaseMealSlotToWeekMeal(day.lunch),
-      dinner: supabaseMealSlotToWeekMeal(day.dinner),
-    })),
-    isoWeek,
-  );
-}
+  writeSelectedWeek,
+} from "@/lib/data/repositories";
+import { pageShellClass } from "@/lib/ui";
+import { withWeekDates } from "@/lib/weekStorage";
 
 function buildCreateMenuHref(isoWeek: IsoWeek) {
   const { startDate, endDate } = getIsoWeekRange(isoWeek);
@@ -86,6 +70,9 @@ function WeekPageContent() {
   const [selectedIsoWeek, setSelectedIsoWeek] = useState<IsoWeek | null>(null);
   const [weekDays, setWeekDays] = useState<WeekDay[] | null>(null);
   const [isLoadingWeek, setIsLoadingWeek] = useState(true);
+  const [syncState, setSyncState] = useState<SyncState>({});
+  const identity = useIdentity();
+  const isSignedIn = identity.userId !== null;
   const [activeDay, setActiveDay] = useState<number | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
 
@@ -112,84 +99,58 @@ function WeekPageContent() {
   }, [selectedIsoWeek]);
 
   useEffect(() => {
-    const realCurrentIsoWeek = getIsoWeekFromDate();
-    setCurrentIsoWeek(realCurrentIsoWeek);
+    // Deferred like the other screens: the real date is only known in the browser.
+    const timer = window.setTimeout(() => {
+      const realCurrentIsoWeek = getIsoWeekFromDate();
+      setCurrentIsoWeek(realCurrentIsoWeek);
 
-    const nextIsoWeek = parseIsoWeek({
-      isoYear: isoYearParam,
-      isoWeek: isoWeekParam,
-    }) ?? realCurrentIsoWeek;
+      const nextIsoWeek = parseIsoWeek({
+        isoYear: isoYearParam,
+        isoWeek: isoWeekParam,
+      }) ?? realCurrentIsoWeek;
 
-    setSelectedIsoWeek((currentWeek) =>
-      currentWeek && isSameIsoWeek(nextIsoWeek, currentWeek)
-        ? currentWeek
-        : nextIsoWeek,
-    );
+      setSelectedIsoWeek((currentWeek) =>
+        currentWeek && isSameIsoWeek(nextIsoWeek, currentWeek)
+          ? currentWeek
+          : nextIsoWeek,
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [isoWeekParam, isoYearParam]);
 
   useEffect(() => {
-    if (!selectedIsoWeek) {
+    // Identity first: nothing is read until we know whose data this is.
+    if (!selectedIsoWeek || identity.status !== "ready") {
       return;
     }
 
     let isCancelled = false;
     const weekToLoad = selectedIsoWeek;
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
 
     async function loadSelectedWeek() {
       setIsLoadingWeek(true);
-      saveSelectedIsoWeek(weekToLoad);
+      setSyncState({});
+      writeSelectedWeek(dataIdentity, weekToLoad);
 
-      const cachedWeek = readSavedWeek(weekToLoad);
-      if (cachedWeek) {
-        setWeekDays(withWeekDates(cachedWeek, weekToLoad));
-      } else {
-        setWeekDays(null);
+      // Fast paint from this identity's cache; signed-in users are then revalidated.
+      const cachedWeek = readCachedWeek(dataIdentity, weekToLoad);
+      setWeekDays(cachedWeek ? withWeekDates(cachedWeek, weekToLoad) : null);
+
+      const result = await loadWeek(dataIdentity, weekToLoad);
+
+      if (isCancelled) {
+        return;
       }
 
-      try {
-        const { getCurrentUser } = await import("@/lib/supabase/auth");
-        const { getWeekFromSupabaseByIsoWeek } = await import(
-          "@/lib/supabase/weeks"
-        );
-        const currentUser = await getCurrentUser();
-        const remoteWeek = await getWeekFromSupabaseByIsoWeek({
-          isoYear: weekToLoad.isoYear,
-          isoWeek: weekToLoad.isoWeek,
-          userId: currentUser?.id,
-        });
-
-        if (isCancelled) {
-          return;
-        }
-
-        if (!remoteWeek) {
-          if (currentUser) {
-            clearSavedWeek(weekToLoad);
-            setWeekDays(null);
-          }
-
-          return;
-        }
-
-        const restoredWeek = supabaseWeekToWeekDays(remoteWeek, weekToLoad);
-
-        if (restoredWeek.length === 0) {
-          setWeekDays(null);
-          return;
-        }
-
-        setWeekDays(restoredWeek);
-        saveWeek(restoredWeek, weekToLoad);
-      } catch (error: unknown) {
-        console.warn(
-          "No se pudo recuperar la semana calendario desde Supabase:",
-          error instanceof Error ? error.message : error,
-        );
-      } finally {
-        if (!isCancelled) {
-          setIsLoadingWeek(false);
-        }
-      }
+      setWeekDays(result.data?.length ? withWeekDates(result.data, weekToLoad) : null);
+      setSyncState({
+        offline: result.offline,
+        discardedLocalChanges: result.discardedLocalChanges,
+        pending: result.pending,
+      });
+      setIsLoadingWeek(false);
     }
 
     void loadSelectedWeek();
@@ -197,7 +158,8 @@ function WeekPageContent() {
     return () => {
       isCancelled = true;
     };
-  }, [selectedIsoWeek]);
+    // epoch: any sign-in, sign-out or user switch reloads with the new identity.
+  }, [selectedIsoWeek, identity.status, identity.scope, identity.userId, identity.epoch]);
 
   const handleNavigateWeek = (offset: number) => {
     if (!selectedIsoWeek) {
@@ -245,10 +207,15 @@ function WeekPageContent() {
     );
 
     setWeekDays(updatedWeekDays);
-    saveWeekWithSupabaseSync(updatedWeekDays, {
-      isoYear: selectedIsoWeek.isoYear,
-      isoWeek: selectedIsoWeek.isoWeek,
-      replaceExisting: true,
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    const weekToSave = selectedIsoWeek;
+    void saveWeek(dataIdentity, weekToSave, updatedWeekDays).then((result) => {
+      if (result.status === "conflict") {
+        setWeekDays(result.remoteData?.length ? withWeekDates(result.remoteData, weekToSave) : null);
+        setSyncState({ conflict: true });
+      } else {
+        setSyncState(result.status === "pending" ? { pending: true } : {});
+      }
     });
   };
 
@@ -357,6 +324,8 @@ function WeekPageContent() {
             ) : null}
           </div>
         </section>
+
+        {isSignedIn ? <SyncNotice state={syncState} /> : null}
 
         <section>
           {weekDays ? (

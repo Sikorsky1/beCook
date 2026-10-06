@@ -5,8 +5,12 @@ import Link from "next/link";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
+import { useIdentity, useIdentityActions } from "@/components/session/IdentityProvider";
+import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
 import { Button, PrimaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { loadProfile, readCachedProfile, saveProfile } from "@/lib/data/repositories";
+import { scopeHasPendingChanges } from "@/lib/storage/scoped-storage";
 import type {
   Allergy,
   DietaryRestriction,
@@ -18,7 +22,6 @@ import type {
 } from "@/lib/supabase/profiles";
 import { pageShellClass } from "@/lib/ui";
 
-const PROFILE_STORAGE_KEY = "becook-profile";
 const dislikedFoodsMaxLength = 150;
 const otherGoalMaxLength = 150;
 
@@ -146,72 +149,8 @@ function normalizeProfile(profile: UserProfile): UserProfile {
   };
 }
 
-function readSavedProfile() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const savedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-
-  if (!savedProfile) {
-    return null;
-  }
-
-  try {
-    const parsedProfile = JSON.parse(savedProfile);
-
-    return isProfile(parsedProfile) ? normalizeProfile(parsedProfile) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveProfile(profile: UserProfile) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
-}
-
-type ProfileSyncResult =
-  | { status: "remote"; profile: UserProfile; userEmail: string | null }
-  | { status: "local"; reason: "no-user" };
-
-async function syncProfileToSupabase(
-  profile: UserProfile,
-): Promise<ProfileSyncResult> {
-  const { getCurrentUser } = await import("@/lib/supabase/auth");
-  const currentUser = await getCurrentUser();
-
-  if (!currentUser) {
-    console.warn(
-      "Perfil guardado solo en localStorage: no hay usuario autenticado en Supabase Auth.",
-    );
-
-    return { status: "local", reason: "no-user" };
-  }
-
-  try {
-    const { saveProfileToSupabase } = await import("@/lib/supabase/profiles");
-    const savedProfile = await saveProfileToSupabase(profile, {
-      userId: currentUser.id,
-    });
-
-    return {
-      status: "remote",
-      profile: savedProfile,
-      userEmail: currentUser.email ?? null,
-    };
-  } catch (error: unknown) {
-    console.error("No se pudo sincronizar el perfil con Supabase.", {
-      userId: currentUser.id,
-      profileId: profile.id ?? null,
-      error,
-    });
-
-    throw error;
-  }
+function toFormProfile(value: unknown) {
+  return isProfile(value) ? normalizeProfile(value) : null;
 }
 
 function dislikedFoodsToText(dislikedFoods: string[]) {
@@ -410,8 +349,12 @@ export default function ProfilePage() {
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved-local" | "saved-remote" | "error"
   >("idle");
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const identity = useIdentity();
+  const { signOut } = useIdentityActions();
+  const userEmail = identity.email;
+  const [syncState, setSyncState] = useState<SyncState>({});
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
   const dislikedFoodsCharacters = useMemo(
     () => dislikedFoodsText.length,
     [dislikedFoodsText],
@@ -422,77 +365,46 @@ export default function ProfilePage() {
   );
 
   useEffect(() => {
+    // Identity first; every sign-in, sign-out or user switch reloads the form for that identity.
+    if (identity.status !== "ready") {
+      return;
+    }
+
     let isCancelled = false;
-    const loadProfile = window.setTimeout(() => {
-      void loadInitialProfile();
-    }, 0);
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    const applyProfile = (value: unknown) => {
+      const formProfile = toFormProfile(value) ?? defaultProfile;
+      setProfile(formProfile);
+      setDislikedFoodsText(dislikedFoodsToText(formProfile.dislikedFoods));
+    };
 
-    async function loadInitialProfile() {
-      const savedProfile = readSavedProfile();
+    const loadTimer = window.setTimeout(() => {
+      setSaveStatus("idle");
+      setSyncState({});
+      setConfirmSignOut(false);
+      applyProfile(readCachedProfile(dataIdentity));
+      setHasLoadedProfile(!dataIdentity.userId);
 
-      if (savedProfile) {
-        setProfile(savedProfile);
-        setDislikedFoodsText(dislikedFoodsToText(savedProfile.dislikedFoods));
-        setHasLoadedProfile(true);
-        return;
-      }
-
-      try {
-        const { getLatestProfileFromSupabase } = await import(
-          "@/lib/supabase/profiles"
-        );
-        const latestProfile = await getLatestProfileFromSupabase();
-
-        if (!latestProfile || isCancelled) {
-          setHasLoadedProfile(true);
+      void loadProfile(dataIdentity).then((result) => {
+        if (isCancelled) {
           return;
         }
 
-        const restoredProfile = normalizeProfile(latestProfile);
-
-        setProfile(restoredProfile);
-        setDislikedFoodsText(
-          dislikedFoodsToText(restoredProfile.dislikedFoods),
-        );
-        saveProfile(restoredProfile);
-      } catch (error: unknown) {
-        console.warn(
-          "No se pudo recuperar el perfil desde Supabase:",
-          error instanceof Error ? error.message : error,
-        );
-      } finally {
-        if (!isCancelled) {
-          setHasLoadedProfile(true);
-        }
-      }
-    }
-
-    return () => {
-      isCancelled = true;
-      window.clearTimeout(loadProfile);
-    };
-  }, []);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    void import("@/lib/supabase/auth")
-      .then(({ getCurrentUser }) => getCurrentUser())
-      .then((currentUser) => {
-        if (!isCancelled) {
-          setUserEmail(currentUser?.email ?? null);
-        }
-      })
-      .catch(() => {
-        if (!isCancelled) {
-          setUserEmail(null);
-        }
+        applyProfile(result.data);
+        setSyncState({
+          offline: result.offline,
+          discardedLocalChanges: result.discardedLocalChanges,
+          pending: result.pending,
+        });
+        setHasLoadedProfile(true);
       });
+    }, 0);
 
     return () => {
       isCancelled = true;
+      window.clearTimeout(loadTimer);
     };
-  }, []);
+  }, [identity.status, identity.scope, identity.userId, identity.epoch]);
 
   const updateProfile = (updates: Partial<UserProfile>) => {
     setProfile((currentProfile) => ({ ...currentProfile, ...updates }));
@@ -549,41 +461,42 @@ export default function ProfilePage() {
       dislikedFoods: textToDislikedFoods(dislikedFoodsText),
     };
 
-    saveProfile(profileToSave);
     setProfile(profileToSave);
     setSaveStatus("saving");
+    setSyncState({});
 
-    try {
-      const syncResult = await syncProfileToSupabase(profileToSave);
+    const result = await saveProfile(
+      { scope: identity.scope, userId: identity.userId },
+      profileToSave,
+    );
 
-      if (syncResult.status === "local") {
-        setSaveStatus("saved-local");
-        return;
-      }
-
-      const profileWithSupabaseIds = {
-        ...profileToSave,
-        id: syncResult.profile.id,
-        userId: syncResult.profile.userId,
-        user_id: syncResult.profile.user_id ?? syncResult.profile.userId,
-      };
-
-      saveProfile(profileWithSupabaseIds);
-      setProfile(profileWithSupabaseIds);
-      setUserEmail(syncResult.userEmail);
+    if (result.status === "local") {
+      setSaveStatus("saved-local");
+    } else if (result.status === "synced") {
       setSaveStatus("saved-remote");
-    } catch {
+    } else if (result.status === "conflict") {
+      const remoteProfile = toFormProfile(result.remoteData) ?? defaultProfile;
+      setProfile(remoteProfile);
+      setDislikedFoodsText(dislikedFoodsToText(remoteProfile.dislikedFoods));
+      setSyncState({ conflict: true });
+      setSaveStatus("idle");
+    } else {
+      setSyncState({ pending: true });
       setSaveStatus("error");
     }
   };
 
   const handleSignOut = async () => {
+    // Unsynced changes would be lost with the device cache: ask first.
+    if (!confirmSignOut && scopeHasPendingChanges(identity.scope)) {
+      setConfirmSignOut(true);
+      return;
+    }
+
     setIsSigningOut(true);
 
     try {
-      const { signOut } = await import("@/lib/supabase/auth");
       await signOut();
-      setUserEmail(null);
     } catch (error: unknown) {
       console.warn(
         "No se pudo cerrar sesión:",
@@ -591,6 +504,7 @@ export default function ProfilePage() {
       );
     } finally {
       setIsSigningOut(false);
+      setConfirmSignOut(false);
     }
   };
 
@@ -826,6 +740,12 @@ export default function ProfilePage() {
 
           <Card className="space-y-3 p-3.5 sm:p-4">
             <SectionTitle title="Cuenta" />
+            {userEmail ? <SyncNotice state={syncState} /> : null}
+            {confirmSignOut ? (
+              <p className="t-meta text-[color:var(--color-danger)]">
+                Hay cambios sin guardar en tu cuenta. Si cierras sesión ahora, se perderán en este dispositivo.
+              </p>
+            ) : null}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="t-meta min-w-0 truncate">
                 {userEmail ?? "Modo local"}
@@ -840,7 +760,7 @@ export default function ProfilePage() {
                   className="rounded-full sm:w-auto"
                 >
                   <LogOut aria-hidden="true" className="h-4 w-4" />
-                  Cerrar sesión
+                  {confirmSignOut ? "Cerrar sesión igualmente" : "Cerrar sesión"}
                 </Button>
               ) : (
                 <Link
@@ -875,7 +795,7 @@ export default function ProfilePage() {
                 ) : saveStatus === "saving" ? (
                   "Guardando perfil"
                 ) : saveStatus === "error" ? (
-                  "No se pudo sincronizar. Tus datos están guardados en este dispositivo."
+                  "No se pudo guardar en tu cuenta. El cambio queda pendiente en este dispositivo y se reintentará."
                 ) : hasLoadedProfile ? (
                   ""
                 ) : (

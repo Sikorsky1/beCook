@@ -5,6 +5,7 @@ const { ROOT, sql, verifiedContainer, localApi } = require("./local-supabase.cjs
 const { fingerprintSql, probeSql } = require("./db-test-probe.cjs");
 const { runOwnershipTests } = require("./reference-ownership-tests.cjs");
 const { runAiUsageTests } = require("./ai-usage-db-tests.cjs");
+const { runSessionTests } = require("./session-db-tests.cjs");
 const { createClient } = require("@supabase/supabase-js");
 const id = (prefix, n) => prefix + "0000000-0000-4000-8000-00000000000" + n;
 let failures = 0, passed = 0;
@@ -140,6 +141,8 @@ async function main() {
   check("AI usage fixture session", () => assert.equal(fixtureLogin.error,null));
   await runAiUsageTests({check, sql, id, api, createClient, userClient});
   await userClient.auth.signOut({scope:"local"});
+  // B1: identity-scoped device data with the application's own Supabase client.
+  await runSessionTests({check, id, supabase});
   console.log(passed + " passed; " + failures + " failed. No production connection; SQL probes rolled back.");
   process.exitCode = failures ? 1 : 0;
 }

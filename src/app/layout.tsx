@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
+import { IdentityProvider } from "@/components/session/IdentityProvider";
+import { SessionNotices } from "@/components/session/SessionNotices";
 
 import "./globals.css";
 
@@ -41,8 +43,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[color:var(--color-background)] text-[color:var(--color-foreground)]">
-        {children}
-        <BottomNavigation />
+        <IdentityProvider>
+          <SessionNotices />
+          {children}
+          <BottomNavigation />
+        </IdentityProvider>
       </body>
     </html>
   );

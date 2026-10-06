@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AiLoginNotice } from "@/components/features/AiLoginNotice";
+import { useIdentity } from "@/components/session/IdentityProvider";
+import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
 import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
 import { ShoppingTabs } from "@/components/layout/ShoppingTabs";
 import { Card } from "@/components/ui/Card";
@@ -12,9 +14,25 @@ import { StateMessage } from "@/components/ui/StateMessage";
 import { StatusPill } from "@/components/ui/StatusPill";
 import type { WeekDay } from "@/data/mockWeek";
 import { isAiLoginRequiredError } from "@/lib/ai-client";
+import {
+  getRemoteWeekId,
+  loadPantry,
+  loadRemoteShoppingList,
+  loadWeek,
+  readCachedPantry,
+  readSelectedWeek,
+  readShoppingCache,
+  writeShoppingCache,
+  type ShoppingCache,
+} from "@/lib/data/repositories";
+import { getIsoWeekFromDate, type IsoWeek } from "@/lib/isoWeek";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { pageShellClass } from "@/lib/ui";
-import { pantryHasItem, readPantryBase } from "@/lib/pantryStorage";
+import {
+  activePantryNames,
+  pantryHasItem,
+  pantryItemsOrDefault,
+} from "@/lib/pantryStorage";
 import {
   groupShoppingListItems,
   type ShoppingCategoryGroup,
@@ -25,11 +43,9 @@ import {
   generateAndCacheShoppingListForWeek,
   ShoppingListApiError,
   getWeekSignature,
-  readShoppingListCache,
-  saveShoppingListCache,
   syncShoppingListToSupabase,
 } from "@/lib/shoppingListStorage";
-import { readSavedWeek } from "@/lib/weekStorage";
+import { withWeekDates } from "@/lib/weekStorage";
 
 function capitalizeIngredientName(name: string) {
   if (!name) {
@@ -188,54 +204,116 @@ export default function ShoppingListPage() {
   const [selectedCategory, setSelectedCategory] =
     useState<SupermarketCategory | null>(null);
 
+  const identity = useIdentity();
+  const [isoWeek, setIsoWeek] = useState<IsoWeek | null>(null);
+  const [remoteWeekId, setRemoteWeekId] = useState<string | null>(null);
+  const [syncState, setSyncState] = useState<SyncState>({});
+
   useEffect(() => {
-    // La lista lee la despensa al montar, sin depender de localStorage en el primer render.
-    const loadPantry = window.setTimeout(() => {
-      setPantryItems(readPantryBase());
+    // Identity first: pantry, week and list all belong to the current identity.
+    if (identity.status !== "ready") {
+      return;
+    }
+
+    let isCancelled = false;
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    const weekToLoad = readSelectedWeek(dataIdentity) ?? getIsoWeekFromDate();
+    const loadTimer = window.setTimeout(() => {
+      setHasLoadedWeek(false);
+      setGeneratedItems([]);
+      setCheckedItems([]);
+      setErrorMessage("");
+      setNeedsLogin(false);
+      setSyncState({});
+      setRemoteWeekId(null);
+      setIsoWeek(weekToLoad);
+      setPantryItems(activePantryNames(pantryItemsOrDefault(readCachedPantry(dataIdentity))));
+
+      void loadPantry(dataIdentity).then((result) => {
+        if (!isCancelled) {
+          setPantryItems(activePantryNames(pantryItemsOrDefault(result.data)));
+        }
+      });
+
+      // The week is revalidated before deciding that there is nothing to shop for.
+      void loadWeek(dataIdentity, weekToLoad).then((result) => {
+        if (isCancelled) {
+          return;
+        }
+
+        setWeekDays(result.data?.length ? withWeekDates(result.data, weekToLoad) : null);
+        setSyncState({ offline: result.offline, pending: result.pending });
+        setHasLoadedWeek(true);
+      });
     }, 0);
 
-    return () => window.clearTimeout(loadPantry);
-  }, []);
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(loadTimer);
+    };
+  }, [identity.status, identity.scope, identity.userId, identity.epoch]);
 
   useEffect(() => {
-    const loadWeek = window.setTimeout(() => {
-      const savedWeek = readSavedWeek();
-
-      setWeekDays(savedWeek);
-      setHasLoadedWeek(true);
-    }, 0);
-
-    return () => window.clearTimeout(loadWeek);
-  }, []);
-
-  useEffect(() => {
-    if (!hasLoadedWeek || !weekDays || weekDays.length === 0) {
+    if (!hasLoadedWeek || !weekDays || weekDays.length === 0 || !isoWeek) {
       return;
     }
 
     const controller = new AbortController();
     const currentWeekDays = weekDays;
+    const currentIsoWeek = isoWeek;
     const weekSignature = getWeekSignature(weekDays);
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
 
-    async function generateShoppingList() {
-      const cachedShoppingList = readShoppingListCache();
+    const showItems = (items: ShoppingCache["items"], checkedItemIds: string[]) => {
+      const visibleItems = groupShoppingListItems(withVisibleCategories(items)).flatMap(
+        (group) => group.items,
+      );
+      const visibleIds = new Set(visibleItems.map((item) => item.id));
+      setGeneratedItems(visibleItems);
+      setCheckedItems(checkedItemIds.filter((itemId) => visibleIds.has(itemId)));
+      setErrorMessage("");
+      setNeedsLogin(false);
+    };
+
+    async function resolveShoppingList() {
+      if (dataIdentity.userId) {
+        void getRemoteWeekId(dataIdentity, currentIsoWeek)
+          .then((weekId) => {
+            if (!controller.signal.aborted) setRemoteWeekId(weekId);
+          })
+          .catch(() => undefined);
+      }
+
+      // 1. This identity's cache for this exact week content.
+      const cachedShoppingList = readShoppingCache(dataIdentity, currentIsoWeek);
 
       if (cachedShoppingList?.weekSignature === weekSignature) {
-        console.log("Lista de la compra: usando caché local");
-        const cachedItems = groupShoppingListItems(
-          withVisibleCategories(cachedShoppingList.items),
-        ).flatMap((group) => group.items);
-        const cachedItemIds = new Set(cachedItems.map((item) => item.id));
-
-        setGeneratedItems(cachedItems);
-        setCheckedItems(
-          cachedShoppingList.checkedItemIds.filter((itemId) =>
-            cachedItemIds.has(itemId),
-          ),
-        );
-        setErrorMessage("");
-        setNeedsLogin(false);
+        showItems(cachedShoppingList.items, cachedShoppingList.checkedItemIds);
         return;
+      }
+
+      // 2. The account's list for this week (another device may have created it).
+      if (dataIdentity.userId) {
+        try {
+          const remoteList = await loadRemoteShoppingList(dataIdentity, currentIsoWeek);
+
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          if (remoteList) {
+            writeShoppingCache(dataIdentity, currentIsoWeek, {
+              weekSignature,
+              items: remoteList.items,
+              checkedItemIds: remoteList.checkedItemIds,
+            });
+            setRemoteWeekId(remoteList.weekId);
+            showItems(remoteList.items, remoteList.checkedItemIds);
+            return;
+          }
+        } catch {
+          // Unreachable account: fall through; generating needs the network anyway.
+        }
       }
 
       // Guests keep reading their local week; only the AI call needs a session.
@@ -247,18 +325,22 @@ export default function ShoppingListPage() {
         return;
       }
 
-      console.log("Lista de la compra: generando con OpenAI");
+      // 3. Generate with AI only when no list exists for this week.
       setNeedsLogin(false);
       setIsLoadingList(true);
       setErrorMessage("");
 
       try {
         const groupedItems = await generateAndCacheShoppingListForWeek(
+          dataIdentity,
+          currentIsoWeek,
           currentWeekDays,
           controller.signal,
         );
+        const weekId = await getRemoteWeekId(dataIdentity, currentIsoWeek).catch(() => null);
+        setRemoteWeekId(weekId);
 
-        void syncShoppingListToSupabase(groupedItems, []).catch(
+        void syncShoppingListToSupabase(groupedItems, [], weekId).catch(
           (error: unknown) => {
             console.warn(
               "No se pudo sincronizar la lista de la compra con Supabase:",
@@ -295,18 +377,19 @@ export default function ShoppingListPage() {
       }
     }
 
-    generateShoppingList();
+    void resolveShoppingList();
 
     return () => controller.abort();
-  }, [hasLoadedWeek, weekDays]);
+  }, [hasLoadedWeek, weekDays, isoWeek, identity.scope, identity.userId]);
 
   useEffect(() => {
-    if (!weekDays || weekDays.length === 0 || generatedItems.length === 0) {
+    if (!weekDays || weekDays.length === 0 || generatedItems.length === 0 || !isoWeek) {
       return;
     }
 
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
     const weekSignature = getWeekSignature(weekDays);
-    const cachedShoppingList = readShoppingListCache();
+    const cachedShoppingList = readShoppingCache(dataIdentity, isoWeek);
 
     if (!cachedShoppingList || cachedShoppingList.weekSignature !== weekSignature) {
       return;
@@ -317,11 +400,11 @@ export default function ShoppingListPage() {
       availableItemIds.has(itemId),
     );
 
-    saveShoppingListCache({
+    writeShoppingCache(dataIdentity, isoWeek, {
       ...cachedShoppingList,
       checkedItemIds: persistedCheckedItems,
     });
-  }, [checkedItems, generatedItems, weekDays]);
+  }, [checkedItems, generatedItems, weekDays, isoWeek, identity.scope, identity.userId]);
 
   const shoppingList = useMemo(() => {
     return groupShoppingListItems(generatedItems);
@@ -349,7 +432,12 @@ export default function ShoppingListPage() {
       : [...checkedItems, itemId];
 
     setCheckedItems(nextCheckedItems);
-    void syncShoppingListToSupabase(generatedItems, nextCheckedItems).catch(
+
+    if (!identity.userId) {
+      return;
+    }
+
+    void syncShoppingListToSupabase(generatedItems, nextCheckedItems, remoteWeekId).catch(
       (error: unknown) => {
         console.warn(
           "No se pudo sincronizar la lista de la compra con Supabase:",
@@ -414,6 +502,8 @@ export default function ShoppingListPage() {
             ) : null}
           </div>
         </StickyPageHeader>
+
+        {identity.userId ? <SyncNotice state={syncState} /> : null}
 
         <section className="transition-opacity duration-200 ease-out motion-reduce:transition-none">
           {!hasLoadedWeek ? (
