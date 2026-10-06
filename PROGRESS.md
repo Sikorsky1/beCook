@@ -23,13 +23,25 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Comprobaciones | ✅ | lint, typecheck, test (22/22), build, db:start + test:db (282/282); login y rutas principales en `npm run dev` |
 | Riesgo residual aceptado | ⚠️ | 5 avisos altos: `braces` 3.0.3 sin parche ← micromatch ← fast-glob 3.3.1 (fijado por @next/eslint-plugin-next) ← eslint-config-next. Solo lint/dev, no runtime. Revisar en próximas versiones de Next |
 
+## Iteración A3 — Rutas de IA protegidas ✅ (2026-10-06)
+| Tarea | Estado | Nota |
+|---|---|---|
+| Defecto reproducido antes del cambio | ✅ | Las 3 rutas llamaban a OpenAI sin `Authorization` (menú 200, importar 200, compra 1 llamada) |
+| Guard de servidor `src/lib/server/ai-request.ts` | ✅ | Orden: Bearer ausente 401 → Content-Type 415 → Content-Length 413 → `auth.getUser(token)` 401 (Auth caído 503) → cuerpo por stream 413 → JSON/objeto 400. OpenAI solo tras validar |
+| Límites (`src/lib/server/ai-limits.ts`) | ✅ | Menú 64 KB · importar 32 KB y texto ≤ 8.000 · compra 16 KB, 1–7 días, slots ≤ 200 |
+| Cliente con token (`postAi`) | ✅ | Invitados no llaman a la API; 401 del servidor → aviso de sesión |
+| UX invitado | ✅ | Aviso «Inicia sesión para generar con IA» en Crear menú (generar e importar) y Compra; `/login?next=` solo rutas internas; borrador del formulario en `sessionStorage` |
+| Tests | ✅ | `tests/ai-routes.test.cjs` (24; 19 fallan con el código anterior); test HTTP de menú usa sesión; `test:db` valida token real y manipulado contra Auth local |
+| Comprobaciones | ✅ | lint, typecheck, test 46/46, build, test:db 284/284; manual invitado → login → vuelta con borrador, e identificado (llega a OpenAI; local sin clave → 500 esperado) |
+| Pendiente para A4 | ⏳ | Cuotas, concurrencia, límite por IP y registro de uso en servidor |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
 | 01 Credenciales de recuperación | A1 | ✅ | Archivo retirado + gitleaks (`f6555fd`); códigos regenerados (confirmado por Sergio 2026-10-05) |
 | 02 Entorno de pruebas y cambios reproducibles | A1 | ✅ | Local + preview + CI; producción reconciliada y con `enforce_reference_ownership` (2026-10-06); esquemas prod = preview |
 | 03 Dependencias | A2 | ✅ | 2026-10-06: next/eslint-config-next 16.2.1→16.3.8, supabase-js 2.49.4→2.117.2 + transitivas; audit 17→5 (riesgo residual aceptado, ver A2) |
-| 04 Rutas de IA protegidas | A3 | ⏳ | Decisión D2: IA solo con sesión |
+| 04 Rutas de IA protegidas | A3 | ✅ | 2026-10-06: sesión verificada en servidor (401), límites 413/415/400, UX invitado con retorno; ver A3 |
 | 05 Cuotas y trazabilidad de IA | A4 | ⏳ | Decisión D5: cuotas en tabla Supabase |
 | 06 Datos locales por identidad | B1 | ⏳ | |
 | 07 Fuente de verdad y sincronización | B1 | ⏳ | |

@@ -1,3 +1,4 @@
+import { postAi } from "@/lib/ai-client";
 import type { WeekDay } from "@/data/mockWeek";
 import {
   groupShoppingListItems,
@@ -138,14 +139,11 @@ export async function generateShoppingListForWeek(
   weekDays: WeekDay[],
   signal?: AbortSignal,
 ) {
-  const response = await fetch("/api/generate-shopping-list", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ week: weekDays }),
+  const response = await postAi(
+    "/api/generate-shopping-list",
+    { week: weekDays },
     signal,
-  });
+  );
 
   const data = (await response.json()) as
     | GeneratedShoppingListResponse

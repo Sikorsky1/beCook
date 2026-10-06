@@ -8,6 +8,8 @@ import {
   type GeneratedShoppingListResponse,
 } from "@/lib/shoppingList";
 import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
+import { aiRequestLimits } from "@/lib/server/ai-limits";
+import { guardAiRequest } from "@/lib/server/ai-request";
 
 export const runtime = "nodejs";
 
@@ -40,32 +42,49 @@ Reglas de generación de ingredientes:
 - Responde solo con datos válidos para el esquema solicitado.
 `.trim();
 
-type GenerateShoppingListRequest = {
-  week?: WeekDay[];
-};
+const limits = aiRequestLimits.generateShoppingList;
+
+function isBoundedString(value: unknown, maxLength: number): value is string {
+  return typeof value === "string" && value.length <= maxLength;
+}
 
 function isWeekDayArray(value: unknown): value is WeekDay[] {
-  if (!Array.isArray(value)) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > limits.maxDays) {
     return false;
   }
 
   return value.every((day) => {
-    if (!day || typeof day !== "object") {
+    if (!day || typeof day !== "object" || Array.isArray(day)) {
       return false;
     }
 
-    const parsedDay = day as Partial<WeekDay>;
+    const parsedDay = day as Record<string, unknown>;
 
     return (
-      typeof parsedDay.day === "string" &&
-      typeof parsedDay.date === "string" &&
-      "lunch" in parsedDay &&
-      "dinner" in parsedDay
+      isBoundedString(parsedDay.day, limits.maxDayLabelLength) &&
+      isBoundedString(parsedDay.date, limits.maxDayLabelLength) &&
+      isBoundedString(parsedDay.lunch, limits.maxSlotLength) &&
+      isBoundedString(parsedDay.dinner, limits.maxSlotLength)
     );
   });
 }
 
 export async function POST(request: Request) {
+  const guard = await guardAiRequest(request, limits);
+
+  if (!guard.ok) {
+    return guard.response;
+  }
+
+  const week = guard.body.week;
+
+  if (!isWeekDayArray(week)) {
+    return NextResponse.json(
+      { error: "No hay una semana válida para generar la lista de la compra." },
+      { status: 400 },
+    );
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
@@ -76,16 +95,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as GenerateShoppingListRequest;
-    const week = body?.week;
-
-    if (!isWeekDayArray(week) || week.length === 0) {
-      return NextResponse.json(
-        { error: "No hay una semana válida para generar la lista de la compra." },
-        { status: 400 },
-      );
-    }
-
     const openai = new OpenAI({ apiKey });
     logOpenAIModelUsage("generate-shopping-list");
 

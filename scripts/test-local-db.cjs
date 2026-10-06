@@ -108,6 +108,14 @@ async function main() {
     const own = await client.from("weeks").select("id").eq("id",id("2",n));
     const other = await client.from("weeks").select("id").eq("id",id("2",3-n));
     check("Data API own / other " + n, () => { assert.equal(own.error,null); assert.equal(own.data.length,1); assert.equal(other.error,null); assert.equal(other.data.length,0); });
+    // A3: the AI-route guard verifies tokens against the real local Auth server.
+    const { guardAiRequest } = require("../src/lib/server/ai-request.ts");
+    const aiRequest = token => new Request("http://localhost/api/generate-menu",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer " + token},body:"{}"});
+    const accessToken = auth.data.session.access_token;
+    const accepted = await guardAiRequest(aiRequest(accessToken),{maxBytes:1024});
+    const tampered = accessToken.slice(0,-2) + (accessToken.endsWith("AA") ? "BB" : "AA");
+    const rejected = await guardAiRequest(aiRequest(tampered),{maxBytes:1024});
+    check("AI guard verifies session " + n, () => { assert.equal(accepted.ok,true); assert.equal(accepted.user.id,id("0",n)); assert.equal(rejected.ok,false); assert.equal(rejected.response.status,401); });
     await supabase.auth.setSession({access_token:auth.data.session.access_token,refresh_token:auth.data.session.refresh_token});
     const week = await require("../src/lib/supabase/weeks.ts").getLatestWeekFromSupabase();
     check("application week mapper " + n, () => assert.equal(week.title,"Semana sintética " + n));

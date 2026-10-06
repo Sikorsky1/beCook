@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { AiLoginNotice } from "@/components/features/AiLoginNotice";
 import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
 import { ShoppingTabs } from "@/components/layout/ShoppingTabs";
 import { Card } from "@/components/ui/Card";
@@ -10,6 +11,8 @@ import { CheckboxItem } from "@/components/ui/CheckboxItem";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { StatusPill } from "@/components/ui/StatusPill";
 import type { WeekDay } from "@/data/mockWeek";
+import { isAiLoginRequiredError } from "@/lib/ai-client";
+import { getAccessToken } from "@/lib/supabase/auth";
 import { pageShellClass } from "@/lib/ui";
 import { pantryHasItem, readPantryBase } from "@/lib/pantryStorage";
 import {
@@ -180,6 +183,7 @@ export default function ShoppingListPage() {
   const [generatedItems, setGeneratedItems] = useState<ShoppingListItem[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [needsLogin, setNeedsLogin] = useState(false);
   const [selectedCategory, setSelectedCategory] =
     useState<SupermarketCategory | null>(null);
 
@@ -229,10 +233,21 @@ export default function ShoppingListPage() {
           ),
         );
         setErrorMessage("");
+        setNeedsLogin(false);
+        return;
+      }
+
+      // Guests keep reading their local week; only the AI call needs a session.
+      if (!(await getAccessToken())) {
+        if (!controller.signal.aborted) {
+          setGeneratedItems([]);
+          setNeedsLogin(true);
+        }
         return;
       }
 
       console.log("Lista de la compra: generando con OpenAI");
+      setNeedsLogin(false);
       setIsLoadingList(true);
       setErrorMessage("");
 
@@ -263,6 +278,12 @@ export default function ShoppingListPage() {
         }
 
         setGeneratedItems([]);
+
+        if (isAiLoginRequiredError(error)) {
+          setNeedsLogin(true);
+          return;
+        }
+
         setErrorMessage("Ha fallado la conexión al generar la lista de la compra.");
       } finally {
         setIsLoadingList(false);
@@ -420,6 +441,12 @@ export default function ShoppingListPage() {
                 <div className="h-full w-1/2 rounded-full bg-[color:var(--color-accent)] transition-all duration-700 ease-out motion-reduce:transition-none motion-safe:animate-pulse" />
               </div>
             </Card>
+          ) : needsLogin ? (
+            <AiLoginNotice
+              className="p-6 sm:p-7"
+              returnPath="/shopping/list"
+              description="Tu semana sigue guardada en este dispositivo. Inicia sesión para calcular la lista de la compra con IA."
+            />
           ) : errorMessage ? (
             <StateMessage
               className="p-6 sm:p-7"

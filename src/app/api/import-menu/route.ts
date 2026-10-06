@@ -8,6 +8,8 @@ import {
   type ImportedMenuResponse,
 } from "@/lib/importMenu";
 import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
+import { aiRequestLimits } from "@/lib/server/ai-limits";
+import { guardAiRequest } from "@/lib/server/ai-request";
 
 export const runtime = "nodejs";
 
@@ -31,6 +33,39 @@ Reglas importantes:
 `.trim();
 
 export async function POST(request: Request) {
+  const guard = await guardAiRequest(request, aiRequestLimits.importMenu);
+
+  if (!guard.ok) {
+    return guard.response;
+  }
+
+  const rawText = guard.body.text;
+
+  if (rawText !== undefined && typeof rawText !== "string") {
+    return NextResponse.json(
+      { error: "El menú pegado debe ser texto." },
+      { status: 400 },
+    );
+  }
+
+  const text = (rawText ?? "").trim();
+
+  if (!text) {
+    return NextResponse.json(
+      { error: "Pega un menú antes de procesarlo." },
+      { status: 400 },
+    );
+  }
+
+  if (text.length > aiRequestLimits.importMenu.maxTextLength) {
+    return NextResponse.json(
+      {
+        error: `El menú pegado es demasiado largo (máximo ${aiRequestLimits.importMenu.maxTextLength} caracteres).`,
+      },
+      { status: 400 },
+    );
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
@@ -41,16 +76,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json();
-    const text = typeof body?.text === "string" ? body.text.trim() : "";
-
-    if (!text) {
-      return NextResponse.json(
-        { error: "Pega un menú antes de procesarlo." },
-        { status: 400 },
-      );
-    }
-
     const openai = new OpenAI({ apiKey });
     logOpenAIModelUsage("import-menu");
 

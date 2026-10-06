@@ -4,11 +4,14 @@ import { Check, Eraser, LoaderCircle, Sparkles } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { AiLoginNotice } from "@/components/features/AiLoginNotice";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { TextArea } from "@/components/ui/TextArea";
+import { isAiLoginRequiredError, postAi } from "@/lib/ai-client";
+import { consumeCreateMenuDraft, saveCreateMenuDraft } from "@/lib/createMenuDraft";
 import {
   importedMenuToWeekDays,
   type GeneratedMenuApiResponse,
@@ -28,6 +31,7 @@ import {
   generateAndCacheShoppingListForWeek,
   syncShoppingListToSupabase,
 } from "@/lib/shoppingListStorage";
+import { getAccessToken } from "@/lib/supabase/auth";
 import type { UserProfile } from "@/lib/supabase/profiles";
 import { pageContentClass, pageShellClass } from "@/lib/ui";
 import {
@@ -54,6 +58,10 @@ const menuStyleOptions = [
 type MenuStyle = (typeof menuStyleOptions)[number]["id"];
 
 const defaultMenuStyles: MenuStyle[] = ["healthy_balanced"];
+
+function isMenuStyle(value: string): value is MenuStyle {
+  return menuStyleOptions.some((option) => option.id === value);
+}
 const defaultElaborationLevel = 4;
 // Etiquetas visibles mapeadas al valor 1-7 que espera /api/generate-menu.
 const elaborationOptions = [
@@ -177,6 +185,7 @@ export default function CreateMenuPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMode, setLoadingMode] = useState<CreateMenuMode | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [needsLogin, setNeedsLogin] = useState(false);
   const [useWeekStatus, setUseWeekStatus] = useState<UseWeekStatus>("idle");
   const [useWeekMessage, setUseWeekMessage] = useState("");
   const isApplyingWeekRef = useRef(false);
@@ -213,13 +222,32 @@ export default function CreateMenuPage() {
     saveSelectedIsoWeek(weekForMenu);
 
     let isCancelled = false;
+    const draft = consumeCreateMenuDraft();
+
+    if (draft) {
+      setMode(draft.mode);
+      setMenuText(draft.menuText);
+      setFreeTextPrompt(draft.freeTextPrompt.slice(0, freeTextPromptMaxLength));
+      setPeopleCount(normalizePeopleCount(draft.peopleCount));
+      const restoredStyles = draft.menuStyles.filter(isMenuStyle);
+      setMenuStyles(restoredStyles.length ? restoredStyles : defaultMenuStyles);
+      setElaborationLevel(draft.elaborationLevel);
+    }
+
+    void getAccessToken().then((accessToken) => {
+      if (!isCancelled) {
+        setNeedsLogin(!accessToken);
+      }
+    });
 
     async function loadProfile() {
       const savedProfile = readSavedProfile();
 
       if (savedProfile) {
         setProfile(savedProfile);
-        setPeopleCount(normalizePeopleCount(savedProfile.householdSize));
+        if (!draft) {
+          setPeopleCount(normalizePeopleCount(savedProfile.householdSize));
+        }
         return;
       }
 
@@ -234,7 +262,9 @@ export default function CreateMenuPage() {
         }
 
         setProfile(latestProfile);
-        setPeopleCount(normalizePeopleCount(latestProfile.householdSize));
+        if (!draft) {
+          setPeopleCount(normalizePeopleCount(latestProfile.householdSize));
+        }
       } catch (error: unknown) {
         console.warn(
           "No se pudo recuperar el perfil para crear menú:",
@@ -266,7 +296,35 @@ export default function CreateMenuPage() {
     [],
   );
 
+  const createMenuReturnPath = targetIsoWeek
+    ? `/create-menu?isoYear=${targetIsoWeek.isoYear}&isoWeek=${targetIsoWeek.isoWeek}`
+    : "/create-menu";
+
+  const saveDraftForLogin = () => {
+    saveCreateMenuDraft({
+      mode,
+      menuText,
+      freeTextPrompt,
+      peopleCount,
+      menuStyles,
+      elaborationLevel,
+    });
+  };
+
+  const requireSession = async () => {
+    if (await getAccessToken()) {
+      return true;
+    }
+
+    setNeedsLogin(true);
+    return false;
+  };
+
   const handleProcessMenu = async () => {
+    if (!(await requireSession())) {
+      return;
+    }
+
     setIsLoading(true);
     setLoadingMode("import");
     setErrorMessage("");
@@ -275,13 +333,7 @@ export default function CreateMenuPage() {
     setGenerationRequestId(null);
 
     try {
-      const response = await fetch("/api/import-menu", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text: menuText }),
-      });
+      const response = await postAi("/api/import-menu", { text: menuText });
 
       const data = (await response.json()) as
         | ImportedMenuResponse
@@ -297,8 +349,14 @@ export default function CreateMenuPage() {
       }
 
       setImportedMenu(data as ImportedMenuResponse);
-    } catch {
+    } catch (error: unknown) {
       setImportedMenu(null);
+
+      if (isAiLoginRequiredError(error)) {
+        setNeedsLogin(true);
+        return;
+      }
+
       setErrorMessage("Ha fallado la conexión al procesar el menú.");
     } finally {
       setIsLoading(false);
@@ -307,6 +365,10 @@ export default function CreateMenuPage() {
   };
 
   const handleGenerateMenu = async () => {
+    if (!(await requireSession())) {
+      return;
+    }
+
     const generationStartedAt = performance.now();
     let preparationMs = 0;
     let apiMs = 0;
@@ -378,20 +440,14 @@ export default function CreateMenuPage() {
 
       preparationMs = Math.round(performance.now() - generationStartedAt);
       const apiStartedAt = performance.now();
-      const response = await fetch("/api/generate-menu", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          profile: profileForGeneration,
-          pantryItems: pantryItemsForGeneration,
-          peopleCount,
-          menuStyle: menuStylesForGeneration,
-          elaborationLevel,
-          recentDishes,
-          freeTextPrompt: trimmedFreeTextPrompt,
-        }),
+      const response = await postAi("/api/generate-menu", {
+        profile: profileForGeneration,
+        pantryItems: pantryItemsForGeneration,
+        peopleCount,
+        menuStyle: menuStylesForGeneration,
+        elaborationLevel,
+        recentDishes,
+        freeTextPrompt: trimmedFreeTextPrompt,
       });
 
       const data = (await response.json()) as
@@ -452,7 +508,7 @@ export default function CreateMenuPage() {
 
       persistenceMs = Math.round(performance.now() - persistenceStartedAt);
       setImportedMenu(generatedMenu);
-    } catch {
+    } catch (error: unknown) {
       setImportedMenu(null);
       setGenerationRequestId(null);
 
@@ -469,6 +525,11 @@ export default function CreateMenuPage() {
             error instanceof Error ? error.message : error,
           );
         }
+      }
+
+      if (isAiLoginRequiredError(error)) {
+        setNeedsLogin(true);
+        return;
       }
 
       setErrorMessage("Ha fallado la conexión al crear el menú.");
@@ -666,21 +727,30 @@ export default function CreateMenuPage() {
               )}
             </div>
 
-            <PrimaryButton
-              onClick={handleProcessMenu}
-              disabled={isLoading}
-              size="lg"
-              className="mt-3 w-full disabled:cursor-wait"
-            >
-              {isLoading && loadingMode === "import" ? (
-                "Estamos organizando tu menú..."
-              ) : (
-                <>
-                  <Check aria-hidden="true" className="h-4 w-4" />
-                  Procesar menú
-                </>
-              )}
-            </PrimaryButton>
+            {needsLogin ? (
+              <AiLoginNotice
+                className="mt-3"
+                returnPath={createMenuReturnPath}
+                description="Tu texto se conserva en este dispositivo. Al volver podrás procesarlo."
+                onBeforeNavigate={saveDraftForLogin}
+              />
+            ) : (
+              <PrimaryButton
+                onClick={handleProcessMenu}
+                disabled={isLoading}
+                size="lg"
+                className="mt-3 w-full disabled:cursor-wait"
+              >
+                {isLoading && loadingMode === "import" ? (
+                  "Estamos organizando tu menú..."
+                ) : (
+                  <>
+                    <Check aria-hidden="true" className="h-4 w-4" />
+                    Procesar menú
+                  </>
+                )}
+              </PrimaryButton>
+            )}
           </Card>
         ) : (
           <Card className="space-y-4 p-3.5 sm:p-5">
@@ -801,21 +871,29 @@ export default function CreateMenuPage() {
               </span>
             </label>
 
-            <PrimaryButton
-              onClick={handleGenerateMenu}
-              disabled={isLoading}
-              size="lg"
-              className="w-full disabled:cursor-wait"
-            >
-              {isLoading && loadingMode === "generate" ? (
-                "Estamos creando tu semana..."
-              ) : (
-                <>
-                  <Sparkles aria-hidden="true" className="h-4 w-4" />
-                  Crear menú semanal
-                </>
-              )}
-            </PrimaryButton>
+            {needsLogin ? (
+              <AiLoginNotice
+                returnPath={createMenuReturnPath}
+                description="Tus preferencias se conservan en este dispositivo. Al volver podrás crear el menú."
+                onBeforeNavigate={saveDraftForLogin}
+              />
+            ) : (
+              <PrimaryButton
+                onClick={handleGenerateMenu}
+                disabled={isLoading}
+                size="lg"
+                className="w-full disabled:cursor-wait"
+              >
+                {isLoading && loadingMode === "generate" ? (
+                  "Estamos creando tu semana..."
+                ) : (
+                  <>
+                    <Sparkles aria-hidden="true" className="h-4 w-4" />
+                    Crear menú semanal
+                  </>
+                )}
+              </PrimaryButton>
+            )}
           </Card>
         )}
 

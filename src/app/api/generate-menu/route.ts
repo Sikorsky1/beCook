@@ -5,6 +5,8 @@ import { estimateOpenAICostUsd } from "@/lib/openai/cost";
 import { buildMenuInput } from "@/lib/menu-generation/prompt";
 import { selectionToMenu } from "@/lib/menu-generation/validation";
 import { createMenuCompletion, menuReasoningEffort, menuTimeoutMs, type MenuAttempt } from "@/lib/menu-generation/runtime";
+import { aiRequestLimits } from "@/lib/server/ai-limits";
+import { guardAiRequest } from "@/lib/server/ai-request";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
@@ -16,16 +18,15 @@ export async function POST(request: Request) {
   let preparationMs = 0;
   let parseMs = 0;
   let outcome = "error";
+  const guard = await guardAiRequest(request, aiRequestLimits.generateMenu);
+  if (!guard.ok) return guard.response;
+  let input: ReturnType<typeof buildMenuInput>;
+  try { input = buildMenuInput(guard.body); } catch {
+    return NextResponse.json({error: "Revisa el número de personas (1–6) y los datos de restricciones del perfil."}, {status: 400});
+  }
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({error: "Falta configurar OpenAI en el servidor."}, {status: 500});
   try {
-    let body: unknown;
-    try { body = await request.json(); } catch { return NextResponse.json({error: "La petición no contiene JSON válido."}, {status: 400}); }
-    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({error: "Petición de menú inválida."}, {status: 400});
-    let input: ReturnType<typeof buildMenuInput>;
-    try { input = buildMenuInput(body as Record<string, unknown>); } catch {
-      return NextResponse.json({error: "Revisa el número de personas (1–6) y los datos de restricciones del perfil."}, {status: 400});
-    }
     const openai = new OpenAI({apiKey, maxRetries: 0, timeout: menuTimeoutMs});
     preparationMs = Math.round(performance.now() - startedAt);
     const openAIStartedAt = performance.now();
