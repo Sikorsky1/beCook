@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { TextInput } from "@/components/ui/TextInput";
+import { safeNextPath } from "@/lib/navigation";
 import { getCurrentUser, signIn } from "@/lib/supabase/auth";
 import { pageContentClass, pageShellClass } from "@/lib/ui";
 
@@ -55,7 +56,9 @@ export default function LoginPage() {
       setMessage("Sesión iniciada.");
 
       if (currentUser) {
-        router.push("/profile");
+        router.push(
+          safeNextPath(new URLSearchParams(window.location.search).get("next")),
+        );
         router.refresh();
       }
     } catch (error: unknown) {

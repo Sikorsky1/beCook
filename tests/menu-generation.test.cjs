@@ -7,6 +7,7 @@ const {createMenuCompletion} = require("../src/lib/menu-generation/runtime.ts");
 const {isImportedMenuResponse, importedMenuToWeekDays} = require("../src/lib/importMenu.ts");
 const {weekDaysToSupabaseWeek, withWeekDates} = require("../src/lib/weekStorage.ts");
 const {estimateOpenAICostUsd} = require("../src/lib/openai/cost.ts");
+const {installFakeBackends, aiRequest} = require("./helpers/fake-backends.cjs");
 const profile = readMenuProfile(null);
 const selection = {
  lunches: ["Pollo asado con batata", "Lentejas estofadas", "Arroz meloso de sepia", "Espaguetis con setas", "Garbanzos con espinacas", "Merluza al horno", "Paella de pollo"],
@@ -62,34 +63,28 @@ test("transport: one call normally, one fallback on 503, none on 429/400; SDK re
  }
 });
 test("HTTP route rejects invalid input before billing and invalid output without regeneration", async () => {
- const previousKey = process.env.OPENAI_API_KEY;
- const previousFetch = global.fetch;
- process.env.OPENAI_API_KEY = "synthetic-test-key";
- let calls = 0;
  let responseSelection = selection;
- global.fetch = async () => {
-  calls++;
-  return Response.json({choices:[{finish_reason:"stop",message:{content:JSON.stringify(responseSelection)}}],usage:{prompt_tokens:100,completion_tokens:100,total_tokens:200}});
- };
+ // Synthetic verified session (A3) and usage ledger (A4): the route only bills after both accept.
+ const fakes = installFakeBackends(() => Response.json({choices:[{finish_reason:"stop",message:{content:JSON.stringify(responseSelection)}}],usage:{prompt_tokens:100,completion_tokens:100,total_tokens:200}}));
  try {
   const {POST} = require("../src/app/api/generate-menu/route.ts");
-  const request = body => new Request("http://localhost/api/generate-menu",{method:"POST",body:JSON.stringify(body)});
+  const request = body => aiRequest("generate-menu", body);
   assert.equal((await POST(request({peopleCount:8}))).status,400);
   assert.equal((await POST(request({peopleCount:2,profile:{allergies:"nuts"}}))).status,400);
-  assert.equal(calls,0);
+  assert.equal(fakes.openAICalls,0);
+  assert.equal(fakes.begin.length,0, "invalid input never opens a usage record");
   const success = await POST(request({peopleCount:2}));
   assert.equal(success.status,200);
   assert.ok(success.headers.get("Server-Timing"));
   assert.equal((await success.json()).days.length,7);
   responseSelection = {...selection,lunches:[]};
   assert.equal((await POST(request({peopleCount:2}))).status,422);
-  assert.equal(calls,2);
+  assert.equal(fakes.openAICalls,2);
   responseSelection = selection;
   assert.equal((await POST(request({peopleCount:2,profile:{dietaryRestrictions:["vegetarian"]}}))).status,422);
-  assert.equal(calls,3);
+  assert.equal(fakes.openAICalls,3);
+  assert.deepEqual(fakes.finish.map(f => f.p_status), ["succeeded","failed","failed"]);
  } finally {
-  global.fetch = previousFetch;
-  if(previousKey === undefined) delete process.env.OPENAI_API_KEY;
-  else process.env.OPENAI_API_KEY = previousKey;
+  fakes.restore();
  }
 });

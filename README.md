@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# beCook
 
-## Getting Started
+Aplicación Next.js, TypeScript y Supabase.
 
-First, run the development server:
+## Desarrollo local seguro
 
-```bash
+Requisitos: Node 24, npm y Docker local arrancado.
+
+```sh
+npm ci
+npm run db:start
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`dev` utiliza Supabase local verificado y desactiva las llamadas reales de IA.
+No hace falta copiar claves de producción ni cambiar `.env.local`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Consultar la [guía de entorno, fixtures, pruebas y migraciones](docs/development/local-database.md)
+y el [informe de la iteración 02](docs/development/iteration-02.md).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```sh
+npm test
+npm run test:db
+npm run lint
+npm run typecheck
+npm run build
+npm run db:stop
+```
 
-## Learn More
+Las pruebas de base comprueban aislamiento RLS e integridad de las seis relaciones
+privadas. Ver el [cierre 02B](docs/development/iteration-02b.md). La migración está
+validada en desarrollo; su aplicación en producción requiere reconciliación de
+datos y autorización separadas. No hay despliegue en este workflow de CI.
 
-To learn more about Next.js, take a look at the following resources:
+## Secretos antes de un commit
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Instalar Gitleaks 8.30.1 con checksum verificado y ejecutar `npm run secrets:check`
+después de preparar los archivos con Git. Consultar
+[instalación, hook local y falsos positivos](docs/security/secret-detection.md).

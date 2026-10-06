@@ -1,0 +1,26 @@
+{
+  "project": "qdhpdhnpcsfhmygjofqb",
+  "name": "becook-preview",
+  "appliedAt": "2026-09-24",
+  "migrations": [
+    {
+      "version": "20260924112904",
+      "name": "preview_bootstrap",
+      "source": "supabase/hosted/20260924000100_preview_bootstrap.sql",
+      "sha256": "82569aedee51eb297b8aa7e65e3a62f1eb4704df1b159ab1652fa1cc7a708b77"
+    },
+    {
+      "version": "20260924112917",
+      "name": "enforce_reference_ownership",
+      "source": "supabase/migrations/20260923194029_enforce_reference_ownership.sql",
+      "sha256": "ec7608fc491f7e9967619a3f55a5b16ea45e93141f7db145acdf6ead5e46747c"
+    },
+    {
+      "version": "20261006115739",
+      "name": "ai_usage_quotas",
+      "source": "supabase/migrations/20261006090000_ai_usage_quotas.sql",
+      "sha256": "72df3cc5ef6bf020acb35ba6eae2956606655c08e2bfa51edf46ad51a994c5d9",
+      "appliedAt": "2026-10-06"
+    }
+  ]
+}

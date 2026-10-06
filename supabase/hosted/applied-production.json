@@ -1,0 +1,37 @@
+{
+  "project": "wejvptpkxlllfpskyisu",
+  "name": "becook",
+  "environment": "production",
+  "notes": "Ledger de producción vacío hasta 2026-10-05; el esquema previo procede de cambios manuales históricos (ver docs/development/iteration-02.md).",
+  "operations": [
+    {
+      "appliedAt": "2026-10-06",
+      "type": "data-reconciliation",
+      "ledger": false,
+      "source": "supabase/hosted/production/2026-10-05-reconcile-ownership.sql",
+      "sha256": "fdd0b7d9497a04bfa9a6ca97a2262aff05726a4a9e62c52a90053d4f5376a638",
+      "executedBy": "Sergio (SQL Editor; el conector bloquea DELETE)",
+      "backup": "Esquema interno backup_20261005 (10 tablas). Sin backup externo por decisión de Sergio (D6b)."
+    },
+    {
+      "appliedAt": "2026-10-06",
+      "type": "migration",
+      "ledger": true,
+      "version": "20261005220924",
+      "name": "enforce_reference_ownership",
+      "source": "supabase/migrations/20260923194029_enforce_reference_ownership.sql",
+      "sha256": "ec7608fc491f7e9967619a3f55a5b16ea45e93141f7db145acdf6ead5e46747c",
+      "verification": "Columnas, constraints, índices, políticas, triggers y funciones idénticos a becook-preview (huella md5 por categoría). Diferencias aceptadas: grants y representación de weeks_iso_week_range_chk."
+    },
+    {
+      "appliedAt": "2026-10-06",
+      "type": "migration",
+      "ledger": true,
+      "version": "20261006171007",
+      "name": "ai_usage_quotas",
+      "source": "supabase/migrations/20261006090000_ai_usage_quotas.sql",
+      "sha256": "72df3cc5ef6bf020acb35ba6eae2956606655c08e2bfa51edf46ad51a994c5d9",
+      "verification": "RLS activo; sin permisos anon/authenticated sobre tabla y funciones; EXECUTE solo service_role. Sin backup externo (D6b: datos irrelevantes; migración solo aditiva)."
+    }
+  ]
+}

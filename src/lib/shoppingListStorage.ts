@@ -1,3 +1,4 @@
+import { postAi } from "@/lib/ai-client";
 import type { WeekDay } from "@/data/mockWeek";
 import {
   groupShoppingListItems,
@@ -134,18 +135,23 @@ export async function syncShoppingListToSupabase(
   await saveShoppingListToSupabase(targetWeekId, shoppingItems);
 }
 
+// A message from the server meant for the user (quota, budget, invalid week).
+export class ShoppingListApiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ShoppingListApiError";
+  }
+}
+
 export async function generateShoppingListForWeek(
   weekDays: WeekDay[],
   signal?: AbortSignal,
 ) {
-  const response = await fetch("/api/generate-shopping-list", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ week: weekDays }),
+  const response = await postAi(
+    "/api/generate-shopping-list",
+    { week: weekDays },
     signal,
-  });
+  );
 
   const data = (await response.json()) as
     | GeneratedShoppingListResponse
@@ -153,7 +159,7 @@ export async function generateShoppingListForWeek(
 
   if (!response.ok) {
     const fallbackMessage = "No se pudo generar la lista de la compra.";
-    throw new Error(
+    throw new ShoppingListApiError(
       "error" in data ? data.error ?? fallbackMessage : fallbackMessage,
     );
   }

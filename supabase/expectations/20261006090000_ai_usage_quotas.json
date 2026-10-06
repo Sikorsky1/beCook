@@ -1,0 +1,283 @@
+{
+  "migration": "20261006090000_ai_usage_quotas",
+  "columns": [
+    {
+      "table_name": "ai_usage_events",
+      "name": "id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "gen_random_uuid()"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "user_id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "flow",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "status",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "reject_reason",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "model",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "prompt_tokens",
+      "type": "integer",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "completion_tokens",
+      "type": "integer",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "cost_usd",
+      "type": "numeric(10,6)",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "latency_ms",
+      "type": "integer",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "request_id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "ip_hash",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "name": "finished_at",
+      "type": "timestamp with time zone",
+      "not_null": false,
+      "default_expr": null
+    }
+  ],
+  "tables": [
+    {
+      "relname": "ai_usage_events",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "ai_usage_events_flow_chk",
+      "table_name": "ai_usage_events",
+      "definition": "CHECK ((flow = ANY (ARRAY['menu'::text, 'import'::text, 'shopping'::text])))"
+    },
+    {
+      "conname": "ai_usage_events_status_chk",
+      "table_name": "ai_usage_events",
+      "definition": "CHECK ((status = ANY (ARRAY['started'::text, 'succeeded'::text, 'failed'::text, 'rejected'::text])))"
+    },
+    {
+      "conname": "ai_usage_events_prompt_tokens_chk",
+      "table_name": "ai_usage_events",
+      "definition": "CHECK ((prompt_tokens >= 0))"
+    },
+    {
+      "conname": "ai_usage_events_completion_tokens_chk",
+      "table_name": "ai_usage_events",
+      "definition": "CHECK ((completion_tokens >= 0))"
+    },
+    {
+      "conname": "ai_usage_events_cost_usd_chk",
+      "table_name": "ai_usage_events",
+      "definition": "CHECK ((cost_usd >= (0)::numeric))"
+    },
+    {
+      "conname": "ai_usage_events_latency_ms_chk",
+      "table_name": "ai_usage_events",
+      "definition": "CHECK ((latency_ms >= 0))"
+    },
+    {
+      "conname": "ai_usage_events_pkey",
+      "table_name": "ai_usage_events",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "ai_usage_events_request_id_key",
+      "table_name": "ai_usage_events",
+      "definition": "UNIQUE (request_id)"
+    },
+    {
+      "conname": "ai_usage_events_user_id_fkey",
+      "table_name": "ai_usage_events",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "ai_usage_events",
+      "indexname": "ai_usage_events_pkey",
+      "indexdef": "CREATE UNIQUE INDEX ai_usage_events_pkey ON public.ai_usage_events USING btree (id)"
+    },
+    {
+      "tablename": "ai_usage_events",
+      "indexname": "ai_usage_events_request_id_key",
+      "indexdef": "CREATE UNIQUE INDEX ai_usage_events_request_id_key ON public.ai_usage_events USING btree (request_id)"
+    },
+    {
+      "tablename": "ai_usage_events",
+      "indexname": "ai_usage_events_user_flow_created_idx",
+      "indexdef": "CREATE INDEX ai_usage_events_user_flow_created_idx ON public.ai_usage_events USING btree (user_id, flow, created_at)"
+    },
+    {
+      "tablename": "ai_usage_events",
+      "indexname": "ai_usage_events_ip_created_idx",
+      "indexdef": "CREATE INDEX ai_usage_events_ip_created_idx ON public.ai_usage_events USING btree (ip_hash, created_at)"
+    }
+  ],
+  "functions": [
+    {
+      "proname": "ai_begin_request",
+      "definition": "CREATE OR REPLACE FUNCTION public.ai_begin_request(p_user_id uuid, p_flow text, p_ip_hash text, p_request_id uuid, p_limits jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_now timestamptz := now();\n  v_local timestamp := now() AT TIME ZONE 'Europe/Madrid';\n  v_day_start timestamptz := date_trunc('day', v_local) AT TIME ZONE 'Europe/Madrid';\n  v_next_day timestamptz := (date_trunc('day', v_local) + interval '1 day') AT TIME ZONE 'Europe/Madrid';\n  v_month_start timestamptz := date_trunc('month', v_local) AT TIME ZONE 'Europe/Madrid';\n  v_next_month timestamptz := (date_trunc('month', v_local) + interval '1 month') AT TIME ZONE 'Europe/Madrid';\n  v_daily integer := (p_limits ->> 'daily')::integer;\n  v_monthly integer := (p_limits ->> 'monthly')::integer;\n  v_max_concurrent integer := (p_limits ->> 'max_concurrent')::integer;\n  v_ip_hourly integer := (p_limits ->> 'ip_hourly')::integer;\n  v_budget numeric := (p_limits ->> 'monthly_budget_usd')::numeric;\n  v_reason text;\n  v_retry_after integer;\n  v_count integer;\n  v_oldest timestamptz;\n  v_spent numeric;\n  v_id uuid;\nBEGIN\n  IF p_user_id IS NULL OR p_request_id IS NULL OR coalesce(p_ip_hash, '') = '' THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'ai_begin_request: missing identity';\n  END IF;\n  IF p_flow NOT IN ('menu', 'import', 'shopping') THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'ai_begin_request: invalid flow';\n  END IF;\n  IF v_max_concurrent IS NULL OR v_ip_hourly IS NULL OR v_budget IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'ai_begin_request: incomplete limits';\n  END IF;\n\n  -- Serialise per user, then per IP (always in this order, so no lock cycles).\n  PERFORM pg_advisory_xact_lock(hashtextextended('ai_usage:user:' || p_user_id::text, 0));\n  PERFORM pg_advisory_xact_lock(hashtextextended('ai_usage:ip:' || p_ip_hash, 0));\n\n  -- Requests stuck in 'started' (killed function, lost finish) expire after 2 minutes.\n  UPDATE public.ai_usage_events\n     SET status = 'failed', reject_reason = 'expired', finished_at = v_now\n   WHERE user_id = p_user_id AND status = 'started' AND created_at < v_now - interval '2 minutes';\n\n  -- 1. Global monthly budget (finished requests; in-flight ones are not yet costed).\n  SELECT coalesce(sum(cost_usd), 0) INTO v_spent\n    FROM public.ai_usage_events\n   WHERE created_at >= v_month_start AND status IN ('succeeded', 'failed');\n  IF v_spent >= v_budget THEN\n    v_reason := 'budget_exhausted';\n    v_retry_after := ceil(extract(epoch FROM v_next_month - v_now));\n  END IF;\n\n  -- 2. Concurrent requests for this user.\n  IF v_reason IS NULL THEN\n    SELECT count(*), min(created_at) INTO v_count, v_oldest\n      FROM public.ai_usage_events\n     WHERE user_id = p_user_id AND status = 'started';\n    IF v_count >= v_max_concurrent THEN\n      v_reason := 'concurrency';\n      v_retry_after := greatest(1, ceil(extract(epoch FROM v_oldest + interval '2 minutes' - v_now)));\n    END IF;\n  END IF;\n\n  -- 3. Daily and monthly quota per flow. Failures that consumed no tokens are free.\n  IF v_reason IS NULL AND v_daily IS NOT NULL THEN\n    SELECT count(*) INTO v_count\n      FROM public.ai_usage_events\n     WHERE user_id = p_user_id AND flow = p_flow AND created_at >= v_day_start\n       AND (status IN ('started', 'succeeded')\n            OR (status = 'failed' AND coalesce(prompt_tokens, 0) + coalesce(completion_tokens, 0) > 0));\n    IF v_count >= v_daily THEN\n      v_reason := 'daily_quota';\n      v_retry_after := ceil(extract(epoch FROM v_next_day - v_now));\n    END IF;\n  END IF;\n  IF v_reason IS NULL AND v_monthly IS NOT NULL THEN\n    SELECT count(*) INTO v_count\n      FROM public.ai_usage_events\n     WHERE user_id = p_user_id AND flow = p_flow AND created_at >= v_month_start\n       AND (status IN ('started', 'succeeded')\n            OR (status = 'failed' AND coalesce(prompt_tokens, 0) + coalesce(completion_tokens, 0) > 0));\n    IF v_count >= v_monthly THEN\n      v_reason := 'monthly_quota';\n      v_retry_after := ceil(extract(epoch FROM v_next_month - v_now));\n    END IF;\n  END IF;\n\n  -- 4. Requests from the same network in the last hour, any user and flow.\n  IF v_reason IS NULL THEN\n    SELECT count(*), min(created_at) INTO v_count, v_oldest\n      FROM public.ai_usage_events\n     WHERE ip_hash = p_ip_hash AND status <> 'rejected' AND created_at > v_now - interval '1 hour';\n    IF v_count >= v_ip_hourly THEN\n      v_reason := 'ip_rate';\n      v_retry_after := greatest(1, ceil(extract(epoch FROM v_oldest + interval '1 hour' - v_now)));\n    END IF;\n  END IF;\n\n  IF v_reason IS NOT NULL THEN\n    INSERT INTO public.ai_usage_events (user_id, flow, status, reject_reason, request_id, ip_hash, finished_at)\n    VALUES (p_user_id, p_flow, 'rejected', v_reason, p_request_id, p_ip_hash, v_now)\n    RETURNING id INTO v_id;\n    RETURN jsonb_build_object('allowed', false, 'id', v_id, 'reason', v_reason,\n                              'retry_after_seconds', v_retry_after);\n  END IF;\n\n  INSERT INTO public.ai_usage_events (user_id, flow, status, request_id, ip_hash)\n  VALUES (p_user_id, p_flow, 'started', p_request_id, p_ip_hash)\n  RETURNING id INTO v_id;\n  RETURN jsonb_build_object('allowed', true, 'id', v_id, 'reason', NULL, 'retry_after_seconds', NULL);\nEND $function$\n"
+    },
+    {
+      "proname": "ai_finish_request",
+      "definition": "CREATE OR REPLACE FUNCTION public.ai_finish_request(p_id uuid, p_status text, p_model text, p_prompt_tokens integer, p_completion_tokens integer, p_cost_usd numeric, p_latency_ms integer, p_reason text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_local timestamp := now() AT TIME ZONE 'Europe/Madrid';\n  v_month_start timestamptz := date_trunc('month', v_local) AT TIME ZONE 'Europe/Madrid';\n  v_updated integer;\n  v_spent numeric;\nBEGIN\n  IF p_status NOT IN ('succeeded', 'failed') THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'ai_finish_request: invalid status';\n  END IF;\n\n  -- Only an open request can be closed; expired or finished rows stay untouched.\n  UPDATE public.ai_usage_events\n     SET status = p_status, reject_reason = p_reason, model = p_model,\n         prompt_tokens = p_prompt_tokens, completion_tokens = p_completion_tokens,\n         cost_usd = p_cost_usd, latency_ms = p_latency_ms, finished_at = now()\n   WHERE id = p_id AND status = 'started';\n  GET DIAGNOSTICS v_updated = ROW_COUNT;\n\n  SELECT coalesce(sum(cost_usd), 0) INTO v_spent\n    FROM public.ai_usage_events\n   WHERE created_at >= v_month_start AND status IN ('succeeded', 'failed');\n\n  RETURN jsonb_build_object(\n    'updated', v_updated = 1,\n    'month_cost_usd', v_spent,\n    'previous_month_cost_usd', CASE WHEN v_updated = 1 THEN v_spent - coalesce(p_cost_usd, 0) ELSE v_spent END\n  );\nEND $function$\n"
+    }
+  ],
+  "grants": [
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "ai_usage_events",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    }
+  ],
+  "function_grants": [
+    {
+      "routine_name": "ai_begin_request",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "ai_begin_request",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "ai_finish_request",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "ai_finish_request",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    }
+  ]
+}

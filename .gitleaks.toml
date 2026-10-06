@@ -1,0 +1,8 @@
+title = "beCook secret detection"
+
+[extend]
+useDefault = true
+
+# Path checks (including empty recovery exports) live in check-secrets.cjs.
+# Any future false-positive exception must be rule-specific, anchored to one
+# file and one synthetic value, with a written justification. No global bypass.

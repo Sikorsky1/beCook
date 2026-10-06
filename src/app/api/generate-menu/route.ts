@@ -5,6 +5,9 @@ import { estimateOpenAICostUsd } from "@/lib/openai/cost";
 import { buildMenuInput } from "@/lib/menu-generation/prompt";
 import { selectionToMenu } from "@/lib/menu-generation/validation";
 import { createMenuCompletion, menuReasoningEffort, menuTimeoutMs, type MenuAttempt } from "@/lib/menu-generation/runtime";
+import { aiRequestLimits } from "@/lib/server/ai-limits";
+import { guardAiRequest } from "@/lib/server/ai-request";
+import { beginAiUsage, withRequestId } from "@/lib/server/ai-usage";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
@@ -16,16 +19,19 @@ export async function POST(request: Request) {
   let preparationMs = 0;
   let parseMs = 0;
   let outcome = "error";
+  const guard = await guardAiRequest(request, aiRequestLimits.generateMenu);
+  if (!guard.ok) return guard.response;
+  let input: ReturnType<typeof buildMenuInput>;
+  try { input = buildMenuInput(guard.body); } catch {
+    return NextResponse.json({error: "Revisa el número de personas (1–6) y los datos de restricciones del perfil."}, {status: 400});
+  }
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({error: "Falta configurar OpenAI en el servidor."}, {status: 500});
+  const begin = await beginAiUsage(request, {userId: guard.user.id, flow: "menu"});
+  if (!begin.ok) return begin.response;
+  const aiUsage = begin.usage;
+  let failureReason = "error";
   try {
-    let body: unknown;
-    try { body = await request.json(); } catch { return NextResponse.json({error: "La petición no contiene JSON válido."}, {status: 400}); }
-    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({error: "Petición de menú inválida."}, {status: 400});
-    let input: ReturnType<typeof buildMenuInput>;
-    try { input = buildMenuInput(body as Record<string, unknown>); } catch {
-      return NextResponse.json({error: "Revisa el número de personas (1–6) y los datos de restricciones del perfil."}, {status: 400});
-    }
     const openai = new OpenAI({apiKey, maxRetries: 0, timeout: menuTimeoutMs});
     preparationMs = Math.round(performance.now() - startedAt);
     const openAIStartedAt = performance.now();
@@ -42,22 +48,34 @@ export async function POST(request: Request) {
     };
     const choice = completion.choices[0];
     if (choice?.finish_reason !== "stop" || choice.message.refusal || !choice.message.content) {
-      return NextResponse.json({error: "No se ha podido completar un menú válido. Inténtalo de nuevo.", openaiTelemetry: telemetry}, {status: 502});
+      failureReason = "incomplete_output";
+      return withRequestId(NextResponse.json({error: "No se ha podido completar un menú válido. Inténtalo de nuevo.", openaiTelemetry: telemetry}, {status: 502}), aiUsage.requestId);
     }
     const parseStartedAt = performance.now();
     let menu;
     try { menu = selectionToMenu(JSON.parse(choice.message.content), input.profile); } catch {
       parseMs = Math.round(performance.now() - parseStartedAt);
-      return NextResponse.json({error: "El menú no ha superado las comprobaciones de formato, variedad o restricciones. Inténtalo de nuevo.", openaiTelemetry: telemetry}, {status: 422});
+      failureReason = "invalid_output";
+      return withRequestId(NextResponse.json({error: "El menú no ha superado las comprobaciones de formato, variedad o restricciones. Inténtalo de nuevo.", openaiTelemetry: telemetry}, {status: 422}), aiUsage.requestId);
     }
     parseMs = Math.round(performance.now() - parseStartedAt);
     outcome = "success";
     const totalMs = Math.round(performance.now() - startedAt);
     const response: GeneratedMenuApiResponse = {...menu, openaiTelemetry: {...telemetry, preparationMs, parseMs, totalMs}};
-    return NextResponse.json(response, {headers: {"Server-Timing": `prepare;dur=${preparationMs}, openai;dur=${telemetry.responseTimeMs}, parse;dur=${parseMs}, total;dur=${totalMs}`}});
-  } catch {
-    return NextResponse.json({error: "Ha fallado la generación del menú. Inténtalo de nuevo.", ...(telemetry ? {openaiTelemetry: telemetry} : {})}, {status: 502});
+    return withRequestId(NextResponse.json(response, {headers: {"Server-Timing": `prepare;dur=${preparationMs}, openai;dur=${telemetry.responseTimeMs}, parse;dur=${parseMs}, total;dur=${totalMs}`}}), aiUsage.requestId);
+  } catch (error) {
+    failureReason = request.signal.aborted ? "client_aborted" : error instanceof OpenAI.APIConnectionTimeoutError ? "timeout" : error instanceof OpenAI.APIError ? `openai_${error.status ?? "error"}` : "error";
+    return withRequestId(NextResponse.json({error: "Ha fallado la generación del menú. Inténtalo de nuevo.", ...(telemetry ? {openaiTelemetry: telemetry} : {})}, {status: 502}), aiUsage.requestId);
   } finally {
+    await aiUsage.finish({
+      status: outcome === "success" ? "succeeded" : "failed",
+      reason: outcome === "success" ? undefined : failureReason,
+      model: telemetry?.modelUsed ?? attempts.at(-1)?.model ?? null,
+      promptTokens: telemetry?.promptTokens ?? null,
+      completionTokens: telemetry?.completionTokens ?? null,
+      costUsd: telemetry?.estimatedCostUsd ?? null,
+      attempts: attempts.length,
+    });
     // No prompts, dishes, profile data, IDs, API errors or secrets in logs.
     console.info("menu_generation", {outcome, preparationMs, parseMs, totalMs: Math.round(performance.now() - startedAt), attempts, telemetry});
   }
