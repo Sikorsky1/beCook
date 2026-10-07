@@ -1,4 +1,6 @@
 import type { WeekDay } from "@/data/mockWeek";
+import type { IsoWeek } from "@/lib/isoWeek";
+import { withWeekDates } from "@/lib/weekStorage";
 
 export type ImportedMealSlot = {
   status: "planned" | "free";
@@ -125,23 +127,20 @@ export const importedMenuSchema = {
   },
 } as const;
 
-const previewDatesByDay: Record<ImportedMenuDay["dayName"], string> = {
-  Lunes: "31 mar",
-  Martes: "1 abr",
-  Miércoles: "2 abr",
-  Jueves: "3 abr",
-  Viernes: "4 abr",
-  Sábado: "5 abr",
-  Domingo: "6 abr",
-};
-
-export function importedMenuToWeekDays(days: ImportedMenuDay[]): WeekDay[] {
-  return days.map((day) => ({
-    day: day.dayName,
-    date: previewDatesByDay[day.dayName],
-    lunch: day.lunch.status === "free" ? "LIBRE" : day.lunch.dishName,
-    dinner: day.dinner.status === "free" ? "LIBRE" : day.dinner.dishName,
-  }));
+// Proposal and import days are dated inside the target week by their real day name.
+export function importedMenuToWeekDays(
+  days: ImportedMenuDay[],
+  isoWeek: IsoWeek,
+): WeekDay[] {
+  return withWeekDates(
+    days.map((day) => ({
+      day: day.dayName,
+      date: "",
+      lunch: day.lunch.status === "free" ? "LIBRE" : day.lunch.dishName,
+      dinner: day.dinner.status === "free" ? "LIBRE" : day.dinner.dishName,
+    })),
+    isoWeek,
+  );
 }
 
 export function isImportedMenuResponse(
