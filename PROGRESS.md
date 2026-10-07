@@ -91,7 +91,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Producción | [PR #8](https://github.com/Sikorsky1/beCook/pull/8), merge commit `9acc880` (2026-10-06 22:10 UTC), checks en verde. Despliegue be-cook `dpl_3hdkPSnXeFKoGxPjWytuFTBpPsne` READY en `www.becook.xyz` (anterior para rollback: `dpl_BhB2LfQCNEZWGn1pBHv1HQ81XAc3`). `/login`, `/week`, `/profile` 200 · `POST /api/generate-menu` sin sesión 401. `audit-opt` = `main` por fast-forward |
 | Pendiente | Prueba manual en producción con dos cuentas (A → logout → B) y oferta de importación en un navegador con datos antiguos (Sergio) |
 
-## Iteración B2 — Contrato perfil ↔ BD 🟡 (2026-10-07; código listo, migración pendiente en remotos)
+## Iteración B2 — Contrato perfil ↔ BD ✅ (2026-10-07, en producción el 2026-10-07)
 | Elemento | Detalle |
 |---|---|
 | Defectos reproducidos | Tests contra Supabase local que fallaban con el código anterior (9 de 11): 6–7 días → `profiles_weekly_training_days_check`; «Otro» primero → `profiles_goal_check`; `disliked_foods` se guardaba como texto JSON (`["pollo",…]`, `[]`) y se leía como `[]` |
@@ -102,7 +102,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Migración `20261007090000_profiles_training_days_0_7` | ✅ local. Sustituye la CHECK 0–5 por 0–7 (solo ampliación). Expectativas con `replaces` en `supabase/expectations/` |
 | Tests | `tests/profile-contract.test.cjs` (7, valores antiguos y límites); `test:db` +17: guardar → recargar → leer en otro dispositivo (6 y 7 días, «Otro», alimentos rechazados, vacío → NULL), JSON antiguo, `maintenance`, > 150, 8/−1 rechazados y 6/7 aceptados por la CHECK |
 | Comprobaciones | lint, typecheck, test 113/113, build, test:db 324/324 (también tras `db:reset` + `db:seed`). Manual en `npm run dev`: 7 días + «Otro» + «Ganar masa muscular» → BD `goal=muscle_gain`; lista > 150 bloqueada con mensaje (168/150); «pollo,  brócoli / queso azul, Pollo» → `pollo, brócoli, queso azul`; segundo dispositivo (almacenamiento vacío + login) lee todo; cambio allí a 6 días + «setas» leído desde un tercer cliente |
-| Pendiente (Sergio, Cowork) | Aplicar la migración en becook-preview (registrar en `applied-preview.json`), validar la Preview de `audit-opt` (6–7 días fallan hasta entonces) y después en producción antes del merge |
+| Producción | [PR #9](https://github.com/Sikorsky1/beCook/pull/9), merge commit `a17d120` (2026-10-07 16:18 UTC), checks en verde. Migración en becook-preview (`20261007122056`) y becook (`20261007143519`) antes del merge; UI validada por Sergio en la Preview. Despliegue be-cook `dpl_37MQ5zomRkhFD7rvEEnKPXPunZLm` READY en `www.becook.xyz` (anterior para rollback: `dpl_3hdkPSnXeFKoGxPjWytuFTBpPsne`). `/`, `/login`, `/week`, `/profile` 200 · `POST /api/generate-menu` y `/api/generate-shopping-list` sin sesión 401. `audit-opt` = `main` por fast-forward |
 | Nota de entorno | La sincronización de `Documents` crea copias « 2»/« 3» dentro de `.next` (caché de Turbopack, `routes.d 2.ts`) y rompe build/typecheck; se resolvió apartando la caché. Hay también un `.git/index 2` sin tocar |
 
 ## Pasos del roadmap
@@ -115,7 +115,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | 05 Cuotas y trazabilidad de IA | A4 | ✅ | En producción desde 2026-10-06 (PR #6) |
 | 06 Datos locales por identidad | B1 | ✅ | En producción desde 2026-10-07 (PR #8): claves con ámbito, identidad antes que datos; ver B1 |
 | 07 Fuente de verdad y sincronización | B1 | ✅ | En producción desde 2026-10-07 (PR #8): remoto canónico, política en `docs/development/data-sync.md` |
-| 08 Contrato perfil ↔ BD | B2 | 🟡 | Migración aplicada en preview y producción (2026-10-07); UI validada en Preview por Sergio; falta merge a `main` |
+| 08 Contrato perfil ↔ BD | B2 | ✅ | En producción desde 2026-10-07 (PR #9): días 0–7, `goal` legacy derivado de `goals`, `disliked_foods` como texto; ver B2 |
 | 09 Calendario ISO | B3 | ⏳ | |
 | 10 Escrituras de semana seguras | B4 | ⏳ | |
 | 11 Aplicar menú ≠ generar compra | B5 | ⏳ | |
