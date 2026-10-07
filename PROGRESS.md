@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-06 · Rama: `audit-opt` (= `main` tras PR #6) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-07 · Rama: `audit-opt` (= `main` tras PR #6) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -76,7 +76,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Producción | [PR #7](https://github.com/Sikorsky1/beCook/pull/7), merge commit `bb47993` (2026-10-06 21:22 UTC), checks en verde. Despliegue be-cook `dpl_BhB2LfQCNEZWGn1pBHv1HQ81XAc3` READY en `www.becook.xyz` (anterior para rollback: `dpl_HuitjA7FscP4fN6h3i4RuEATGbxe`). `/login` 200 · `POST /api/generate-shopping-list` sin sesión 401 · extra `POST /api/generate-menu` sin sesión 401. `audit-opt` = `main` por fast-forward |
 | Pendiente | Generar una lista real con sesión en producción y revisar su latencia en `ai_usage_events` (Sergio) |
 
-## Iteración B1 — Identidad y fuente de verdad 🟡 (2026-10-06, en audit-opt; sin merge a main)
+## Iteración B1 — Identidad y fuente de verdad ✅ (2026-10-06, en producción el 2026-10-07)
 | Elemento | Detalle |
 |---|---|
 | Defecto reproducido | Con el código anterior, B veía el perfil de A (`becook-profile` con su alergia), su semana y su despensa tras A → logout → B. En el navegador, `fixture-1` veía un perfil local antiguo (hombre, 174 cm) en vez del suyo (mujer, 165 cm) |
@@ -88,7 +88,22 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Datos antiguos | Movidos a invitado con `legacy-origin`; oferta explícita «¿Quieres añadirlos a tu cuenta?» que solo añade lo que la cuenta no tiene; rechazo → quedan como invitado |
 | Tests | `tests/session-isolation.test.cjs` (16; mutaciones: claves sin ámbito → 5 fallos, logout sin borrar → falla H3); `test:db` +4 contra Auth/RLS reales |
 | Comprobaciones | lint, typecheck, test 106/106, build, test:db 307/307 (tras `db:reset`). Manual con fixtures A y B: migración de claves antiguas, oferta e importación (9 semanas añadidas, perfil y despensa conservados), perfil de A correcto, logout sin rastro de A, B solo ve lo suyo, cambio desde un segundo dispositivo visible al recargar |
-| Pendiente | Validar en Preview y merge a `main` cuando lo autorice Sergio |
+| Producción | [PR #8](https://github.com/Sikorsky1/beCook/pull/8), merge commit `9acc880` (2026-10-06 22:10 UTC), checks en verde. Despliegue be-cook `dpl_3hdkPSnXeFKoGxPjWytuFTBpPsne` READY en `www.becook.xyz` (anterior para rollback: `dpl_BhB2LfQCNEZWGn1pBHv1HQ81XAc3`). `/login`, `/week`, `/profile` 200 · `POST /api/generate-menu` sin sesión 401. `audit-opt` = `main` por fast-forward |
+| Pendiente | Prueba manual en producción con dos cuentas (A → logout → B) y oferta de importación en un navegador con datos antiguos (Sergio) |
+
+## Iteración B2 — Contrato perfil ↔ BD 🟡 (2026-10-07; código listo, migración pendiente en remotos)
+| Elemento | Detalle |
+|---|---|
+| Defectos reproducidos | Tests contra Supabase local que fallaban con el código anterior (9 de 11): 6–7 días → `profiles_weekly_training_days_check`; «Otro» primero → `profiles_goal_check`; `disliked_foods` se guardaba como texto JSON (`["pollo",…]`, `[]`) y se leía como `[]` |
+| Producción (solo recuentos) | 3 perfiles; los 3 `disliked_foods` son arrays JSON (2 `[]`, 1 con un elemento, sin comas); 0 `maintenance`, 0 `other`; máx. 3 días. La lectura nueva los conserva sin migrar datos |
+| `disliked_foods` | Texto canónico `pollo, brócoli` (sin vacíos ni duplicados; vacío → NULL). Lectura tolerante: JSON antiguo, literal `{…}` y texto separado por `,` `;` o salto de línea. Límite 150 sobre el texto serializado; contador y mensaje en el formulario, sin truncar al pegar |
+| `goal` legacy | Derivado de `goals` (fuente de verdad): primer objetivo admitido por la CHECK legacy; solo «Otro» o vacío → `healthy_eating`. Nunca `other` ni `maintenance`. `maintenance` antiguo con `goals` vacío se lee como `healthy_eating` (como la migración 20260608). Sin cambios en las CHECK de `goal`/`goals` |
+| Validación | `validateProfileForStorage` con los rangos de la BD (altura, peso, personas, días 0–7, valores de enumeración, `other_goal` y `disliked_foods` ≤ 150); el formulario no guarda si falla y `profileToRow` la repite como barrera |
+| Migración `20261007090000_profiles_training_days_0_7` | ✅ local. Sustituye la CHECK 0–5 por 0–7 (solo ampliación). Expectativas con `replaces` en `supabase/expectations/` |
+| Tests | `tests/profile-contract.test.cjs` (7, valores antiguos y límites); `test:db` +17: guardar → recargar → leer en otro dispositivo (6 y 7 días, «Otro», alimentos rechazados, vacío → NULL), JSON antiguo, `maintenance`, > 150, 8/−1 rechazados y 6/7 aceptados por la CHECK |
+| Comprobaciones | lint, typecheck, test 113/113, build, test:db 324/324 (también tras `db:reset` + `db:seed`). Manual en `npm run dev`: 7 días + «Otro» + «Ganar masa muscular» → BD `goal=muscle_gain`; lista > 150 bloqueada con mensaje (168/150); «pollo,  brócoli / queso azul, Pollo» → `pollo, brócoli, queso azul`; segundo dispositivo (almacenamiento vacío + login) lee todo; cambio allí a 6 días + «setas» leído desde un tercer cliente |
+| Pendiente (Sergio, Cowork) | Aplicar la migración en becook-preview (registrar en `applied-preview.json`), validar la Preview de `audit-opt` (6–7 días fallan hasta entonces) y después en producción antes del merge |
+| Nota de entorno | La sincronización de `Documents` crea copias « 2»/« 3» dentro de `.next` (caché de Turbopack, `routes.d 2.ts`) y rompe build/typecheck; se resolvió apartando la caché. Hay también un `.git/index 2` sin tocar |
 
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
@@ -98,9 +113,9 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | 03 Dependencias | A2 | ✅ | 2026-10-06: next/eslint-config-next 16.2.1→16.3.8, supabase-js 2.49.4→2.117.2 + transitivas; audit 17→5 (riesgo residual aceptado, ver A2) |
 | 04 Rutas de IA protegidas | A3 | ✅ | 2026-10-06: sesión verificada en servidor (401), límites 413/415/400, UX invitado con retorno; ver A3 |
 | 05 Cuotas y trazabilidad de IA | A4 | ✅ | En producción desde 2026-10-06 (PR #6) |
-| 06 Datos locales por identidad | B1 | 🟡 | 2026-10-06 en `audit-opt` (sin merge): claves con ámbito, identidad antes que datos; ver B1 |
-| 07 Fuente de verdad y sincronización | B1 | 🟡 | 2026-10-06 en `audit-opt`: remoto canónico, política de conflictos en `docs/development/data-sync.md` |
-| 08 Contrato perfil ↔ BD | B2 | ⏳ | |
+| 06 Datos locales por identidad | B1 | ✅ | En producción desde 2026-10-07 (PR #8): claves con ámbito, identidad antes que datos; ver B1 |
+| 07 Fuente de verdad y sincronización | B1 | ✅ | En producción desde 2026-10-07 (PR #8): remoto canónico, política en `docs/development/data-sync.md` |
+| 08 Contrato perfil ↔ BD | B2 | 🟡 | Migración aplicada en preview y producción (2026-10-07); UI validada en Preview por Sergio; falta merge a `main` |
 | 09 Calendario ISO | B3 | ⏳ | |
 | 10 Escrituras de semana seguras | B4 | ⏳ | |
 | 11 Aplicar menú ≠ generar compra | B5 | ⏳ | |
@@ -139,6 +154,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | reconcile_ownership (datos) | n/a | n/a | ✅ 2026-10-06 (SQL Editor, fuera del ledger) |
 | enforce_reference_ownership | ✅ | ✅ 20260924112917 | ✅ 20261005220924 |
 | ai_usage_quotas | ✅ | ✅ 20261006115739 | ✅ 20261006171007 |
+| profiles_training_days_0_7 | ✅ | ✅ 20261007122056 | ✅ 20261007143519 |
 
 ## Decisiones
 | # | Decisión | Fecha |

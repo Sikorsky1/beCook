@@ -11,19 +11,25 @@ import { Button, PrimaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { loadProfile, readCachedProfile, saveProfile } from "@/lib/data/repositories";
 import { scopeHasPendingChanges } from "@/lib/storage/scoped-storage";
-import type {
-  Allergy,
-  DietaryRestriction,
-  Goal,
-  Sex,
-  TrainingType,
-  UserProfile,
-  WeeklyTrainingDays,
+import {
+  PROFILE_LIMITS,
+  legacyGoalFromGoals,
+  normalizeDislikedFoods,
+  serializeDislikedFoods,
+  validateProfileForStorage,
+  type Allergy,
+  type DietaryRestriction,
+  type Goal,
+  type ProfileValidationIssue,
+  type Sex,
+  type TrainingType,
+  type UserProfile,
+  type WeeklyTrainingDays,
 } from "@/lib/supabase/profiles";
 import { pageShellClass } from "@/lib/ui";
 
-const dislikedFoodsMaxLength = 150;
-const otherGoalMaxLength = 150;
+const dislikedFoodsMaxLength = PROFILE_LIMITS.dislikedFoodsMaxLength;
+const otherGoalMaxLength = PROFILE_LIMITS.otherGoalMaxLength;
 
 const defaultProfile: UserProfile = {
   sex: "male",
@@ -142,7 +148,7 @@ function normalizeProfile(profile: UserProfile): UserProfile {
     ...defaultProfile,
     ...profile,
     goals: normalizedGoals,
-    goal: normalizedGoals[0] ?? "healthy_eating",
+    goal: legacyGoalFromGoals(normalizedGoals),
     otherGoal: normalizedGoals.includes("other")
       ? profile.otherGoal?.slice(0, otherGoalMaxLength) ?? ""
       : "",
@@ -158,10 +164,12 @@ function dislikedFoodsToText(dislikedFoods: string[]) {
 }
 
 function textToDislikedFoods(value: string) {
-  return value
-    .split(/,|\n/)
-    .map((food) => food.trim())
-    .filter(Boolean);
+  return normalizeDislikedFoods([value]);
+}
+
+// Length of what the database will store, which is what profiles_disliked_foods_check limits.
+function storedDislikedFoodsLength(value: string) {
+  return (serializeDislikedFoods(textToDislikedFoods(value)) ?? "").length;
 }
 
 function normalizeOtherGoal(value: string | undefined) {
@@ -169,7 +177,9 @@ function normalizeOtherGoal(value: string | undefined) {
 }
 
 function toWeeklyTrainingDays(value: number): WeeklyTrainingDays {
-  return Math.min(Math.max(value, 0), 7) as WeeklyTrainingDays;
+  const { min, max } = PROFILE_LIMITS.weeklyTrainingDays;
+
+  return Math.min(Math.max(value, min), max) as WeeklyTrainingDays;
 }
 
 function FieldLabel({ children }: { children: string }) {
@@ -347,8 +357,9 @@ export default function ProfilePage() {
   const [dislikedFoodsText, setDislikedFoodsText] = useState("");
   const [hasLoadedProfile, setHasLoadedProfile] = useState(false);
   const [saveStatus, setSaveStatus] = useState<
-    "idle" | "saving" | "saved-local" | "saved-remote" | "error"
+    "idle" | "saving" | "saved-local" | "saved-remote" | "error" | "invalid"
   >("idle");
+  const [validationIssues, setValidationIssues] = useState<ProfileValidationIssue[]>([]);
   const identity = useIdentity();
   const { signOut } = useIdentityActions();
   const userEmail = identity.email;
@@ -356,9 +367,10 @@ export default function ProfilePage() {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const dislikedFoodsCharacters = useMemo(
-    () => dislikedFoodsText.length,
+    () => storedDislikedFoodsLength(dislikedFoodsText),
     [dislikedFoodsText],
   );
+  const dislikedFoodsTooLong = dislikedFoodsCharacters > dislikedFoodsMaxLength;
   const otherGoalCharacters = useMemo(
     () => profile.otherGoal?.length ?? 0,
     [profile.otherGoal],
@@ -409,6 +421,7 @@ export default function ProfilePage() {
   const updateProfile = (updates: Partial<UserProfile>) => {
     setProfile((currentProfile) => ({ ...currentProfile, ...updates }));
     setSaveStatus("idle");
+    setValidationIssues([]);
   };
 
   const handleDietaryRestrictionsChange = (
@@ -437,7 +450,7 @@ export default function ProfilePage() {
 
     updateProfile({
       goals: normalizedGoals,
-      goal: normalizedGoals[0] ?? "healthy_eating",
+      goal: legacyGoalFromGoals(normalizedGoals),
       otherGoal: normalizedGoals.includes("other") ? profile.otherGoal : "",
     });
   };
@@ -451,7 +464,7 @@ export default function ProfilePage() {
         ? profile.otherTrainingType?.trim()
         : "",
       goals: profile.goals,
-      goal: profile.goals[0] ?? "healthy_eating",
+      goal: legacyGoalFromGoals(profile.goals),
       otherGoal: profile.goals.includes("other")
         ? normalizeOtherGoal(profile.otherGoal)
         : "",
@@ -461,7 +474,18 @@ export default function ProfilePage() {
       dislikedFoods: textToDislikedFoods(dislikedFoodsText),
     };
 
+    // Same ranges as the database CHECKs: nothing invalid reaches the cache or the server.
+    const issues = validateProfileForStorage(profileToSave);
+
+    if (issues.length > 0) {
+      setValidationIssues(issues);
+      setSaveStatus("invalid");
+      return;
+    }
+
+    setValidationIssues([]);
     setProfile(profileToSave);
+    setDislikedFoodsText(dislikedFoodsToText(profileToSave.dislikedFoods));
     setSaveStatus("saving");
     setSyncState({});
 
@@ -721,8 +745,9 @@ export default function ProfilePage() {
                 <FieldLabel>Alimentos que no te gustan</FieldLabel>
                 <textarea
                   value={dislikedFoodsText}
-                  maxLength={dislikedFoodsMaxLength}
-                  placeholder="Cuéntanos si hay algún alimento que prefieras evitar."
+                  aria-invalid={dislikedFoodsTooLong}
+                  aria-describedby="disliked-foods-count"
+                  placeholder="Cuéntanos si hay algún alimento que prefieras evitar. Sepáralos con comas."
                   onChange={(event) => {
                     setDislikedFoodsText(event.target.value);
                     updateProfile({
@@ -731,8 +756,17 @@ export default function ProfilePage() {
                   }}
                   className={`${compactInputClass} min-h-20 resize-y leading-5 placeholder:text-xs placeholder:italic placeholder:text-[color:var(--color-muted-foreground)]`}
                 />
-                <span className="block text-right text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)]">
-                  {dislikedFoodsCharacters}/{dislikedFoodsMaxLength}
+                <span
+                  id="disliked-foods-count"
+                  className={`block text-right text-[0.68rem] font-semibold ${
+                    dislikedFoodsTooLong
+                      ? "text-[color:var(--color-danger)]"
+                      : "text-[color:var(--color-muted-foreground)]"
+                  }`}
+                >
+                  {dislikedFoodsTooLong
+                    ? `${dislikedFoodsCharacters}/${dislikedFoodsMaxLength} · Acorta la lista para poder guardar`
+                    : `${dislikedFoodsCharacters}/${dislikedFoodsMaxLength}`}
                 </span>
               </label>
             </div>
@@ -777,7 +811,7 @@ export default function ProfilePage() {
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p
                 className={`min-h-5 text-[0.78rem] font-semibold ${
-                  saveStatus === "error"
+                  saveStatus === "error" || saveStatus === "invalid"
                     ? "text-[color:var(--color-danger)]"
                     : "text-[color:var(--color-secondary-hover)]"
                 }`}
@@ -794,6 +828,10 @@ export default function ProfilePage() {
                   </span>
                 ) : saveStatus === "saving" ? (
                   "Guardando perfil"
+                ) : saveStatus === "invalid" ? (
+                  <span role="alert">
+                    {validationIssues.map((issue) => issue.message).join(" ")}
+                  </span>
                 ) : saveStatus === "error" ? (
                   "No se pudo guardar en tu cuenta. El cambio queda pendiente en este dispositivo y se reintentará."
                 ) : hasLoadedProfile ? (

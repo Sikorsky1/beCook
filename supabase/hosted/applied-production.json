@@ -32,6 +32,16 @@
       "source": "supabase/migrations/20261006090000_ai_usage_quotas.sql",
       "sha256": "72df3cc5ef6bf020acb35ba6eae2956606655c08e2bfa51edf46ad51a994c5d9",
       "verification": "RLS activo; sin permisos anon/authenticated sobre tabla y funciones; EXECUTE solo service_role. Sin backup externo (D6b: datos irrelevantes; migración solo aditiva)."
+    },
+    {
+      "appliedAt": "2026-10-07",
+      "type": "migration",
+      "ledger": true,
+      "version": "20261007143519",
+      "name": "profiles_training_days_0_7",
+      "source": "supabase/migrations/20261007090000_profiles_training_days_0_7.sql",
+      "sha256": "886184cf1230914547562be0074a95909086f225405683b5b5dad3f640331c9f",
+      "verification": "CHECK 0–7 coincide con supabase/expectations; 13 CHECK en profiles (igual que antes). Solo amplía el rango: compatible con el código de main."
     }
   ]
 }

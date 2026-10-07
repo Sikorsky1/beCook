@@ -21,6 +21,13 @@
       "source": "supabase/migrations/20261006090000_ai_usage_quotas.sql",
       "sha256": "72df3cc5ef6bf020acb35ba6eae2956606655c08e2bfa51edf46ad51a994c5d9",
       "appliedAt": "2026-10-06"
+    },
+    {
+      "version": "20261007122056",
+      "name": "profiles_training_days_0_7",
+      "source": "supabase/migrations/20261007090000_profiles_training_days_0_7.sql",
+      "sha256": "886184cf1230914547562be0074a95909086f225405683b5b5dad3f640331c9f",
+      "appliedAt": "2026-10-07"
     }
   ]
 }

@@ -67,7 +67,7 @@ type SaveProfileToSupabaseOptions = {
   userId?: string | null;
 };
 
-type ProfileRow = {
+export type ProfileRow = {
   id: string;
   user_id?: string | null;
   sex: string | null;
@@ -84,8 +84,40 @@ type ProfileRow = {
   dietary_restrictions: string[] | null;
   allergies: string[] | null;
   other_allergies: string | null;
-  disliked_foods: string[] | null;
+  // TEXT in the database: "pollo, brócoli" (see serializeDislikedFoods).
+  disliked_foods: string | null;
 };
+
+export const PROFILE_COLUMNS =
+  "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,goals,other_goal,dietary_restrictions,allergies,other_allergies,disliked_foods";
+
+// Same ranges as the CHECK constraints on public.profiles; weekly_training_days 0–7 since
+// 20261007090000_profiles_training_days_0_7.
+export const PROFILE_LIMITS = {
+  heightCm: { min: 120, max: 230 },
+  weightKg: { min: 45, max: 200 },
+  householdSize: { min: 1, max: 6 },
+  weeklyTrainingDays: { min: 0, max: 7 },
+  otherGoalMaxLength: 150,
+  dislikedFoodsMaxLength: 150,
+} as const;
+
+export type ProfileField = keyof UserProfile;
+
+export type ProfileValidationIssue = {
+  field: ProfileField;
+  message: string;
+};
+
+export class ProfileValidationError extends Error {
+  issues: ProfileValidationIssue[];
+
+  constructor(issues: ProfileValidationIssue[]) {
+    super(issues.map((issue) => issue.message).join(" "));
+    this.name = "ProfileValidationError";
+    this.issues = issues;
+  }
+}
 
 const sexValues = new Set<Sex>(["male", "female"]);
 const trainingTypeValues = new Set<TrainingType>([
@@ -153,8 +185,8 @@ function parseWeeklyTrainingDays(value: number | null): WeeklyTrainingDays {
 
   if (
     Number.isInteger(parsedValue) &&
-    parsedValue >= 0 &&
-    parsedValue <= 7
+    parsedValue >= PROFILE_LIMITS.weeklyTrainingDays.min &&
+    parsedValue <= PROFILE_LIMITS.weeklyTrainingDays.max
   ) {
     return parsedValue as WeeklyTrainingDays;
   }
@@ -198,12 +230,104 @@ function parseEnumArray<T extends string>(
   });
 }
 
-function parseStringArray(values: string[] | null) {
-  return Array.isArray(values) ? values : [];
+// Legacy profiles.goal CHECK: fat_loss, maintenance, muscle_gain, sports_performance,
+// healthy_eating. goals is the source of truth; goal is derived and never 'other' or 'maintenance'.
+const storableLegacyGoals: Goal[] = [
+  "fat_loss",
+  "muscle_gain",
+  "sports_performance",
+  "healthy_eating",
+];
+const fallbackLegacyGoal: Goal = "healthy_eating";
+
+export function legacyGoalFromGoals(goals: Goal[]): Goal {
+  return goals.find((goal) => storableLegacyGoals.includes(goal)) ?? fallbackLegacyGoal;
+}
+
+// --- disliked_foods: TEXT ↔ string[] -------------------------------------
+// Stored as "pollo, brócoli, queso azul": items are trimmed, de-duplicated (case-insensitive)
+// and never contain a separator, so the text round-trips. An empty list is NULL.
+const dislikedFoodSeparator = /[,;\n]/;
+
+export function normalizeDislikedFoods(foods: string[]) {
+  const seen = new Set<string>();
+  const normalizedFoods: string[] = [];
+
+  for (const food of foods.flatMap((value) => value.split(dislikedFoodSeparator))) {
+    const trimmedFood = food.trim().replace(/\s+/g, " ");
+    const key = trimmedFood.toLocaleLowerCase("es");
+
+    if (trimmedFood && !seen.has(key)) {
+      seen.add(key);
+      normalizedFoods.push(trimmedFood);
+    }
+  }
+
+  return normalizedFoods;
+}
+
+export function serializeDislikedFoods(foods: string[]) {
+  const normalizedFoods = normalizeDislikedFoods(foods);
+
+  return normalizedFoods.length > 0 ? normalizedFoods.join(", ") : null;
+}
+
+function parseJsonStringArray(value: string) {
+  try {
+    const parsedValue: unknown = JSON.parse(value);
+
+    return Array.isArray(parsedValue)
+      ? parsedValue.filter((item): item is string => typeof item === "string")
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function parsePostgresArrayLiteral(value: string) {
+  const body = value.trim().slice(1, -1);
+  const items: string[] = [];
+  const itemPattern = /\s*(?:"((?:[^"\\]|\\.)*)"|([^,]*))\s*(?:,|$)/g;
+  let match: RegExpExecArray | null;
+
+  while (body && (match = itemPattern.exec(body)) && match[0] !== "") {
+    items.push(match[1] !== undefined ? match[1].replace(/\\(.)/g, "$1") : match[2]);
+  }
+
+  return items.filter((item) => item.toUpperCase() !== "NULL");
+}
+
+// Reads every format found in profiles.disliked_foods: the canonical text, the JSON array text
+// written by the previous code ('["pollo"]', '[]') and a Postgres array literal ('{pollo}').
+export function parseDislikedFoods(value: string | string[] | null | undefined) {
+  if (Array.isArray(value)) {
+    return normalizeDislikedFoods(value);
+  }
+
+  const text = value?.trim();
+
+  if (!text) {
+    return [];
+  }
+
+  if (text.startsWith("[")) {
+    const jsonItems = parseJsonStringArray(text);
+
+    if (jsonItems) {
+      return normalizeDislikedFoods(jsonItems);
+    }
+  }
+
+  if (text.startsWith("{") && text.endsWith("}")) {
+    return normalizeDislikedFoods(parsePostgresArrayLiteral(text));
+  }
+
+  return normalizeDislikedFoods([text]);
 }
 
 function normalizeGoals(goals: Goal[], legacyGoal?: LegacyGoal): Goal[] {
   const normalizedGoals = goals.length > 0 ? goals : legacyGoal ? [legacyGoal] : [];
+  // 'maintenance' only exists in the legacy column; goals never accepted it.
   const filteredGoals = normalizedGoals
     .map((goal) => (goal === "maintenance" ? "healthy_eating" : goal))
     .filter((goal): goal is Goal => goalValues.has(goal as Goal));
@@ -211,17 +335,102 @@ function normalizeGoals(goals: Goal[], legacyGoal?: LegacyGoal): Goal[] {
   return Array.from(new Set(filteredGoals));
 }
 
-function getLegacyGoalForStorage(profile: UserProfile): Goal {
-  return normalizeGoals(profile.goals, profile.goal)[0] ?? "healthy_eating";
+function isIntegerInRange(value: unknown, range: { min: number; max: number }) {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= range.min &&
+    value <= range.max
+  );
 }
 
-function profileToRow(
+function hasOnlyAllowedValues<T extends string>(values: unknown, allowedValues: Set<T>) {
+  return Array.isArray(values) && values.every((value) => allowedValues.has(value as T));
+}
+
+// Client-side mirror of the CHECK constraints, run before every save.
+export function validateProfileForStorage(profile: UserProfile): ProfileValidationIssue[] {
+  const issues: ProfileValidationIssue[] = [];
+  const addIssue = (field: ProfileField, message: string) => issues.push({ field, message });
+  const { heightCm, weightKg, householdSize, weeklyTrainingDays } = PROFILE_LIMITS;
+
+  if (!sexValues.has(profile.sex)) {
+    addIssue("sex", "Elige un sexo.");
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(profile.birthDate ?? "")) {
+    addIssue("birthDate", "Indica tu fecha de nacimiento.");
+  }
+
+  if (!isIntegerInRange(profile.heightCm, heightCm)) {
+    addIssue("heightCm", `La altura debe ser un número entero entre ${heightCm.min} y ${heightCm.max} cm.`);
+  }
+
+  if (!isIntegerInRange(profile.weightKg, weightKg)) {
+    addIssue("weightKg", `El peso debe ser un número entero entre ${weightKg.min} y ${weightKg.max} kg.`);
+  }
+
+  if (!isIntegerInRange(profile.householdSize, householdSize)) {
+    addIssue("householdSize", `Las personas en casa deben estar entre ${householdSize.min} y ${householdSize.max}.`);
+  }
+
+  if (!isIntegerInRange(profile.weeklyTrainingDays, weeklyTrainingDays)) {
+    addIssue(
+      "weeklyTrainingDays",
+      `Los días de entrenamiento deben estar entre ${weeklyTrainingDays.min} y ${weeklyTrainingDays.max}.`,
+    );
+  }
+
+  if (!hasOnlyAllowedValues(profile.trainingTypes, trainingTypeValues)) {
+    addIssue("trainingTypes", "Hay un tipo de entrenamiento no válido.");
+  }
+
+  if (!hasOnlyAllowedValues(profile.goals, goalValues)) {
+    addIssue("goals", "Hay un objetivo no válido.");
+  }
+
+  if (!hasOnlyAllowedValues(profile.dietaryRestrictions, dietaryRestrictionValues)) {
+    addIssue("dietaryRestrictions", "Hay una restricción alimentaria no válida.");
+  }
+
+  if (!hasOnlyAllowedValues(profile.allergies, allergyValues)) {
+    addIssue("allergies", "Hay una alergia no válida.");
+  }
+
+  const otherGoalLength = profile.goals?.includes("other")
+    ? (optionalText(profile.otherGoal) ?? "").length
+    : 0;
+
+  if (otherGoalLength > PROFILE_LIMITS.otherGoalMaxLength) {
+    addIssue(
+      "otherGoal",
+      `El objetivo «Otro» ocupa ${otherGoalLength}/${PROFILE_LIMITS.otherGoalMaxLength} caracteres. Acórtalo para guardar.`,
+    );
+  }
+
+  const dislikedFoodsLength = (serializeDislikedFoods(profile.dislikedFoods ?? []) ?? "").length;
+
+  if (dislikedFoodsLength > PROFILE_LIMITS.dislikedFoodsMaxLength) {
+    addIssue(
+      "dislikedFoods",
+      `Los alimentos que no te gustan ocupan ${dislikedFoodsLength}/${PROFILE_LIMITS.dislikedFoodsMaxLength} caracteres. Acorta la lista para guardar.`,
+    );
+  }
+
+  return issues;
+}
+
+export function profileToRow(
   profile: UserProfile,
   options: SaveProfileToSupabaseOptions = {},
 ) {
-  if (profile.weeklyTrainingDays < 0 || profile.weeklyTrainingDays > 7) {
-    throw new Error("weeklyTrainingDays must be between 0 and 7.");
+  const issues = validateProfileForStorage(profile);
+
+  if (issues.length > 0) {
+    throw new ProfileValidationError(issues);
   }
+
+  const goals = normalizeGoals(profile.goals, profile.goal);
 
   return {
     user_id: options.userId ?? null,
@@ -233,19 +442,23 @@ function profileToRow(
     weekly_training_days: profile.weeklyTrainingDays,
     training_types: profile.trainingTypes,
     other_training_type: optionalText(profile.otherTrainingType),
-    goal: getLegacyGoalForStorage(profile),
-    goals: normalizeGoals(profile.goals, profile.goal),
-    other_goal: profile.goals.includes("other")
+    goal: legacyGoalFromGoals(goals),
+    goals,
+    other_goal: goals.includes("other")
       ? optionalText(profile.otherGoal)
       : null,
     dietary_restrictions: profile.dietaryRestrictions,
     allergies: profile.allergies,
     other_allergies: optionalText(profile.otherAllergies),
-    disliked_foods: profile.dislikedFoods,
+    disliked_foods: serializeDislikedFoods(profile.dislikedFoods),
   };
 }
 
-function rowToProfile(row: ProfileRow): UserProfile {
+export function profileFromRow(row: ProfileRow): UserProfile {
+  const legacyGoal = row.goal && legacyGoalValues.has(row.goal as LegacyGoal)
+    ? (row.goal as LegacyGoal)
+    : undefined;
+
   return {
     id: row.id,
     userId: row.user_id ?? undefined,
@@ -262,14 +475,10 @@ function rowToProfile(row: ProfileRow): UserProfile {
       "training_types",
     ),
     otherTrainingType: row.other_training_type ?? undefined,
-    goal: row.goal && legacyGoalValues.has(row.goal as LegacyGoal)
-      ? (row.goal as LegacyGoal)
-      : undefined,
+    goal: legacyGoal,
     goals: normalizeGoals(
       parseEnumArray(row.goals, goalValues, "goals"),
-      row.goal && legacyGoalValues.has(row.goal as LegacyGoal)
-        ? (row.goal as LegacyGoal)
-        : undefined,
+      legacyGoal,
     ),
     otherGoal: row.other_goal ?? undefined,
     dietaryRestrictions: parseEnumArray(
@@ -279,7 +488,8 @@ function rowToProfile(row: ProfileRow): UserProfile {
     ),
     allergies: parseEnumArray(row.allergies, allergyValues, "allergies"),
     otherAllergies: row.other_allergies ?? undefined,
-    dislikedFoods: parseStringArray(row.disliked_foods),
+    // Tolerates the JSON text the previous code stored; '[]' reads as [].
+    dislikedFoods: parseDislikedFoods(row.disliked_foods),
   };
 }
 
@@ -304,7 +514,7 @@ export async function saveProfileToSupabase(
     .from("profiles")
     .upsert(profileRow, { onConflict: "user_id" })
     .select(
-      "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,goals,other_goal,dietary_restrictions,allergies,other_allergies,disliked_foods",
+      PROFILE_COLUMNS,
     )
     .maybeSingle<ProfileRow>();
 
@@ -325,7 +535,7 @@ export async function saveProfileToSupabase(
     );
   }
 
-  return rowToProfile(savedProfile);
+  return profileFromRow(savedProfile);
 }
 
 export async function getLatestProfileFromSupabase(): Promise<UserProfile | null> {
@@ -338,7 +548,7 @@ export async function getLatestProfileFromSupabase(): Promise<UserProfile | null
   const { data: latestProfile, error: profileError } = await supabase
     .from("profiles")
     .select(
-      "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,goals,other_goal,dietary_restrictions,allergies,other_allergies,disliked_foods",
+      PROFILE_COLUMNS,
     )
     .order("created_at", { ascending: false })
     .limit(1)
@@ -352,7 +562,7 @@ export async function getLatestProfileFromSupabase(): Promise<UserProfile | null
     return null;
   }
 
-  return rowToProfile(latestProfile);
+  return profileFromRow(latestProfile);
 }
 
 // The signed-in user's own profile and its remote version (updated_at).
@@ -368,7 +578,7 @@ export async function getProfileForUserFromSupabase(
   const { data: profileRow, error: profileError } = await supabase
     .from("profiles")
     .select(
-      "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,goals,other_goal,dietary_restrictions,allergies,other_allergies,disliked_foods,updated_at",
+      `${PROFILE_COLUMNS},updated_at`,
     )
     .eq("user_id", userId)
     .order("updated_at", { ascending: false })
@@ -383,5 +593,5 @@ export async function getProfileForUserFromSupabase(
     return null;
   }
 
-  return { profile: rowToProfile(profileRow), updatedAt: profileRow.updated_at ?? null };
+  return { profile: profileFromRow(profileRow), updatedAt: profileRow.updated_at ?? null };
 }

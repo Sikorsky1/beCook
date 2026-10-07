@@ -6,6 +6,7 @@ const { fingerprintSql, probeSql } = require("./db-test-probe.cjs");
 const { runOwnershipTests } = require("./reference-ownership-tests.cjs");
 const { runAiUsageTests } = require("./ai-usage-db-tests.cjs");
 const { runSessionTests } = require("./session-db-tests.cjs");
+const { runProfileContractTests } = require("./profile-db-tests.cjs");
 const { createClient } = require("@supabase/supabase-js");
 const id = (prefix, n) => prefix + "0000000-0000-4000-8000-00000000000" + n;
 let failures = 0, passed = 0;
@@ -33,9 +34,13 @@ async function main() {
   const expected = JSON.parse(fs.readFileSync(path.join(ROOT,"supabase/baseline/remote-metadata.json"),"utf8"));
   const initialState = sql(fingerprintSql);
   // Every additive migration ships the metadata it adds; the schema must match exactly.
+  // "replaces" drops the earlier definition of an object the migration widens (same name).
   const delta = { constraints: [] };
   for (const file of fs.readdirSync(path.join(ROOT,"supabase/expectations")).filter(f => f.endsWith(".json")).sort()) {
     const migrationDelta = JSON.parse(fs.readFileSync(path.join(ROOT,"supabase/expectations",file),"utf8"));
+    for (const [key, keys] of Object.entries(migrationDelta.replaces || {})) {
+      expected[key] = (expected[key] || []).filter(row => !keys.some(match => Object.entries(match).every(([k, v]) => row[k] === v)));
+    }
     for (const [key, rows] of Object.entries(migrationDelta)) if (Array.isArray(rows)) (expected[key] ||= []).push(...rows);
     delta.constraints.push(...(migrationDelta.constraints || []));
   }
@@ -92,7 +97,9 @@ async function main() {
       const result = outcome(n,"UPDATE public." + table + " SET " + column + "='" + id(parentPrefix,other) + "' WHERE id='" + fixtureId(ownPrefix,n) + "'");
       check("user " + n + " cross-owner " + table + "." + column + " denied (observed " + result + ")", () => assert.equal(result,"constraint:23503"));
     }
-    check("invalid profile training days is schema error 23514", () => assert.equal(outcome(n,"UPDATE public.profiles SET weekly_training_days=7 WHERE id='" + id("1",n) + "'"),"constraint:23514"));
+    // B2: CHECK widened to 0–7; outside that range is still a schema error.
+    for (const days of [8, -1]) check("invalid profile training days " + days + " is schema error 23514", () => assert.equal(outcome(n,"UPDATE public.profiles SET weekly_training_days=" + days + " WHERE id='" + id("1",n) + "'"),"constraint:23514"));
+    for (const days of [6, 7]) check("profile training days " + days + " accepted", () => assert.equal(outcome(n,"UPDATE public.profiles SET weekly_training_days=" + days + " WHERE id='" + id("1",n) + "'"),"accepted"));
   }
   runOwnershipTests({check, outcome, query, id, fixtureId});
   check("all new constraints validated and immediate", () => {
@@ -143,6 +150,8 @@ async function main() {
   await userClient.auth.signOut({scope:"local"});
   // B1: identity-scoped device data with the application's own Supabase client.
   await runSessionTests({check, id, supabase});
+  // B2: profile contract (save → reload → read on another device) with the application adapter.
+  await runProfileContractTests({check, sql, id, api, createClient, supabase});
   console.log(passed + " passed; " + failures + " failed. No production connection; SQL probes rolled back.");
   process.exitCode = failures ? 1 : 0;
 }
