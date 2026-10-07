@@ -25,7 +25,7 @@ import {
   writeShoppingCache,
   type ShoppingCache,
 } from "@/lib/data/repositories";
-import { getIsoWeekFromDate, type IsoWeek } from "@/lib/isoWeek";
+import { getCurrentIsoWeek, type IsoWeek } from "@/lib/isoWeek";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { pageShellClass } from "@/lib/ui";
 import {
@@ -43,6 +43,7 @@ import {
   generateAndCacheShoppingListForWeek,
   ShoppingListApiError,
   getWeekSignature,
+  matchesWeekSignature,
   syncShoppingListToSupabase,
 } from "@/lib/shoppingListStorage";
 import { withWeekDates } from "@/lib/weekStorage";
@@ -217,7 +218,7 @@ export default function ShoppingListPage() {
 
     let isCancelled = false;
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
-    const weekToLoad = readSelectedWeek(dataIdentity) ?? getIsoWeekFromDate();
+    const weekToLoad = readSelectedWeek(dataIdentity) ?? getCurrentIsoWeek();
     const loadTimer = window.setTimeout(() => {
       setHasLoadedWeek(false);
       setGeneratedItems([]);
@@ -287,7 +288,10 @@ export default function ShoppingListPage() {
       // 1. This identity's cache for this exact week content.
       const cachedShoppingList = readShoppingCache(dataIdentity, currentIsoWeek);
 
-      if (cachedShoppingList?.weekSignature === weekSignature) {
+      if (cachedShoppingList && matchesWeekSignature(cachedShoppingList.weekSignature, currentWeekDays)) {
+        if (cachedShoppingList.weekSignature !== weekSignature) {
+          writeShoppingCache(dataIdentity, currentIsoWeek, { ...cachedShoppingList, weekSignature });
+        }
         showItems(cachedShoppingList.items, cachedShoppingList.checkedItemIds);
         return;
       }
@@ -391,7 +395,7 @@ export default function ShoppingListPage() {
     const weekSignature = getWeekSignature(weekDays);
     const cachedShoppingList = readShoppingCache(dataIdentity, isoWeek);
 
-    if (!cachedShoppingList || cachedShoppingList.weekSignature !== weekSignature) {
+    if (!cachedShoppingList || !matchesWeekSignature(cachedShoppingList.weekSignature, weekDays)) {
       return;
     }
 
@@ -402,6 +406,7 @@ export default function ShoppingListPage() {
 
     writeShoppingCache(dataIdentity, isoWeek, {
       ...cachedShoppingList,
+      weekSignature,
       checkedItemIds: persistedCheckedItems,
     });
   }, [checkedItems, generatedItems, weekDays, isoWeek, identity.scope, identity.userId]);

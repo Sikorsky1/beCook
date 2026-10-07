@@ -17,7 +17,7 @@ test("maps exactly seven ordered days and planned slots into existing storage co
  const menu = selectionToMenu(selection, profile);
  assert.ok(isImportedMenuResponse(menu));
  assert.deepEqual(menu.days.map(d => d.dayName), dayNames);
- assert.equal(weekDaysToSupabaseWeek(withWeekDates(importedMenuToWeekDays(menu.days), {isoYear:2026,isoWeek:38})).days.length, 7);
+ assert.equal(weekDaysToSupabaseWeek(withWeekDates(importedMenuToWeekDays(menu.days, {isoYear:2026,isoWeek:38}), {isoYear:2026,isoWeek:38})).days.length, 7);
  assert.equal(menu.days[6].dinner.status, "planned");
 });
 test("rejects incomplete, blank, duplicate and generic output", () => {

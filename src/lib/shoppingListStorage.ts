@@ -14,8 +14,21 @@ export type ShoppingListCache = {
   checkedItemIds: string[];
 };
 
+// Content only: day name and dishes, never the presented date (full canonical signature in B6).
 export function getWeekSignature(week: WeekDay[]) {
-  return JSON.stringify(week);
+  return JSON.stringify(week.map((day) => [day.day, day.lunch, day.dinner]));
+}
+
+// Caches written before B3 signed the whole week with its date text; accept them so that no
+// existing list is generated again, and rewrite them with the new signature.
+export function matchesWeekSignature(signature: string | undefined, week: WeekDay[]) {
+  return (
+    signature === getWeekSignature(week) ||
+    signature ===
+      JSON.stringify(
+        week.map(({ day, date, lunch, dinner }) => ({ day, date, lunch, dinner })),
+      )
+  );
 }
 
 export function getShoppingItemsForSupabase(

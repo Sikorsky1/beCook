@@ -1,23 +1,23 @@
 import type { MealSlot, WeekDay } from "@/data/mockWeek";
-import { getIsoWeekStartDate, type IsoWeek } from "@/lib/isoWeek";
+import { getDayPosition, getIsoWeekDay, type IsoWeek } from "@/lib/isoWeek";
 import type { SupabaseMealSlot, SupabaseWeek } from "@/lib/supabase/weeks";
 
 // Pure week helpers. Persistence lives in @/lib/data/repositories (scoped by identity).
 
+// Each day is dated by its name inside the ISO week, never by its index: a partial week
+// (only Wednesday, or skipped days) keeps the real dates. Days are returned Monday→Sunday.
 export function withWeekDates(weekDays: WeekDay[], isoWeek: IsoWeek) {
-  const startDate = getIsoWeekStartDate(isoWeek);
+  const order = (day: WeekDay) => {
+    const position = getDayPosition(day.day);
+    return position === -1 ? Number.MAX_SAFE_INTEGER : position;
+  };
 
-  return weekDays.map((day, index) => {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + index);
-
-    return {
+  return [...weekDays]
+    .sort((left, right) => order(left) - order(right))
+    .map((day) => ({
       ...day,
-      date: `${date.getDate()} ${date.toLocaleDateString("es-ES", {
-        month: "short",
-      })}`,
-    };
-  });
+      date: getIsoWeekDay(isoWeek, day.day)?.label ?? "",
+    }));
 }
 
 function mealSlotToSupabase(slot: MealSlot) {

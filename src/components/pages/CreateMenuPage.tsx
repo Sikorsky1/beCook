@@ -20,10 +20,10 @@ import {
   type MenuGenerationApiErrorResponse,
 } from "@/lib/importMenu";
 import {
-  formatIsoWeekRange,
-  getIsoWeekFromDate,
+  formatIsoWeekTitle,
+  getCurrentIsoWeek,
+  getMadridToday,
   isSameIsoWeek,
-  parseIsoWeek,
   type IsoWeek,
 } from "@/lib/isoWeek";
 import {
@@ -43,6 +43,7 @@ import {
   syncShoppingListToSupabase,
 } from "@/lib/shoppingListStorage";
 import { getAccessToken } from "@/lib/supabase/auth";
+import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
 import type { UserProfile } from "@/lib/supabase/profiles";
 import { pageContentClass, pageShellClass } from "@/lib/ui";
 
@@ -75,20 +76,6 @@ const elaborationOptions = [
   { value: 6, label: "Elaborado" },
 ] as const;
 const useWeekSuccessDelayMs = 900;
-
-const orderedDayNames = [
-  "Lunes",
-  "Martes",
-  "Miércoles",
-  "Jueves",
-  "Viernes",
-  "Sábado",
-  "Domingo",
-] as const;
-
-function getTodayDayName() {
-  return orderedDayNames[(new Date().getDay() + 6) % 7];
-}
 
 function isProfile(value: unknown): value is UserProfile {
   if (!value || typeof value !== "object") {
@@ -127,23 +114,13 @@ function serializeMenuGenerationContext(
   return `${getMenuStylesForGeneration(menuStyles).join(",")}|elaboration_level=${elaborationLevel}`;
 }
 
-function sanitizeDateParam(value: string | null) {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return null;
-  }
-
-  return value;
-}
-
 export default function CreateMenuPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const weekParam = searchParams.get("week");
   const isoYearParam = searchParams.get("isoYear");
   const isoWeekParam = searchParams.get("isoWeek");
-  const rawStartDateParam = searchParams.get("startDate");
-  const rawEndDateParam = searchParams.get("endDate");
-  const startDateParam = sanitizeDateParam(rawStartDateParam);
-  const endDateParam = sanitizeDateParam(rawEndDateParam);
+  const [weekNotice, setWeekNotice] = useState<string | null>(null);
   const [hasMounted, setHasMounted] = useState(false);
   const [mode, setMode] = useState<CreateMenuMode>("generate");
   const [menuText, setMenuText] = useState("");
@@ -174,13 +151,16 @@ export default function CreateMenuPage() {
   const isApplyingWeekRef = useRef(false);
   const navigationTimeoutRef = useRef<number | null>(null);
   const [targetIsoWeek, setTargetIsoWeek] = useState<IsoWeek | null>(null);
-  const importedWeekDays = importedMenu
-    ? importedMenuToWeekDays(importedMenu.days)
-    : null;
-  const isCurrentTargetWeek = targetIsoWeek
-    ? isSameIsoWeek(targetIsoWeek, getIsoWeekFromDate())
-    : false;
-  const todayDayName = isCurrentTargetWeek ? getTodayDayName() : null;
+  // Each proposed or imported day is dated by its name inside the target week.
+  const importedWeekDays =
+    importedMenu && targetIsoWeek
+      ? importedMenuToWeekDays(importedMenu.days, targetIsoWeek)
+      : null;
+  const madridToday = getMadridToday();
+  const todayDayName =
+    targetIsoWeek && isSameIsoWeek(targetIsoWeek, madridToday.week)
+      ? madridToday.dayName
+      : null;
 
   useEffect(() => {
     // Identity first: profile, pantry and selected week belong to the current identity.
@@ -191,22 +171,17 @@ export default function CreateMenuPage() {
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
     setHasMounted(true);
 
-    const weekFromUrl = parseIsoWeek({
-      isoYear: isoYearParam,
-      isoWeek: isoWeekParam,
+    // Same rule as /week: the URL decides, then the scoped preference, then today (Madrid).
+    const selection = resolveWeekSelection({
+      weekParam,
+      isoYearParam,
+      isoWeekParam,
+      preference: readSelectedWeek(dataIdentity),
+      today: getCurrentIsoWeek(),
     });
-    const weekForMenu =
-      weekFromUrl ?? readSelectedWeek(dataIdentity) ?? getIsoWeekFromDate();
+    const weekForMenu = selection.week;
 
-    if (
-      (rawStartDateParam && !startDateParam) ||
-      (rawEndDateParam && !endDateParam)
-    ) {
-      console.warn(
-        "Parámetros de fecha de semana ignorados por formato inválido.",
-      );
-    }
-
+    setWeekNotice(selection.notice);
     setTargetIsoWeek(weekForMenu);
     writeSelectedWeek(dataIdentity, weekForMenu);
 
@@ -258,12 +233,9 @@ export default function CreateMenuPage() {
     identity.scope,
     identity.userId,
     identity.epoch,
-    endDateParam,
+    weekParam,
     isoWeekParam,
     isoYearParam,
-    rawEndDateParam,
-    rawStartDateParam,
-    startDateParam,
   ]);
 
   useEffect(
@@ -276,7 +248,7 @@ export default function CreateMenuPage() {
   );
 
   const createMenuReturnPath = targetIsoWeek
-    ? `/create-menu?isoYear=${targetIsoWeek.isoYear}&isoWeek=${targetIsoWeek.isoWeek}`
+    ? buildWeekHref("/create-menu", targetIsoWeek)
     : "/create-menu";
 
   const saveDraftForLogin = () => {
@@ -366,7 +338,7 @@ export default function CreateMenuPage() {
     const profileForGeneration = profile;
     const pantryItemsForGeneration = activePantryItemNames;
     const menuStylesForGeneration = getMenuStylesForGeneration(menuStyles);
-    const weekForGeneration = targetIsoWeek ?? getIsoWeekFromDate();
+    const weekForGeneration = targetIsoWeek ?? getCurrentIsoWeek();
     let currentGenerationRequestId: string | null = null;
     let recentDishes: string[] = [];
 
@@ -537,8 +509,8 @@ export default function CreateMenuPage() {
     setUseWeekStatus("applying");
     setUseWeekMessage("");
 
-    const weekForUse = targetIsoWeek ?? getIsoWeekFromDate();
-    const weekHref = `/week?isoYear=${weekForUse.isoYear}&isoWeek=${weekForUse.isoWeek}`;
+    const weekForUse = targetIsoWeek ?? getCurrentIsoWeek();
+    const weekHref = buildWeekHref("/week", weekForUse);
 
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
 
@@ -640,7 +612,15 @@ export default function CreateMenuPage() {
           {targetIsoWeek ? (
             <p className="t-meta mt-2">
               Se guardará en Semana {targetIsoWeek.isoWeek} ·{" "}
-              {formatIsoWeekRange(targetIsoWeek)}
+              {formatIsoWeekTitle(targetIsoWeek)}
+            </p>
+          ) : null}
+          {weekNotice ? (
+            <p
+              role="status"
+              className="mt-3 rounded-[var(--radius-control)] border border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] px-4 py-3 text-sm leading-6 text-[#8a4e2a]"
+            >
+              {weekNotice}
             </p>
           ) : null}
         </section>
