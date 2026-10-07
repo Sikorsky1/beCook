@@ -115,7 +115,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | 05 Cuotas y trazabilidad de IA | A4 | ✅ | En producción desde 2026-10-06 (PR #6) |
 | 06 Datos locales por identidad | B1 | ✅ | En producción desde 2026-10-07 (PR #8): claves con ámbito, identidad antes que datos; ver B1 |
 | 07 Fuente de verdad y sincronización | B1 | ✅ | En producción desde 2026-10-07 (PR #8): remoto canónico, política en `docs/development/data-sync.md` |
-| 08 Contrato perfil ↔ BD | B2 | 🟡 | Código y tests listos en `audit-opt`; migración pendiente en preview y producción (ver B2) |
+| 08 Contrato perfil ↔ BD | B2 | 🟡 | Migración aplicada en preview y producción (2026-10-07); UI validada en Preview por Sergio; falta merge a `main` |
 | 09 Calendario ISO | B3 | ⏳ | |
 | 10 Escrituras de semana seguras | B4 | ⏳ | |
 | 11 Aplicar menú ≠ generar compra | B5 | ⏳ | |
@@ -154,7 +154,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | reconcile_ownership (datos) | n/a | n/a | ✅ 2026-10-06 (SQL Editor, fuera del ledger) |
 | enforce_reference_ownership | ✅ | ✅ 20260924112917 | ✅ 20261005220924 |
 | ai_usage_quotas | ✅ | ✅ 20261006115739 | ✅ 20261006171007 |
-| profiles_training_days_0_7 | ✅ | ⏳ | ⏳ (antes del merge) |
+| profiles_training_days_0_7 | ✅ | ✅ 20261007122056 | ✅ 20261007143519 |
 
 ## Decisiones
 | # | Decisión | Fecha |
