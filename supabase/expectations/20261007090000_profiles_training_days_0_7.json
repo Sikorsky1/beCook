@@ -1,0 +1,18 @@
+{
+  "migration": "20261007090000_profiles_training_days_0_7",
+  "replaces": {
+    "constraints": [
+      {
+        "conname": "profiles_weekly_training_days_check",
+        "table_name": "profiles"
+      }
+    ]
+  },
+  "constraints": [
+    {
+      "conname": "profiles_weekly_training_days_check",
+      "table_name": "profiles",
+      "definition": "CHECK (((weekly_training_days >= 0) AND (weekly_training_days <= 7)))"
+    }
+  ]
+}
