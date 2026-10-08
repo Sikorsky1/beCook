@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-08 · Rama: `audit-opt` (B3 pendiente de merge) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-08 · Rama: `audit-opt` (= `main` tras PR #10, más commits de documentación) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -105,7 +105,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Producción | [PR #9](https://github.com/Sikorsky1/beCook/pull/9), merge commit `a17d120` (2026-10-07 16:18 UTC), checks en verde. Migración en becook-preview (`20261007122056`) y becook (`20261007143519`) antes del merge; UI validada por Sergio en la Preview. Despliegue be-cook `dpl_37MQ5zomRkhFD7rvEEnKPXPunZLm` READY en `www.becook.xyz` (anterior para rollback: `dpl_3hdkPSnXeFKoGxPjWytuFTBpPsne`). `/login`, `/week`, `/profile` 200 · `/` 307 → `/week` · `POST /api/generate-menu` y `/api/generate-shopping-list` sin sesión 401. `audit-opt` = `main` + commits de documentación |
 | Nota de entorno | La sincronización de `Documents` crea copias « 2»/« 3» dentro de `.next` (caché de Turbopack, `routes.d 2.ts`) y rompe build/typecheck; se resolvió apartando la caché. Hay también un `.git/index 2` sin tocar |
 
-## Iteración B3 — Calendario ISO y semana seleccionada 🟡 (2026-10-08; código listo en `audit-opt`, sin merge)
+## Iteración B3 — Calendario ISO y semana seleccionada ✅ (2026-10-08, en producción el 2026-10-08)
 | Elemento | Detalle |
 |---|---|
 | Defectos reproducidos | `tests/calendar.test.cjs`: 10 de 10 fallan con el código anterior. `parseIsoWeek` aceptaba 2025-W53 (lunes 29-12-2025 = 2026-W01); vista previa con fechas fijas («2 abr» para un miércoles de W41); importar solo el miércoles se mostraba con la fecha del lunes; flechas/«Volver a hoy» sin URL; `truncate` en el título |
@@ -117,7 +117,21 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Base de datos | Sin cambios: `week_days` ya guarda `day_name` y `position`. Producción (solo recuentos, 2026-10-07): 21 semanas, 0 semanas 53 inválidas, 0 parciales, 0 nombres de día desconocidos |
 | Tests | `tests/calendar.test.cjs` (10, con `TZ=America/Los_Angeles`): semanas 52/53/01 en 2015/2020/2026/2032 y 2021/2024/2025/2027, cruces de año, DST 29-03 y 25-10-2026, «hoy» en Madrid alrededor de medianoche, DST y Nochevieja, parcial solo miércoles / salteados / desordenado, recarga con `?week=`, inválidas y antiguas, anterior/siguiente/hoy con cambio de año, firma |
 | Comprobaciones | lint, typecheck, test 123/123, build, test:db 324/324 (también tras `db:reset` + `db:seed`). Manual en `npm run dev` (usuario ficticio A): `/week` → `?week=2026-W41`; siguiente ×2, «Volver a hoy», anterior y Atrás del navegador; carga directa de 2026-W53 → siguiente 2027-W01; `?week=2025-W53` y `/create-menu?week=2027-W53` → semana actual con aviso; `?isoYear=2025&isoWeek=40` → `?week=2025-W40`; importación de miércoles + sábado (respuesta de IA simulada en el navegador, sin clave de OpenAI en local) → vista previa «14 oct / 17 oct», BD `Miércoles/2` y `Sábado/5`, `/week` con tarjetas en sus días; Compra reutiliza la lista (0 llamadas al endpoint). 320/390 px sin desbordamiento ni recorte; sin errores en consola |
-| Pendiente | Revisión de Sergio, Preview de `audit-opt` y merge (sin migraciones) |
+| Producción | [PR #10](https://github.com/Sikorsky1/beCook/pull/10), merge commit `806738e` (2026-10-07 22:37 UTC), checks en verde; sin migraciones. UI validada por Sergio en la Preview. Despliegue be-cook `dpl_GXNNPUjw2ZR2VBK4rCCvytpPq3i8` READY en `www.becook.xyz` (anterior para rollback: `dpl_37MQ5zomRkhFD7rvEEnKPXPunZLm`); el bundle servido contiene el código de B3. `/week`, `/create-menu`, `/login` 200 · `POST /api/generate-menu` sin `Authorization` 401. `audit-opt` = `main` por fast-forward antes de este commit de documentación |
+
+## Iteración B4 — Escrituras de semana seguras ✅ local (2026-10-08, pendiente de remotos)
+| Elemento | Detalle |
+|---|---|
+| Defectos reproducidos | `scripts/week-write-db-tests.cjs` (en `test:db`), con la migración aplicada y el cliente anterior: **fallan los 6 escenarios** (1 de 1, 2 en 2 de 3 rondas —carrera—, 3 en 3 de 3, 4 en 3 de 3, 5 y 6): fallo a mitad deja la semana a medias; dos guardados paralelos mezclan o pisan; doble clic aplica dos veces; creación simultánea; editar un plato reescribe las 7 filas; una petición de generación ajena se guardaba **sin el vínculo** (reintento genérico de `insertWeekRow`) |
+| Migración `20261008090000_week_transactional_writes` | ✅ local. Aditiva: `weeks.version` (bigint, trigger `set_weeks_version` en INSERT/UPDATE), `weeks.request_keys` (≤ 20), `UNIQUE (week_id, position)`, `apply_week` y `update_week_slot` `SECURITY INVOKER`, solo `authenticated`. Resultado `applied | duplicate | conflict`. El reemplazo **conserva `weeks.title`** (la app no lo muestra ni lo escribe; antes se ponía `''`). Expectativas en `supabase/expectations/` (sin `replaces`; `supersedes` documenta la ruta de cliente sustituida) |
+| Cliente | `saveWeekToSupabase` (select → update → DELETE → INSERT) y su reintento sin vínculo eliminados; `markMenuGenerationRequestApplied` eliminado (lo hace `apply_week` en la misma transacción). Guardado completo vía `apply_week`, edición de plato vía `update_week_slot` (`saveWeekSlot`). Versión de semana = `weeks.version`, comparada **dentro** de la transacción (sin lectura previa); cachés anteriores con `updated_at` → versión desconocida (gana el remoto). Duplicado → se cachea lo que tiene la cuenta |
+| «Usar este menú» | Deshabilitado mientras guarda; clave estable por intento (mismo menú y semana, también al reintentar tras fallo de red); lee la semana remota sin reenviar pendientes (un pendiente rechazado ya no bloquea aplicar un menú) y guarda sobre esa versión; `overwrite` solo tras «Ya hay menú… ¿reemplazarlo?»; sin confirmación, si otro dispositivo crea la semana → conflicto. Mensajes para aplicado / ya aplicado / conflicto / sin conexión. La compra solo se genera tras un guardado correcto (`src/lib/applyWeek.ts`) |
+| Despliegue | Compatible: con la migración aplicada, el cliente de `main` (806738e, copia congelada en `tests/fixtures/`) sigue creando y reemplazando semanas; sus escrituras suben la versión y una pestaña nueva con versión anterior recibe conflicto (escenario 7 de `test:db`). Orden: migración → código |
+| Política | `docs/development/data-sync.md` actualizado: gana el remoto, versión `weeks.version`, `overwrite` solo tras confirmar, sección «Escrituras de semana (B4)» |
+| Tests | `tests/week-writes.test.cjs` (12): mapeo de resultados, versiones, días por nombre, clave por intento, mensajes, conflicto, duplicado, error sin reintento, edición por comida, pendientes y pendiente atascado. `test:db` +14 (6 escenarios, 3 rondas en los concurrentes, + 2 de despliegue) |
+| Comprobaciones | lint, typecheck, test 135/135, build, test:db 338/338 (tras `db:reset` + `db:seed`). Manual en `npm run dev` (usuario ficticio A, importación simulada en el navegador): aplicar en semana vacía (W45, sin pregunta, versión 1, una clave) y reemplazar (W44, una sola confirmación) con **doble clic real** → botón deshabilitado, una sola aplicación; editar un plato → solo esa comida, mismas filas; dos pestañas (comparten almacenamiento: la segunda edición se guarda sin pisar la primera); cambio de «otro dispositivo» por SQL → conflicto, nada escrito y aviso con la versión de la cuenta |
+| Observaciones | Un pendiente que el servidor rechaza siempre queda `pending` hasta la siguiente carga (resultados explícitos y reintento: B5). Tras editar un plato, la caché guarda la copia de la pestaña con la versión nueva hasta la siguiente revalidación. El script manual desactivado `scripts/test-save-week.ts` se eliminó (usaba la ruta borrada) |
+| Pendiente | Migración en becook-preview y validación en la Preview (Sergio); producción con OK explícito y backup. No aplicada en ningún remoto; sin merge a `main` |
 
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
@@ -130,8 +144,8 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | 06 Datos locales por identidad | B1 | ✅ | En producción desde 2026-10-07 (PR #8): claves con ámbito, identidad antes que datos; ver B1 |
 | 07 Fuente de verdad y sincronización | B1 | ✅ | En producción desde 2026-10-07 (PR #8): remoto canónico, política en `docs/development/data-sync.md` |
 | 08 Contrato perfil ↔ BD | B2 | ✅ | En producción desde 2026-10-07 (PR #9): días 0–7, `goal` legacy derivado de `goals`, `disliked_foods` como texto; ver B2 |
-| 09 Calendario ISO | B3 | 🟡 | Código listo en `audit-opt` (2026-10-08): URL `?week=`, fechas por nombre de día, semana 53 rechazada; falta Preview y merge |
-| 10 Escrituras de semana seguras | B4 | ⏳ | |
+| 09 Calendario ISO | B3 | ✅ | En producción desde 2026-10-08 (PR #10): URL `?week=`, fechas por nombre de día, semana 53 rechazada; ver B3 |
+| 10 Escrituras de semana seguras | B4 | 🟡 | Local completo (2026-10-08): `apply_week`/`update_week_slot`, versión e idempotencia; falta preview y producción; ver B4 |
 | 11 Aplicar menú ≠ generar compra | B5 | ⏳ | |
 | 12 Compra ligada a su semana | B6 | ⏳ | |
 | 13 Despensa remota segura | B7 | ⏳ | |
@@ -169,6 +183,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | enforce_reference_ownership | ✅ | ✅ 20260924112917 | ✅ 20261005220924 |
 | ai_usage_quotas | ✅ | ✅ 20261006115739 | ✅ 20261006171007 |
 | profiles_training_days_0_7 | ✅ | ✅ 20261007122056 | ✅ 20261007143519 |
+| week_transactional_writes | ✅ | ⏳ | ⏳ |
 
 ## Decisiones
 | # | Decisión | Fecha |

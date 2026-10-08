@@ -130,10 +130,3 @@ export function markMenuGenerationRequestFailed(
       : {}),
   });
 }
-
-export function markMenuGenerationRequestApplied(id: string, weekId: string) {
-  return updateMenuGenerationRequest(id, {
-    status: "applied",
-    created_week_id: weekId,
-  });
-}

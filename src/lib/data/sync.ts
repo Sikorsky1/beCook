@@ -5,6 +5,8 @@
 //   If the remote changed meanwhile (another device), the remote wins and the pending change is dropped.
 // - A save is refused the same way when the remote changed since the cached version.
 // - Nothing is declared empty until the remote confirms it; a remote failure keeps the cache.
+// - A remote with `checksVersion` (the week, B4) compares the base version itself, atomically with
+//   the write, and throws RemoteConflictError instead of being checked by a separate read first.
 import {
   readEnvelope,
   removeScoped,
@@ -15,10 +17,24 @@ import {
 
 export type RemoteSnapshot<T> = { data: T | null; version: string | null };
 
+// baseVersion: the remote version the data was based on · overwrite: the user chose to replace it.
+export type PushContext = { baseVersion: string | null; overwrite: boolean };
+// duplicate: the same request had already been applied; nothing was written this time.
+export type PushResult = { version: string | null; duplicate?: boolean };
+
+export class RemoteConflictError extends Error {
+  constructor() {
+    super("The account copy changed since this copy was loaded.");
+    this.name = "RemoteConflictError";
+  }
+}
+
 export type EntityRemote<T> = {
   fetch: () => Promise<RemoteSnapshot<T>>;
   // Persists data and returns the new remote version.
-  push: (data: T) => Promise<string | null>;
+  push: (data: T, context: PushContext) => Promise<PushResult>;
+  // The remote checks context.baseVersion in the same transaction as the write.
+  checksVersion?: boolean;
 };
 
 export type LoadResult<T> = {
@@ -59,15 +75,27 @@ export async function loadEntity<T>(target: Target, remote: EntityRemote<T> | nu
   let discardedLocalChanges = false;
   if (cached?.pending) {
     if (snapshot.version === cached.remoteVersion) {
+      const offlineResult = { data: cached.data, source: "cache", offline: true, discardedLocalChanges: false, pending: true } as const;
       try {
-        const version = await remote.push(cached.data);
-        writeScoped(target.scope, target.entity, cached.data, { week: target.week, remoteVersion: version });
-        return { data: cached.data, source: "remote", offline: false, discardedLocalChanges: false, pending: false };
-      } catch {
-        return { data: cached.data, source: "cache", offline: true, discardedLocalChanges: false, pending: true };
+        const pushed = await remote.push(cached.data, { baseVersion: cached.remoteVersion, overwrite: false });
+        if (!pushed.duplicate) {
+          writeScoped(target.scope, target.entity, cached.data, { week: target.week, remoteVersion: pushed.version });
+          return { data: cached.data, source: "remote", offline: false, discardedLocalChanges: false, pending: false };
+        }
+      } catch (error) {
+        if (!(error instanceof RemoteConflictError)) return offlineResult;
+        // Changed elsewhere between the read and the write: the remote wins.
+        discardedLocalChanges = true;
       }
+      // Already applied, or overtaken: show what the account has now.
+      try {
+        snapshot = await remote.fetch();
+      } catch {
+        return offlineResult;
+      }
+    } else {
+      discardedLocalChanges = true;
     }
-    discardedLocalChanges = true;
   }
 
   if (snapshot.data === null) {
@@ -81,7 +109,8 @@ export async function loadEntity<T>(target: Target, remote: EntityRemote<T> | nu
 
 export type SaveResult<T> =
   | { status: "local" }
-  | { status: "synced" }
+  // duplicate: this same request had already been applied (double click, retried request).
+  | { status: "synced"; duplicate?: boolean }
   | { status: "pending" }
   // The account changed elsewhere since this copy was loaded: the remote copy is now cached.
   | { status: "conflict"; remoteData: T | null };
@@ -96,11 +125,12 @@ function queueKey({ scope, entity, week }: Target) {
 }
 
 // `overwrite`: the user explicitly chose to replace the account copy (e.g. "replace this week?").
+// `baseVersion`: the remote version the user saw, when read just before saving (else the cache's).
 export async function saveEntity<T>(
   target: Target,
   data: T,
   remote: EntityRemote<T> | null,
-  { overwrite = false }: { overwrite?: boolean } = {},
+  { overwrite = false, baseVersion: explicitBase }: { overwrite?: boolean; baseVersion?: string | null } = {},
 ): Promise<SaveResult<T>> {
   if (target.scope === "guest" || !remote) {
     writeScoped(target.scope, target.entity, data, { week: target.week });
@@ -114,29 +144,55 @@ export async function saveEntity<T>(
   const before = readEnvelope<T>(target.scope, target.entity, target.week);
   writeScoped(target.scope, target.entity, data, {
     week: target.week,
-    remoteVersion: before?.remoteVersion ?? null,
+    remoteVersion: explicitBase !== undefined ? explicitBase : (before?.remoteVersion ?? null),
     pending: true,
   });
+
+  const adoptRemote = (snapshot: RemoteSnapshot<T>): SaveResult<T> => {
+    if (snapshot.data === null) removeScoped(target.scope, target.entity, target.week);
+    else writeScoped(target.scope, target.entity, snapshot.data, { week: target.week, remoteVersion: snapshot.version });
+    return { status: "conflict", remoteData: snapshot.data };
+  };
 
   const run = async (): Promise<SaveResult<T>> => {
     if (latestSeq.get(key) !== seq) return { status: "synced" };
     const baseVersion = readEnvelope<T>(target.scope, target.entity, target.week)?.remoteVersion ?? null;
     try {
-      const snapshot = overwrite ? null : await remote.fetch();
-      if (snapshot && snapshot.version !== baseVersion && snapshot.data !== null) {
-        writeScoped(target.scope, target.entity, snapshot.data, { week: target.week, remoteVersion: snapshot.version });
-        return { status: "conflict", remoteData: snapshot.data };
+      if (!remote.checksVersion && !overwrite) {
+        const snapshot = await remote.fetch();
+        if (snapshot.version !== baseVersion && snapshot.data !== null) return adoptRemote(snapshot);
       }
-      const version = await remote.push(data);
+      let pushed: PushResult;
+      try {
+        pushed = await remote.push(data, { baseVersion, overwrite });
+      } catch (error) {
+        if (!(error instanceof RemoteConflictError)) throw error;
+        try {
+          return adoptRemote(await remote.fetch());
+        } catch {
+          // The conflict is certain; the stale pending copy is discarded on the next load.
+          return { status: "conflict", remoteData: null };
+        }
+      }
       const isLatest = latestSeq.get(key) === seq;
+      if (pushed.duplicate && isLatest) {
+        // Applied by an earlier identical request: cache what the account has now.
+        const snapshot = await remote.fetch().catch(() => null);
+        if (snapshot) {
+          if (snapshot.data === null) removeScoped(target.scope, target.entity, target.week);
+          else writeScoped(target.scope, target.entity, snapshot.data, { week: target.week, remoteVersion: snapshot.version });
+          return { status: "synced", duplicate: true };
+        }
+      }
       const current = readEnvelope<T>(target.scope, target.entity, target.week);
       writeScoped(target.scope, target.entity, isLatest ? data : (current?.data ?? data), {
         week: target.week,
-        remoteVersion: version,
+        remoteVersion: pushed.version,
         pending: !isLatest,
       });
-      return { status: "synced" };
-    } catch {
+      return pushed.duplicate ? { status: "synced", duplicate: true } : { status: "synced" };
+    } catch (error: unknown) {
+      console.warn(`No se pudo guardar ${target.entity} en la cuenta; queda pendiente:`, error instanceof Error ? error.message : error);
       return { status: "pending" };
     }
   };

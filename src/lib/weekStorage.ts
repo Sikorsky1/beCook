@@ -20,7 +20,7 @@ export function withWeekDates(weekDays: WeekDay[], isoWeek: IsoWeek) {
     }));
 }
 
-function mealSlotToSupabase(slot: MealSlot) {
+export function mealSlotToSupabase(slot: MealSlot) {
   if (slot === "LIBRE") {
     return {
       status: "free" as const,

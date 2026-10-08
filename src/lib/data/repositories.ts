@@ -7,9 +7,11 @@ import type { GeneratedShoppingListResponse } from "@/lib/shoppingList";
 import {
   loadEntity,
   readCached,
+  RemoteConflictError,
   saveEntity,
   type EntityRemote,
   type LoadResult,
+  type PushResult,
   type SaveResult,
 } from "@/lib/data/sync";
 import {
@@ -19,11 +21,32 @@ import {
   type StorageScope,
 } from "@/lib/storage/scoped-storage";
 import type { UserProfile } from "@/lib/supabase/profiles";
-import { supabaseWeekToWeekDays, weekDaysToSupabaseWeek } from "@/lib/weekStorage";
+import type { MealKind, WeekWriteResult } from "@/lib/supabase/weeks";
+import { mealSlotToSupabase, supabaseWeekToWeekDays, weekDaysToSupabaseWeek } from "@/lib/weekStorage";
 
 export type DataIdentity = { scope: StorageScope; userId: string | null };
 
-export type WeekPushOptions = { generationRequestId?: string | null };
+export type WeekSlot = { day: string; meal: MealKind };
+
+// requestKey: one per user attempt (e.g. one click on «Usar este menú»), reused if that attempt is
+// sent again, so the database applies it once. slot: only that meal changed (dish edit).
+export type WeekPushOptions = { generationRequestId?: string | null; requestKey?: string; slot?: WeekSlot };
+
+export function newRequestKey() {
+  return crypto.randomUUID();
+}
+
+// Week versions are weeks.version as a string. A cache written before B4 holds an updated_at
+// timestamp instead: it can never match, so the database answers with a conflict (remote wins).
+export function toWeekVersion(version: string | null): number | null {
+  if (version === null) return null;
+  return /^\d+$/.test(version) ? Number(version) : -1;
+}
+
+export function weekWriteToPush(result: WeekWriteResult): PushResult {
+  if (result.status === "conflict") throw new RemoteConflictError();
+  return { version: String(result.version), duplicate: result.status === "duplicate" };
+}
 
 export type RemoteShoppingList = {
   items: GeneratedShoppingListResponse["items"];
@@ -52,7 +75,7 @@ const supabaseRemotes: Remotes = {
       async push(profile) {
         const { saveProfileToSupabase } = await import("@/lib/supabase/profiles");
         await saveProfileToSupabase(profile, { userId });
-        return (await fetch()).version;
+        return { version: (await fetch()).version };
       },
     };
   },
@@ -64,35 +87,40 @@ const supabaseRemotes: Remotes = {
     const fetch = async () => {
       const remote = await read();
       const days = remote ? supabaseWeekToWeekDays(remote, isoWeek) : [];
-      return { data: days.length ? days : null, version: remote?.updatedAt ?? null };
+      const version = remote?.version ?? null;
+      return { data: days.length ? days : null, version: version === null ? null : String(version) };
     };
     return {
       fetch,
+      // apply_week / update_week_slot compare the version in the same transaction as the write.
+      checksVersion: true,
       weekId: async () => (await read())?.id ?? null,
-      async push(weekDays) {
-        const { saveWeekToSupabase } = await import("@/lib/supabase/weeks");
-        const weekId = await saveWeekToSupabase(
-          { ...weekDaysToSupabaseWeek(weekDays), isoYear: isoWeek.isoYear, isoWeek: isoWeek.isoWeek },
-          {
-            userId,
+      async push(weekDays, { baseVersion, overwrite }) {
+        const { applyWeekInSupabase, updateWeekSlotInSupabase } = await import("@/lib/supabase/weeks");
+        const expectedVersion = toWeekVersion(baseVersion);
+        const requestKey = options.requestKey ?? newRequestKey();
+        const slotDay = options.slot ? weekDays.find((day) => day.day === options.slot?.day) : undefined;
+        // A dish edit touches only its slot; without a known remote week it is a whole-week write.
+        if (options.slot && slotDay && expectedVersion !== null && !overwrite) {
+          return weekWriteToPush(await updateWeekSlotInSupabase({
             isoYear: isoWeek.isoYear,
             isoWeek: isoWeek.isoWeek,
-            replaceExisting: true,
-            generationRequestId: options.generationRequestId ?? undefined,
-          },
-        );
-        if (options.generationRequestId) {
-          try {
-            const { markMenuGenerationRequestApplied } = await import("@/lib/supabase/menu-generation-requests");
-            await markMenuGenerationRequestApplied(options.generationRequestId, weekId);
-          } catch (error: unknown) {
-            console.warn(
-              "No se pudo marcar el request de generación como aplicado:",
-              error instanceof Error ? error.message : error,
-            );
-          }
+            dayName: slotDay.day,
+            meal: options.slot.meal,
+            slot: mealSlotToSupabase(slotDay[options.slot.meal]),
+            expectedVersion,
+            requestKey,
+          }));
         }
-        return (await fetch()).version;
+        return weekWriteToPush(await applyWeekInSupabase({
+          isoYear: isoWeek.isoYear,
+          isoWeek: isoWeek.isoWeek,
+          week: weekDaysToSupabaseWeek(weekDays),
+          requestKey,
+          expectedVersion,
+          overwrite,
+          generationRequestId: options.generationRequestId,
+        }));
       },
     };
   },
@@ -111,7 +139,7 @@ const supabaseRemotes: Remotes = {
         const { replacePantryItemsInSupabase } = await import("@/lib/supabase/pantry");
         const ownProfile = await getProfileForUserFromSupabase(userId);
         await replacePantryItemsInSupabase(items, ownProfile?.profile.id, userId);
-        return (await fetch()).version;
+        return { version: (await fetch()).version };
       },
     };
   },
@@ -170,13 +198,33 @@ export function saveWeek(
   identity: DataIdentity,
   isoWeek: IsoWeek,
   weekDays: WeekDay[],
-  { overwrite = false, ...options }: WeekPushOptions & { overwrite?: boolean } = {},
+  { overwrite = false, baseVersion, ...options }: WeekPushOptions & { overwrite?: boolean; baseVersion?: string | null } = {},
 ): Promise<SaveResult<WeekDay[]>> {
   return saveEntity(
     { scope: identity.scope, entity: "week", week: weekKey(isoWeek) },
     weekDays,
     identity.userId ? remotes.week(identity.userId, isoWeek, options) : null,
-    { overwrite },
+    { overwrite, baseVersion },
+  );
+}
+
+// The account week as it is now, without resending pending changes (they are about to be replaced).
+// Throws when the account cannot be reached.
+export async function readRemoteWeek(identity: DataIdentity, isoWeek: IsoWeek) {
+  return identity.userId ? remotes.week(identity.userId, isoWeek).fetch() : { data: null, version: null };
+}
+
+// Dish edit: only that meal is written, if the account week is still the one this copy is based on.
+export function saveWeekSlot(
+  identity: DataIdentity,
+  isoWeek: IsoWeek,
+  weekDays: WeekDay[],
+  slot: WeekSlot,
+): Promise<SaveResult<WeekDay[]>> {
+  return saveEntity(
+    { scope: identity.scope, entity: "week", week: weekKey(isoWeek) },
+    weekDays,
+    identity.userId ? remotes.week(identity.userId, isoWeek, { slot }) : null,
   );
 }
 

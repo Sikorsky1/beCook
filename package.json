@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "node scripts/local-supabase.cjs dev",
     "test:supabase": "node --require ./scripts/register-typescript.cjs scripts/test-supabase-week.ts",
-    "test:supabase:save-week": "node --require ./scripts/register-typescript.cjs scripts/test-save-week.ts",
     "test:supabase:read-latest-week": "node --require ./scripts/register-typescript.cjs scripts/test-read-latest-week.ts",
     "build": "next build",
     "start": "next start",

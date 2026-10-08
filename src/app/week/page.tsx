@@ -21,7 +21,7 @@ import {
   loadWeek,
   readCachedWeek,
   readSelectedWeek,
-  saveWeek,
+  saveWeekSlot,
   writeSelectedWeek,
 } from "@/lib/data/repositories";
 import { pageShellClass } from "@/lib/ui";
@@ -204,9 +204,12 @@ function WeekPageContent() {
     setWeekDays(updatedWeekDays);
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
     const weekToSave = selectedIsoWeek;
-    void saveWeek(dataIdentity, weekToSave, updatedWeekDays).then((result) => {
+    // Only this meal is written, and only if the account week has not changed meanwhile.
+    void saveWeekSlot(dataIdentity, weekToSave, updatedWeekDays, { day: dayName, meal: mealKey }).then(async (result) => {
       if (result.status === "conflict") {
-        setWeekDays(result.remoteData?.length ? withWeekDates(result.remoteData, weekToSave) : null);
+        // The account wins: show its week (read again if the conflict response could not include it).
+        const remoteDays = result.remoteData ?? (await loadWeek(dataIdentity, weekToSave)).data;
+        setWeekDays(remoteDays?.length ? withWeekDates(remoteDays, weekToSave) : null);
         setSyncState({ conflict: true });
       } else {
         setSyncState(result.status === "pending" ? { pending: true } : {});

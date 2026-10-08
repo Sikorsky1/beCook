@@ -18,7 +18,9 @@ export type SupabaseWeek = {
   title?: string;
   isoYear?: number | null;
   isoWeek?: number | null;
-  // Remote updated_at, used as the version for local cache revalidation.
+  // Remote weeks.version: the version for cache revalidation and conflict checks (B4).
+  version?: number | null;
+  // Remote updated_at: when the week last changed (shopping-list freshness).
   updatedAt?: string | null;
   days: SupabaseWeekDay[];
 };
@@ -28,6 +30,7 @@ type WeekRow = {
   title: string | null;
   iso_year?: number | null;
   iso_week?: number | null;
+  version?: number | null;
   updated_at?: string | null;
 };
 
@@ -40,14 +43,6 @@ type WeekDayRow = {
   dinner_dish_name: string | null;
 };
 
-type SaveWeekToSupabaseOptions = {
-  generationRequestId?: string;
-  userId?: string | null;
-  isoYear?: number | null;
-  isoWeek?: number | null;
-  replaceExisting?: boolean;
-};
-
 const orderedDayNames = [
   "Lunes",
   "Martes",
@@ -57,12 +52,6 @@ const orderedDayNames = [
   "Sábado",
   "Domingo",
 ];
-
-function getDayPosition(dayName: string, fallbackPosition: number) {
-  const position = orderedDayNames.indexOf(dayName);
-
-  return position === -1 ? fallbackPosition : position;
-}
 
 function getDishNameForStorage(slot: SupabaseMealSlot) {
   return slot.status === "free" ? "" : slot.dishName.trim();
@@ -89,152 +78,155 @@ function buildMealSlot(
   };
 }
 
-async function insertWeekRow(
-  weekRow: Record<string, string | number | null>,
-  baseWeekRow: Record<string, string | number | null>,
-  generationRequestId?: string,
-) {
-  let weekInsert = await supabase!
-    .from("weeks")
-    .insert(weekRow)
-    .select("id")
-    .single();
+export type MealKind = "lunch" | "dinner";
 
-  if (weekInsert.error && generationRequestId) {
-    console.warn(
-      "No se pudo vincular la semana al request de generación en weeks.generation_request_id; se guardará la semana sin ese vínculo:",
-      weekInsert.error.message,
-    );
+// Result of apply_week / update_week_slot. Versions are weeks.version (integer, bumped by every
+// write of the week, whatever the write path); the database compares them atomically.
+//   applied: written · duplicate: this request key was already applied, nothing changed ·
+//   conflict: the week was not at the expected version (or the day/week is gone), nothing changed.
+export type WeekWriteResult = {
+  status: "applied" | "duplicate" | "conflict";
+  weekId: string | null;
+  version: number | null;
+  updatedAt: string | null;
+};
 
-    weekInsert = await supabase!
-      .from("weeks")
-      .insert(baseWeekRow)
-      .select("id")
-      .single();
+export function parseWeekWriteResult(value: unknown): WeekWriteResult {
+  const row = value as Record<string, unknown> | null;
+  const status = row?.status;
+
+  if (status !== "applied" && status !== "duplicate" && status !== "conflict") {
+    throw new Error(`Unexpected week write result: ${JSON.stringify(status ?? null)}.`);
   }
 
-  if (weekInsert.error) {
-    throw new Error(`Could not save week: ${weekInsert.error.message}`);
+  const version = row?.version;
+  if (version !== null && version !== undefined && !Number.isSafeInteger(version)) {
+    throw new Error("Unexpected week write result: invalid version.");
+  }
+  if (status !== "conflict" && (typeof row?.week_id !== "string" || typeof version !== "number")) {
+    throw new Error("Unexpected week write result: missing week or version.");
   }
 
-  if (!weekInsert.data?.id) {
-    throw new Error("Could not save week: Supabase did not return a week id.");
-  }
-
-  return weekInsert.data.id as string;
+  return {
+    status,
+    weekId: typeof row?.week_id === "string" ? row.week_id : null,
+    version: typeof version === "number" ? version : null,
+    updatedAt: typeof row?.updated_at === "string" ? row.updated_at : null,
+  };
 }
 
-async function replaceWeekDays(weekId: string, week: SupabaseWeek) {
-  const { error: deleteDaysError } = await supabase!
-    .from("week_days")
-    .delete()
-    .eq("week_id", weekId);
+// Days for apply_week: position comes from the day name (never the index), Monday→Sunday.
+export function weekToApplyWeekDays(week: SupabaseWeek) {
+  return week.days
+    .map((day) => {
+      const position = orderedDayNames.indexOf(day.dayName);
 
-  if (deleteDaysError) {
-    throw new Error(`Could not replace week days: ${deleteDaysError.message}`);
-  }
+      if (position === -1) {
+        throw new Error(`Cannot save an unknown day: ${day.dayName}.`);
+      }
 
-  await insertWeekDays(weekId, week);
-}
-
-async function insertWeekDays(weekId: string, week: SupabaseWeek) {
-  const weekDays = week.days
-    .map((day, index) => ({
-      week_id: weekId,
-      day_name: day.dayName,
-      position: getDayPosition(day.dayName, index),
-      lunch_status: day.lunch.status,
-      lunch_dish_name: getDishNameForStorage(day.lunch),
-      dinner_status: day.dinner.status,
-      dinner_dish_name: getDishNameForStorage(day.dinner),
-    }))
+      return {
+        position,
+        day_name: day.dayName,
+        lunch_status: day.lunch.status,
+        lunch_dish_name: getDishNameForStorage(day.lunch),
+        dinner_status: day.dinner.status,
+        dinner_dish_name: getDishNameForStorage(day.dinner),
+      };
+    })
     .sort((a, b) => a.position - b.position);
-
-  const { error: daysError } = await supabase!
-    .from("week_days")
-    .insert(weekDays);
-
-  if (daysError) {
-    throw new Error(`Could not save week days: ${daysError.message}`);
-  }
 }
 
-export async function saveWeekToSupabase(
-  week: SupabaseWeek,
-  options: SaveWeekToSupabaseOptions = {},
-) {
+function requireSupabase() {
   if (!supabase) {
     throw new Error(
       "Supabase client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.",
     );
   }
 
+  return supabase;
+}
+
+// Applies or replaces the caller's whole calendar week in one transaction (apply_week).
+// Without `overwrite`, it only writes if the week is still at `expectedVersion` (null = no week).
+export async function applyWeekInSupabase({
+  isoYear,
+  isoWeek,
+  week,
+  requestKey,
+  expectedVersion,
+  overwrite = false,
+  generationRequestId,
+}: {
+  isoYear: number;
+  isoWeek: number;
+  week: SupabaseWeek;
+  requestKey: string;
+  expectedVersion: number | null;
+  overwrite?: boolean;
+  generationRequestId?: string | null;
+}) {
   if (!Array.isArray(week.days) || week.days.length === 0) {
     throw new Error("Cannot save a week without days.");
   }
 
-  const baseWeekRow = {
-    title: week.title ?? "",
-    user_id: options.userId ?? null,
-    iso_year: options.isoYear ?? week.isoYear ?? null,
-    iso_week: options.isoWeek ?? week.isoWeek ?? null,
-  };
-  console.log("Saving week with user:", options.userId ?? null);
+  const { data, error } = await requireSupabase().rpc("apply_week", {
+    p_iso_year: isoYear,
+    p_iso_week: isoWeek,
+    p_days: weekToApplyWeekDays(week),
+    p_request_key: requestKey,
+    p_expected_version: expectedVersion,
+    p_overwrite: overwrite,
+    p_generation_request_id: generationRequestId ?? null,
+  });
 
-  const weekRow = options.generationRequestId
-    ? {
-        ...baseWeekRow,
-        generation_request_id: options.generationRequestId,
-      }
-    : baseWeekRow;
-  const hasCalendarIdentity =
-    Boolean(options.userId) &&
-    Number.isInteger(baseWeekRow.iso_year) &&
-    Number.isInteger(baseWeekRow.iso_week);
-
-  if (hasCalendarIdentity) {
-    const { data: existingWeek, error: existingWeekError } = await supabase
-      .from("weeks")
-      .select("id")
-      .eq("user_id", options.userId)
-      .eq("iso_year", baseWeekRow.iso_year)
-      .eq("iso_week", baseWeekRow.iso_week)
-      .maybeSingle<Pick<WeekRow, "id">>();
-
-    if (existingWeekError) {
-      throw new Error(
-        `Could not check existing calendar week: ${existingWeekError.message}`,
-      );
-    }
-
-    if (existingWeek?.id) {
-      if (!options.replaceExisting) {
-        throw new Error("A week already exists for this calendar week.");
-      }
-
-      const { error: updateWeekError } = await supabase
-        .from("weeks")
-        .update(weekRow)
-        .eq("id", existingWeek.id);
-
-      if (updateWeekError) {
-        throw new Error(`Could not update week: ${updateWeekError.message}`);
-      }
-
-      await replaceWeekDays(existingWeek.id, week);
-
-      return existingWeek.id;
-    }
+  if (error) {
+    throw new Error(`Could not save week: ${error.message}`);
   }
 
-  const weekId = await insertWeekRow(
-    weekRow,
-    baseWeekRow,
-    options.generationRequestId,
-  );
-  await insertWeekDays(weekId, week);
+  return parseWeekWriteResult(data);
+}
 
-  return weekId;
+// Updates one meal of one existing day (update_week_slot), only at `expectedVersion`.
+export async function updateWeekSlotInSupabase({
+  isoYear,
+  isoWeek,
+  dayName,
+  meal,
+  slot,
+  expectedVersion,
+  requestKey,
+}: {
+  isoYear: number;
+  isoWeek: number;
+  dayName: string;
+  meal: MealKind;
+  slot: SupabaseMealSlot;
+  expectedVersion: number;
+  requestKey: string;
+}) {
+  const position = orderedDayNames.indexOf(dayName);
+
+  if (position === -1) {
+    throw new Error(`Cannot save an unknown day: ${dayName}.`);
+  }
+
+  const { data, error } = await requireSupabase().rpc("update_week_slot", {
+    p_iso_year: isoYear,
+    p_iso_week: isoWeek,
+    p_position: position,
+    p_meal: meal,
+    p_status: slot.status,
+    p_dish_name: getDishNameForStorage(slot),
+    p_expected_version: expectedVersion,
+    p_request_key: requestKey,
+  });
+
+  if (error) {
+    throw new Error(`Could not save meal: ${error.message}`);
+  }
+
+  return parseWeekWriteResult(data);
 }
 
 async function readWeekDays(weekId: string) {
@@ -282,7 +274,7 @@ export async function getWeekFromSupabaseByIsoWeek({
 
   let query = supabase
     .from("weeks")
-    .select("id,title,iso_year,iso_week,updated_at")
+    .select("id,title,iso_year,iso_week,version,updated_at")
     .eq("iso_year", isoYear)
     .eq("iso_week", isoWeek)
     .order("created_at", { ascending: false })
@@ -307,6 +299,7 @@ export async function getWeekFromSupabaseByIsoWeek({
     title: week.title ?? "",
     isoYear: week.iso_year ?? null,
     isoWeek: week.iso_week ?? null,
+    version: week.version ?? null,
     updatedAt: week.updated_at ?? null,
     days: await readWeekDays(week.id),
   };
