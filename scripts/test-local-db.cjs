@@ -7,6 +7,7 @@ const { runOwnershipTests } = require("./reference-ownership-tests.cjs");
 const { runAiUsageTests } = require("./ai-usage-db-tests.cjs");
 const { runSessionTests } = require("./session-db-tests.cjs");
 const { runProfileContractTests } = require("./profile-db-tests.cjs");
+const { runWeekWriteTests } = require("./week-write-db-tests.cjs");
 const { createClient } = require("@supabase/supabase-js");
 const id = (prefix, n) => prefix + "0000000-0000-4000-8000-00000000000" + n;
 let failures = 0, passed = 0;
@@ -152,6 +153,8 @@ async function main() {
   await runSessionTests({check, id, supabase});
   // B2: profile contract (save → reload → read on another device) with the application adapter.
   await runProfileContractTests({check, sql, id, api, createClient, supabase});
+  // B4: transactional week writes, concurrency, idempotency and slot edits through the application.
+  await runWeekWriteTests({check, sql, id, supabase});
   console.log(passed + " passed; " + failures + " failed. No production connection; SQL probes rolled back.");
   process.exitCode = failures ? 1 : 0;
 }

@@ -12,6 +12,12 @@ import { IconButton } from "@/components/ui/IconButton";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { TextArea } from "@/components/ui/TextArea";
 import { isAiLoginRequiredError, postAi } from "@/lib/ai-client";
+import {
+  applyWeekMessages,
+  applyWeekOutcome,
+  resolveApplyWeekAttempt,
+  type ApplyWeekAttempt,
+} from "@/lib/applyWeek";
 import { consumeCreateMenuDraft, saveCreateMenuDraft } from "@/lib/createMenuDraft";
 import {
   importedMenuToWeekDays,
@@ -22,6 +28,7 @@ import {
 import {
   formatIsoWeekTitle,
   getCurrentIsoWeek,
+  getIsoWeekStorageId,
   getMadridToday,
   isSameIsoWeek,
   type IsoWeek,
@@ -30,9 +37,11 @@ import {
   clearShoppingCache,
   getRemoteWeekId,
   loadPantry,
+  newRequestKey,
   loadProfile,
   readCachedPantry,
   readCachedProfile,
+  readRemoteWeek,
   readSelectedWeek,
   saveWeek,
   writeSelectedWeek,
@@ -149,6 +158,7 @@ export default function CreateMenuPage() {
   const [useWeekStatus, setUseWeekStatus] = useState<UseWeekStatus>("idle");
   const [useWeekMessage, setUseWeekMessage] = useState("");
   const isApplyingWeekRef = useRef(false);
+  const applyAttemptRef = useRef<ApplyWeekAttempt<ImportedMenuResponse> | null>(null);
   const navigationTimeoutRef = useRef<number | null>(null);
   const [targetIsoWeek, setTargetIsoWeek] = useState<IsoWeek | null>(null);
   // Each proposed or imported day is dated by its name inside the target week.
@@ -497,6 +507,7 @@ export default function CreateMenuPage() {
 
   const handleUseWeek = async () => {
     if (
+      !importedMenu ||
       !importedWeekDays ||
       isApplyingWeekRef.current ||
       useWeekStatus === "applying" ||
@@ -511,47 +522,77 @@ export default function CreateMenuPage() {
 
     const weekForUse = targetIsoWeek ?? getCurrentIsoWeek();
     const weekHref = buildWeekHref("/week", weekForUse);
-
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    // Same menu and week → same attempt and request key, so a resend is applied only once.
+    const attempt = resolveApplyWeekAttempt(
+      applyAttemptRef.current,
+      importedMenu,
+      getIsoWeekStorageId(weekForUse),
+      newRequestKey,
+    );
+    applyAttemptRef.current = attempt;
+    const fail = (message: string) => {
+      isApplyingWeekRef.current = false;
+      setUseWeekStatus("error");
+      setUseWeekMessage(message);
+    };
 
     try {
-      const { getWeekFromSupabaseByIsoWeek } = await import(
-        "@/lib/supabase/weeks"
-      );
+      if (dataIdentity.userId && attempt.overwrite === null) {
+        // The account week as it is now: the save is checked against this version.
+        let current: Awaited<ReturnType<typeof readRemoteWeek>>;
 
-      if (dataIdentity.userId) {
-        const existingWeek = await getWeekFromSupabaseByIsoWeek({
-          isoYear: weekForUse.isoYear,
-          isoWeek: weekForUse.isoWeek,
-          userId: dataIdentity.userId,
-        });
+        try {
+          current = await readRemoteWeek(dataIdentity, weekForUse);
+        } catch {
+          fail(applyWeekMessages.unchecked);
+          return;
+        }
 
-        if (existingWeek) {
+        attempt.baseVersion = current.version;
+
+        if (current.data?.length) {
           const shouldReplace = window.confirm(
             "Ya hay menú para esta semana. ¿Quieres reemplazarlo?",
           );
 
           if (!shouldReplace) {
+            applyAttemptRef.current = null;
             isApplyingWeekRef.current = false;
             setUseWeekStatus("idle");
             return;
           }
         }
+
+        attempt.overwrite = Boolean(current.data?.length);
       }
 
-      console.log("Guardando semana importada:", importedWeekDays.length);
       writeSelectedWeek(dataIdentity, weekForUse);
-      clearShoppingCache(dataIdentity, weekForUse);
 
-      // The user already confirmed replacing any existing week for this date.
-      const weekIdPromise = saveWeek(dataIdentity, weekForUse, importedWeekDays, {
+      // Overwrite only after «reemplazar»; otherwise the database refuses it if another device
+      // saved this week since it was read (conflict).
+      const result = await saveWeek(dataIdentity, weekForUse, importedWeekDays, {
         generationRequestId,
-        overwrite: true,
-      }).then((result) =>
+        overwrite: attempt.overwrite === true,
+        requestKey: attempt.requestKey,
+        baseVersion: attempt.baseVersion,
+      });
+      const outcome = applyWeekOutcome(result);
+
+      if (outcome.attempt === "discard") {
+        applyAttemptRef.current = null;
+      }
+
+      if (outcome.status === "error") {
+        fail(outcome.message);
+        return;
+      }
+
+      clearShoppingCache(dataIdentity, weekForUse);
+      const weekId =
         result.status === "synced"
-          ? getRemoteWeekId(dataIdentity, weekForUse).catch(() => null)
-          : null,
-      );
+          ? await getRemoteWeekId(dataIdentity, weekForUse).catch(() => null)
+          : null;
       let generatedItems:
         | Awaited<ReturnType<typeof generateAndCacheShoppingListForWeek>>
         | null = null;
@@ -570,8 +611,6 @@ export default function CreateMenuPage() {
         );
       }
 
-      const weekId = await weekIdPromise;
-
       if (weekId && generatedItems) {
         try {
           await syncShoppingListToSupabase(generatedItems, [], weekId);
@@ -584,7 +623,7 @@ export default function CreateMenuPage() {
       }
 
       setUseWeekStatus("success");
-      setUseWeekMessage("Tu semana se ha actualizado correctamente.");
+      setUseWeekMessage(outcome.message);
       navigationTimeoutRef.current = window.setTimeout(() => {
         router.push(weekHref);
       }, useWeekSuccessDelayMs);
@@ -593,11 +632,7 @@ export default function CreateMenuPage() {
         "No se pudo aplicar el menú semanal:",
         error instanceof Error ? error.message : error,
       );
-      isApplyingWeekRef.current = false;
-      setUseWeekStatus("error");
-      setUseWeekMessage(
-        "No hemos podido aplicar el menú. Inténtalo de nuevo.",
-      );
+      fail("No hemos podido aplicar el menú. Inténtalo de nuevo.");
     }
   };
 

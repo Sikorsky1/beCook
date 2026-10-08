@@ -1,0 +1,97 @@
+{
+  "migration": "20261008090000_week_transactional_writes",
+  "replaces": {},
+  "supersedes": {
+    "schema": "Nothing: purely additive (no constraint, function or policy redefined).",
+    "client": [
+      "src/lib/supabase/weeks.ts saveWeekToSupabase: select → update weeks → DELETE week_days → INSERT week_days in separate requests (replaced by apply_week).",
+      "insertWeekRow retry that saved the week without generation_request_id when the link failed (now an error that rolls everything back).",
+      "markMenuGenerationRequestApplied after saving (apply_week marks the request in the same transaction).",
+      "Week version weeks.updated_at compared by a separate read before writing (now weeks.version compared inside apply_week / update_week_slot).",
+      "Dish edit rewriting the whole week (now update_week_slot, one meal of one day)."
+    ],
+    "rollout": "The previous client keeps working with this migration applied (scripts/week-write-db-tests.cjs, scenario 7)."
+  },
+  "columns": [
+    {
+      "table_name": "weeks",
+      "name": "version",
+      "type": "bigint",
+      "not_null": true,
+      "default_expr": "1"
+    },
+    {
+      "table_name": "weeks",
+      "name": "request_keys",
+      "type": "uuid[]",
+      "not_null": true,
+      "default_expr": "'{}'::uuid[]"
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "weeks_request_keys_max_chk",
+      "table_name": "weeks",
+      "definition": "CHECK ((cardinality(request_keys) <= 20))"
+    },
+    {
+      "conname": "week_days_week_id_position_key",
+      "table_name": "week_days",
+      "definition": "UNIQUE (week_id, \"position\")"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "week_days",
+      "indexname": "week_days_week_id_position_key",
+      "indexdef": "CREATE UNIQUE INDEX week_days_week_id_position_key ON public.week_days USING btree (week_id, \"position\")"
+    }
+  ],
+  "functions": [
+    {
+      "proname": "weeks_set_version",
+      "definition": "CREATE OR REPLACE FUNCTION public.weeks_set_version()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nBEGIN\n  IF TG_OP = 'INSERT' THEN\n    NEW.version := 1;\n  ELSE\n    NEW.version := OLD.version + 1;\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+    },
+    {
+      "proname": "apply_week",
+      "definition": "CREATE OR REPLACE FUNCTION public.apply_week(p_iso_year integer, p_iso_week integer, p_days jsonb, p_request_key uuid, p_expected_version bigint DEFAULT NULL::bigint, p_overwrite boolean DEFAULT false, p_generation_request_id uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_names constant text[] := ARRAY['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];\n  v_week public.weeks%ROWTYPE;\n  v_positions integer[];\n  v_count integer;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'apply_week: authentication required';\n  END IF;\n  IF p_request_key IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'apply_week: request key required';\n  END IF;\n  IF p_iso_year IS NULL OR p_iso_week IS NULL OR p_iso_year NOT BETWEEN 2000 AND 2100\n     OR p_iso_week < 1 OR p_iso_week > extract(week FROM make_date(p_iso_year, 12, 28)) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'apply_week: invalid ISO week';\n  END IF;\n  IF jsonb_typeof(p_days) IS DISTINCT FROM 'array' OR jsonb_array_length(p_days) NOT BETWEEN 1 AND 7 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'apply_week: 1 to 7 days required';\n  END IF;\n\n  SELECT count(*), array_agg(DISTINCT d.position) INTO v_count, v_positions\n  FROM jsonb_to_recordset(p_days) AS d(position integer, day_name text, lunch_status text,\n    lunch_dish_name text, dinner_status text, dinner_dish_name text)\n  WHERE d.position BETWEEN 0 AND 6\n    AND d.day_name = v_names[d.position + 1]\n    AND d.lunch_status IN ('planned', 'free') AND d.dinner_status IN ('planned', 'free')\n    AND char_length(coalesce(d.lunch_dish_name, '')) <= 200\n    AND char_length(coalesce(d.dinner_dish_name, '')) <= 200;\n  IF v_count <> jsonb_array_length(p_days) OR cardinality(v_positions) <> v_count THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'apply_week: invalid or repeated day';\n  END IF;\n\n  -- Create the week if missing; a concurrent creator waits here and then sees the committed row.\n  INSERT INTO public.weeks (user_id, iso_year, iso_week, title, generation_request_id, request_keys)\n  VALUES (v_user, p_iso_year, p_iso_week, '', p_generation_request_id, ARRAY[p_request_key])\n  ON CONFLICT (user_id, iso_year, iso_week)\n    WHERE user_id IS NOT NULL AND iso_year IS NOT NULL AND iso_week IS NOT NULL\n    DO NOTHING\n  RETURNING * INTO v_week;\n\n  IF NOT FOUND THEN\n    SELECT * INTO v_week FROM public.weeks\n    WHERE user_id = v_user AND iso_year = p_iso_year AND iso_week = p_iso_week\n    FOR UPDATE;\n    IF NOT FOUND THEN\n      RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'apply_week: week not accessible';\n    END IF;\n    IF p_request_key = ANY (v_week.request_keys) THEN\n      RETURN jsonb_build_object('status', 'duplicate', 'week_id', v_week.id,\n        'version', v_week.version, 'updated_at', v_week.updated_at);\n    END IF;\n    IF NOT p_overwrite AND v_week.version IS DISTINCT FROM p_expected_version THEN\n      RETURN jsonb_build_object('status', 'conflict', 'week_id', v_week.id,\n        'version', v_week.version, 'updated_at', v_week.updated_at);\n    END IF;\n    -- title is kept: the app never shows or sets it, and replacing the days must not lose it.\n    UPDATE public.weeks\n    SET generation_request_id = coalesce(p_generation_request_id, generation_request_id),\n        request_keys = (ARRAY[p_request_key] || request_keys)[1:20]\n    WHERE id = v_week.id\n    RETURNING * INTO v_week;\n  END IF;\n\n  INSERT INTO public.week_days (week_id, day_name, position, lunch_status, lunch_dish_name,\n    dinner_status, dinner_dish_name)\n  SELECT v_week.id, d.day_name, d.position, d.lunch_status,\n    CASE WHEN d.lunch_status = 'free' THEN '' ELSE coalesce(d.lunch_dish_name, '') END,\n    d.dinner_status,\n    CASE WHEN d.dinner_status = 'free' THEN '' ELSE coalesce(d.dinner_dish_name, '') END\n  FROM jsonb_to_recordset(p_days) AS d(position integer, day_name text, lunch_status text,\n    lunch_dish_name text, dinner_status text, dinner_dish_name text)\n  ON CONFLICT (week_id, position) DO UPDATE\n  SET day_name = EXCLUDED.day_name,\n      lunch_status = EXCLUDED.lunch_status, lunch_dish_name = EXCLUDED.lunch_dish_name,\n      dinner_status = EXCLUDED.dinner_status, dinner_dish_name = EXCLUDED.dinner_dish_name;\n\n  DELETE FROM public.week_days WHERE week_id = v_week.id AND position <> ALL (v_positions);\n\n  IF p_generation_request_id IS NOT NULL THEN\n    UPDATE public.menu_generation_requests\n    SET status = 'applied', created_week_id = v_week.id\n    WHERE id = p_generation_request_id AND user_id = v_user;\n    IF NOT FOUND THEN\n      RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'apply_week: generation request not found';\n    END IF;\n  END IF;\n\n  RETURN jsonb_build_object('status', 'applied', 'week_id', v_week.id,\n    'version', v_week.version, 'updated_at', v_week.updated_at);\nEND;\n$function$\n"
+    },
+    {
+      "proname": "update_week_slot",
+      "definition": "CREATE OR REPLACE FUNCTION public.update_week_slot(p_iso_year integer, p_iso_week integer, p_position integer, p_meal text, p_status text, p_dish_name text, p_expected_version bigint, p_request_key uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_week public.weeks%ROWTYPE;\n  v_dish text := CASE WHEN p_status = 'free' THEN '' ELSE coalesce(p_dish_name, '') END;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'update_week_slot: authentication required';\n  END IF;\n  IF p_request_key IS NULL OR p_expected_version IS NULL OR p_position NOT BETWEEN 0 AND 6\n     OR p_meal NOT IN ('lunch', 'dinner') OR p_status NOT IN ('planned', 'free')\n     OR char_length(v_dish) > 200 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'update_week_slot: invalid slot';\n  END IF;\n\n  SELECT * INTO v_week FROM public.weeks\n  WHERE user_id = v_user AND iso_year = p_iso_year AND iso_week = p_iso_week\n  FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'conflict', 'week_id', NULL, 'version', NULL, 'updated_at', NULL);\n  END IF;\n  IF p_request_key = ANY (v_week.request_keys) THEN\n    RETURN jsonb_build_object('status', 'duplicate', 'week_id', v_week.id,\n      'version', v_week.version, 'updated_at', v_week.updated_at);\n  END IF;\n  IF v_week.version <> p_expected_version THEN\n    RETURN jsonb_build_object('status', 'conflict', 'week_id', v_week.id,\n      'version', v_week.version, 'updated_at', v_week.updated_at);\n  END IF;\n\n  UPDATE public.week_days\n  SET lunch_status = CASE WHEN p_meal = 'lunch' THEN p_status ELSE lunch_status END,\n      lunch_dish_name = CASE WHEN p_meal = 'lunch' THEN v_dish ELSE lunch_dish_name END,\n      dinner_status = CASE WHEN p_meal = 'dinner' THEN p_status ELSE dinner_status END,\n      dinner_dish_name = CASE WHEN p_meal = 'dinner' THEN v_dish ELSE dinner_dish_name END\n  WHERE week_id = v_week.id AND position = p_position;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'conflict', 'week_id', v_week.id,\n      'version', v_week.version, 'updated_at', v_week.updated_at);\n  END IF;\n\n  UPDATE public.weeks\n  SET request_keys = (ARRAY[p_request_key] || request_keys)[1:20]\n  WHERE id = v_week.id\n  RETURNING * INTO v_week;\n\n  RETURN jsonb_build_object('status', 'applied', 'week_id', v_week.id,\n    'version', v_week.version, 'updated_at', v_week.updated_at);\nEND;\n$function$\n"
+    }
+  ],
+  "triggers": [
+    {
+      "table_name": "weeks",
+      "definition": "CREATE TRIGGER set_weeks_version BEFORE INSERT OR UPDATE ON public.weeks FOR EACH ROW EXECUTE FUNCTION weeks_set_version()"
+    }
+  ],
+  "function_grants": [
+    {
+      "routine_name": "weeks_set_version",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "apply_week",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "apply_week",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "update_week_slot",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "update_week_slot",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    }
+  ]
+}

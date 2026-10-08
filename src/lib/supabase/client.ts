@@ -2,9 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const shouldLogSupabaseConfig =
-  process.env.NODE_ENV === "development" ||
-  process.argv?.some((arg) => arg.includes("test-save-week")) === true;
+const shouldLogSupabaseConfig = process.env.NODE_ENV === "development";
 
 if (shouldLogSupabaseConfig) {
   console.log("Supabase client URL loaded:", Boolean(supabaseUrl));

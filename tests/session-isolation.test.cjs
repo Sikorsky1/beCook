@@ -31,7 +31,7 @@ function createRemoteBackend() {
    if (state.down) throw new Error("offline");
    const version = tick();
    map.set(key, {data: structuredClone(data), version});
-   return version;
+   return {version};
   },
  });
  const remotes = {
