@@ -117,7 +117,8 @@ test("login next path only allows same-origin paths", () => {
  assert.equal(safeNextPath("/create-menu?isoYear=2026&isoWeek=41"), "/create-menu?isoYear=2026&isoWeek=41");
  assert.equal(safeNextPath("/shopping/list"), "/shopping/list");
  for (const value of [null, "", "https://evil.example", "//evil.example", "/\\evil.example", "javascript:alert(1)", "profile"]) {
-  assert.equal(safeNextPath(value), "/profile", String(value));
+  // Step 23: the default destination after login is the week (it was /profile).
+  assert.equal(safeNextPath(value), "/week", String(value));
  }
  assert.equal(loginHrefFor("/create-menu?isoYear=2026&isoWeek=41"), "/login?next=%2Fcreate-menu%3FisoYear%3D2026%26isoWeek%3D41");
 });

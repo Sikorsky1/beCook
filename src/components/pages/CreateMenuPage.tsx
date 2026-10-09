@@ -19,6 +19,7 @@ import {
   type ApplyWeekAttempt,
 } from "@/lib/applyWeek";
 import { consumeCreateMenuDraft, saveCreateMenuDraft } from "@/lib/createMenuDraft";
+import { registerBeforeLoginSaver } from "@/lib/session/login-return";
 import {
   importedMenuToWeekDays,
   type GeneratedMenuApiResponse,
@@ -271,6 +272,22 @@ export default function CreateMenuPage() {
       elaborationLevel,
     });
   };
+
+  useEffect(
+    // The expired-session banner also leads to /login: the form must survive that trip too.
+    () =>
+      registerBeforeLoginSaver(() =>
+        saveCreateMenuDraft({
+          mode,
+          menuText,
+          freeTextPrompt,
+          peopleCount,
+          menuStyles,
+          elaborationLevel,
+        }),
+      ),
+    [mode, menuText, freeTextPrompt, peopleCount, menuStyles, elaborationLevel],
+  );
 
   const requireSession = async () => {
     if (await getAccessToken()) {
