@@ -199,7 +199,7 @@ Paso 23 del roadmap.
 | Auth | Redirect URLs configuradas en becook-preview y becook; Site URL `https://becook.xyz` |
 | Pendiente | Comprobar el despliegue de producción en Vercel (no revisado en esta sesión); prueba manual en navegador de B6, C5 y D1 (Sergio); resto de Auth de D1 (plantillas en español, mínimo 8, SMTP propio) |
 
-## Iteración B7 — Despensa remota segura 🟡 (2026-10-09, código y tests listos; migración aplicada en becook-preview y becook)
+## Iteración B7 — Despensa remota segura ✅ (2026-10-09, en producción el 2026-10-09)
 Paso 13 del roadmap (H8 §8; UX 18-20). Rama `audit/b7-despensa` (desde `audit-opt`), sin push.
 
 | Elemento | Detalle |
@@ -225,7 +225,7 @@ Paso 13 del roadmap (H8 §8; UX 18-20). Rama `audit/b7-despensa` (desde `audit-o
 3. Modo avión / sin red en DevTools: marcar un artículo → aviso de pendiente; volver a conectar y recargar → guardado.
 4. Cuenta sin despensa: aparecen los 6 de base; al marcar uno, los 6 quedan guardados (otro dispositivo los ve).
 
-## Iteración D4 — Semana con bloque «Hoy» 🟡 (2026-10-09, rama `audit/p29-hoy`, integrada en `audit-opt` el 2026-10-10; falta CI y Preview)
+## Iteración D4 — Semana con bloque «Hoy» ✅ (2026-10-09, en producción el 2026-10-09; falta ficha de plato con C2)
 Paso 29 del roadmap (UX 11-13; Backend §8).
 
 | Elemento | Detalle |
@@ -241,7 +241,7 @@ Paso 29 del roadmap (UX 11-13; Backend §8).
 | Pendiente | CI tras el push; validar la Preview identificado (editar una comida desde el bloque Hoy y desde una fila compacta → `update_week_slot`, conflicto con otro dispositivo); prueba en móvil real; ficha de plato al llegar C2 |
 | Observaciones | La tira sigue deshabilitando los días sin menú en semanas parciales (hoy incluido, que se ve en acento pero atenuado). Los días pasados de la semana actual no se atenúan; se puede añadir si la prueba con usuarios lo pide. El estado vacío de la semana («No hay menú para esta semana») no cambia: es el paso 32 (D6) |
 
-## Iteración D2 (primera mitad) — Paso 24: perfil simplificado sin datos inventados 🟡 (2026-10-09, rama `audit/p24-perfil`; sin migración)
+## Iteración D2 (primera mitad) — Paso 24: perfil simplificado sin datos inventados 🟡 (2026-10-09, parcial en producción el 2026-10-09; falta la migración de perfil)
 Paso 24 del roadmap (UX 02-04; Backend H5, fase 3). El paso 25 (onboarding) no entra.
 
 | Elemento | Detalle |
@@ -259,6 +259,15 @@ Paso 24 del roadmap (UX 02-04; Backend H5, fase 3). El paso 25 (onboarding) no e
 | Observaciones | Un perfil guardado con alergias `[]` se muestra como «Ninguna» (no se puede distinguir de «sin responder» sin esquema); uno con restricciones `[]` aparece como pendiente. Los valores que el formulario antiguo rellenaba solo (hombre/175/75, 2 personas, «Ninguna») no se pueden identificar en perfiles existentes. Crear menú (`CreateMenuPage`) sigue exigiendo los datos corporales en su comprobación de perfil; no se ha tocado (no usa sus valores) |
 | Pendiente | **Migración (no creada)**, aditiva: `ALTER TABLE public.profiles ALTER COLUMN sex DROP NOT NULL;` (ídem `birth_date`, `height_cm`, `weight_kg`; las CHECK ya admiten NULL) y `ALTER TABLE public.profiles ADD COLUMN confirmed_sections text[] NOT NULL DEFAULT '{}' CHECK (confirmed_sections <@ ARRAY['household','goals','restrictions','allergies']);`. Con ella: datos corporales opcionales (`profileFromRow`, `validateProfileForStorage`, `UserProfile` e `isProfile` de Crear menú aceptan nulos), «Ninguna» explícita persistente y perfiles antiguos marcados como «asumido» hasta confirmar. Orden: migración → código **sin intervalo** (el cliente actual de `main` falla en `profileFromRow` con un perfil con nulos). Además: prueba con sesión contra Supabase local (no hecha para no escribir en la base del agente 1), Preview y paso 25 |
 
+## B7, D4 y D2 (parcial) en producción ✅ (2026-10-09)
+| Elemento | Resultado |
+|---|---|
+| PR | [#13](https://github.com/Sikorsky1/beCook/pull/13) `audit-opt` → `main`, merge commit (sin squash/rebase); checks en verde (application, database, Vercel). El primer intento de `database` en el run `pull_request` falló al arrancar Supabase en el runner (`supabase start`, antes de cualquier test; el run `push` del mismo commit pasó) y pasó al relanzarlo |
+| Commit de merge | `355780c` (2026-10-09 22:48 UTC); `audit-opt` sincronizada por fast-forward |
+| Migración | `pantry_item_writes` aplicada antes del merge por SQL Editor (Sergio): becook-preview `20261009222300`, becook `20261009223500`. D4 y D2 sin cambios de esquema |
+| Validación | B7, D4 y D2 probados en la Preview de `audit-opt` antes del PR |
+| Pendiente | Comprobar el despliegue de producción en Vercel (no revisado en esta sesión); migración de perfil de D2 (datos corporales opcionales, `confirmed_sections`) y paso 25; ficha de plato (C2) para D4; indicador de pendiente/guardado por artículo en la despensa (B5) |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
@@ -274,7 +283,7 @@ Paso 24 del roadmap (UX 02-04; Backend H5, fase 3). El paso 25 (onboarding) no e
 | 10 Escrituras de semana seguras | B4 | ✅ | En producción desde 2026-10-08 (PR #11): `apply_week`/`update_week_slot`, versión e idempotencia; ver B4 |
 | 11 Aplicar menú ≠ generar compra | B5 | ⏳ | |
 | 12 Compra ligada a su semana | B6 | ✅ | En producción desde 2026-10-09 (PR #12): lista vigente por semana, lectura remota primero, marcado por artículo; ver B6 |
-| 13 Despensa remota segura | B7 | 🟡 | Integrada en `audit-opt` (2026-10-10): escrituras por artículo con versión; migración `pantry_item_writes` en local, becook-preview y becook; ver B7 |
+| 13 Despensa remota segura | B7 | ✅ | En producción desde 2026-10-09 (PR #13): escrituras por artículo con versión; migración `pantry_item_writes` en preview y producción; ver B7 |
 | 14 Firma de compra estable | B6 | ✅ | En producción desde 2026-10-09 (PR #12): firma canónica sin fechas ni versión; mismo menú → misma lista; ver B6 |
 | 15 Estados de sincronización visibles | B5 | ⏳ | |
 | 16 Contexto alimentario por semana | C1 | ⏳ | |
@@ -285,12 +294,12 @@ Paso 24 del roadmap (UX 02-04; Backend H5, fase 3). El paso 25 (onboarding) no e
 | 21 Reglas culinarias y sustitución | C5 | ✅ | En producción desde 2026-10-09 (PR #12): reglas de títulos, «Otra idea» con catálogo y luego IA (flujo `menu`); ver C5 |
 | 22 Importación y borradores | C6 | ⏳ | |
 | 23 Alta, login y recuperación | D1 | ✅ | En producción desde 2026-10-09 (PR #12): alta, login con `next`, recuperación; Redirect URLs configuradas, faltan plantillas, mínimo 8 y SMTP; ver D1 |
-| 24 Perfil simplificado | D2 | 🟡 | Parcial, integrado en `audit-opt` (2026-10-10): perfil por secciones sin valores inventados; falta la migración de perfil (datos corporales opcionales, `confirmed_sections`); ver D2 |
+| 24 Perfil simplificado | D2 | 🟡 | Parcial, en producción desde 2026-10-09 (PR #13): perfil por secciones sin valores inventados; falta la migración de perfil (datos corporales opcionales, `confirmed_sections`); ver D2 |
 | 25 Onboarding y primer menú | D2 | ⏳ | |
 | 26 Aplicar propuesta visible y segura | D3 | ⏳ | |
 | 27 Generación honesta | D3 | ⏳ | |
 | 28 «Otra idea» por plato | D3 | ⏳ | |
-| 29 Semana con «Hoy» | D4 | 🟡 | Integrado en `audit-opt` (2026-10-10): bloque «Hoy» y días compactos; falta CI, Preview y ficha de plato (C2); ver D4 |
+| 29 Semana con «Hoy» | D4 | ✅ | En producción desde 2026-10-09 (PR #13): bloque «Hoy» y días compactos; ficha de plato al llegar C2; ver D4 |
 | 30 Compra completa y despensa | D5 | ⏳ | |
 | 31 Despensa con acciones claras | D5 | ⏳ | |
 | 32 Navegación y estados vacíos | D6 | ⏳ | |
