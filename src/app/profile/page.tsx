@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, LogOut, Save } from "lucide-react";
+import { Check, ChevronDown, LogOut, Save } from "lucide-react";
 import Link from "next/link";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useIdentity, useIdentityActions } from "@/components/session/IdentityProvider";
@@ -11,13 +11,27 @@ import { Button, PrimaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { loadProfile, readCachedProfile, saveProfile } from "@/lib/data/repositories";
 import { loginHrefFor } from "@/lib/navigation";
+import {
+  applySection,
+  buildNewProfile,
+  draftFromProfile,
+  emptyProfileDraft,
+  issuesBySection,
+  profileSectionInfo,
+  profileSections,
+  readStoredProfile,
+  resetSections,
+  sectionStatus,
+  toggleRestriction,
+  type ProfileDraft,
+  type ProfileSection,
+  type SectionStatus,
+} from "@/lib/profileForm";
 import { scopeHasPendingChanges } from "@/lib/storage/scoped-storage";
 import {
   PROFILE_LIMITS,
-  legacyGoalFromGoals,
   normalizeDislikedFoods,
   serializeDislikedFoods,
-  validateProfileForStorage,
   type Allergy,
   type DietaryRestriction,
   type Goal,
@@ -32,28 +46,15 @@ import { pageShellClass } from "@/lib/ui";
 const dislikedFoodsMaxLength = PROFILE_LIMITS.dislikedFoodsMaxLength;
 const otherGoalMaxLength = PROFILE_LIMITS.otherGoalMaxLength;
 
-const defaultProfile: UserProfile = {
-  sex: "male",
-  birthDate: "",
-  heightCm: 175,
-  weightKg: 75,
-  householdSize: 2,
-  weeklyTrainingDays: 0,
-  trainingTypes: [],
-  otherTrainingType: "",
-  goals: ["healthy_eating"],
-  goal: "healthy_eating",
-  otherGoal: "",
-  dietaryRestrictions: ["none"],
-  allergies: [],
-  otherAllergies: "",
-  dislikedFoods: [],
-};
-
 const sexOptions: { label: string; value: Sex }[] = [
   { label: "Hombre", value: "male" },
   { label: "Mujer", value: "female" },
 ];
+
+const householdOptions = [1, 2, 3, 4, 5, 6].map((value) => ({
+  label: String(value),
+  value,
+}));
 
 const trainingTypeOptions: { label: string; value: TrainingType }[] = [
   { label: "Fuerza", value: "strength" },
@@ -77,10 +78,7 @@ const goalOptions: { label: string; value: Goal }[] = [
   { label: "Otro", value: "other" },
 ];
 
-const dietaryRestrictionOptions: {
-  label: string;
-  value: DietaryRestriction;
-}[] = [
+const dietaryRestrictionOptions: { label: string; value: DietaryRestriction }[] = [
   { label: "Ninguna", value: "none" },
   { label: "Vegetariano", value: "vegetarian" },
   { label: "Vegano", value: "vegan" },
@@ -89,7 +87,10 @@ const dietaryRestrictionOptions: {
   { label: "Sin alcohol", value: "no_alcohol" },
 ];
 
-const allergyOptions: { label: string; value: Allergy }[] = [
+const noAllergiesValue = "none";
+
+const allergyOptions: { label: string; value: Allergy | typeof noAllergiesValue }[] = [
+  { label: "Ninguna", value: noAllergiesValue },
   { label: "Gluten", value: "gluten" },
   { label: "Lactosa", value: "lactose" },
   { label: "Frutos secos", value: "nuts" },
@@ -98,83 +99,15 @@ const allergyOptions: { label: string; value: Allergy }[] = [
   { label: "Otra", value: "other" },
 ];
 
-function getNumberOptions(min: number, max: number) {
-  return Array.from({ length: max - min + 1 }, (_, index) => min + index);
-}
-
-function isProfile(value: unknown): value is UserProfile {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const profile = value as Partial<UserProfile>;
-
-  return (
-    typeof profile.sex === "string" &&
-    typeof profile.birthDate === "string" &&
-    typeof profile.heightCm === "number" &&
-    typeof profile.weightKg === "number" &&
-    typeof profile.householdSize === "number" &&
-    typeof profile.weeklyTrainingDays === "number" &&
-    Number.isInteger(profile.weeklyTrainingDays) &&
-    profile.weeklyTrainingDays >= 0 &&
-    profile.weeklyTrainingDays <= 7 &&
-    Array.isArray(profile.trainingTypes) &&
-    (Array.isArray(profile.goals) || typeof profile.goal === "string") &&
-    Array.isArray(profile.dietaryRestrictions) &&
-    Array.isArray(profile.allergies) &&
-    Array.isArray(profile.dislikedFoods)
-  );
-}
-
-function normalizeGoals(
-  goals: unknown,
-  legacyGoal: unknown,
-): Goal[] {
-  const rawGoals = Array.isArray(goals) ? goals : [legacyGoal];
-  const normalizedGoals = rawGoals
-    .map((goal) => (goal === "maintenance" ? "healthy_eating" : goal))
-    .filter((goal): goal is Goal =>
-      goalOptions.some((option) => option.value === goal),
-    );
-
-  return Array.from(new Set(normalizedGoals));
-}
-
-function normalizeProfile(profile: UserProfile): UserProfile {
-  const goals = normalizeGoals(profile.goals, profile.goal);
-  const normalizedGoals = goals.length > 0 ? goals : defaultProfile.goals;
-
-  return {
-    ...defaultProfile,
-    ...profile,
-    goals: normalizedGoals,
-    goal: legacyGoalFromGoals(normalizedGoals),
-    otherGoal: normalizedGoals.includes("other")
-      ? profile.otherGoal?.slice(0, otherGoalMaxLength) ?? ""
-      : "",
-  };
-}
-
-function toFormProfile(value: unknown) {
-  return isProfile(value) ? normalizeProfile(value) : null;
-}
-
-function dislikedFoodsToText(dislikedFoods: string[]) {
-  return dislikedFoods.join(", ");
-}
-
-function textToDislikedFoods(value: string) {
-  return normalizeDislikedFoods([value]);
-}
+const statusLabels: Record<SectionStatus, string> = {
+  pending: "Pendiente",
+  unsaved: "Sin guardar",
+  saved: "Guardado",
+};
 
 // Length of what the database will store, which is what profiles_disliked_foods_check limits.
 function storedDislikedFoodsLength(value: string) {
-  return (serializeDislikedFoods(textToDislikedFoods(value)) ?? "").length;
-}
-
-function normalizeOtherGoal(value: string | undefined) {
-  return value?.trim().slice(0, otherGoalMaxLength) ?? "";
+  return (serializeDislikedFoods(normalizeDislikedFoods([value])) ?? "").length;
 }
 
 function toWeeklyTrainingDays(value: number): WeeklyTrainingDays {
@@ -183,17 +116,11 @@ function toWeeklyTrainingDays(value: number): WeeklyTrainingDays {
   return Math.min(Math.max(value, min), max) as WeeklyTrainingDays;
 }
 
-function FieldLabel({ children }: { children: string }) {
+function FieldLabel({ children, id }: { children: ReactNode; id?: string }) {
   return (
-    <span className="t-body-strong text-[color:var(--color-foreground)]">
+    <span id={id} className="t-body-strong text-[color:var(--color-foreground)]">
       {children}
     </span>
-  );
-}
-
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <h2 className="t-h2 text-[color:var(--color-foreground)]">{title}</h2>
   );
 }
 
@@ -201,180 +128,170 @@ const compactInputClass =
   "w-full rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5 text-[0.78rem] font-medium text-[color:var(--color-foreground)] outline-none transition-colors placeholder:text-[color:var(--color-muted-foreground)] focus:border-[color:var(--color-accent)]";
 
 const chipBaseClass =
-  "inline-flex min-h-8 cursor-pointer items-center justify-center rounded-full border px-2.5 py-1.5 text-center text-[0.78rem] font-semibold leading-tight transition-colors";
+  "inline-flex min-h-10 cursor-pointer items-center justify-center rounded-full border px-3 py-1.5 text-center text-[0.78rem] font-semibold leading-tight transition-colors focus-within:shadow-[0_0_0_3px_rgba(224,112,60,0.2)]";
 
-function InlineSexControl({
-  value,
-  onChange,
-}: {
-  value: Sex;
-  onChange: (value: Sex) => void;
-}) {
-  return (
-    <div className="inline-flex min-h-10 w-fit flex-wrap items-center gap-x-3 gap-y-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2">
-      <FieldLabel>Sexo:</FieldLabel>
-      {sexOptions.map((option) => (
-        <label
-          key={option.value}
-          className="inline-flex cursor-pointer items-center gap-1.5 text-[0.78rem] font-semibold text-[color:var(--color-foreground)]"
-        >
-          <span>{option.label}</span>
-          <input
-            type="radio"
-            name="sex"
-            checked={value === option.value}
-            onChange={() => onChange(option.value)}
-            className="h-4 w-4 accent-[color:var(--color-accent)]"
-          />
-        </label>
-      ))}
-    </div>
-  );
-}
-
-function TrainingDaysStepper({
-  value,
-  onChange,
-}: {
-  value: WeeklyTrainingDays;
-  onChange: (value: WeeklyTrainingDays) => void;
-}) {
-  const normalizedValue = toWeeklyTrainingDays(value);
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
-      <FieldLabel>Días que entrenas a la semana</FieldLabel>
-      <div className="inline-flex items-center gap-2 rounded-full bg-[color:var(--color-surface-muted)] p-1">
-        <button
-          type="button"
-          disabled={normalizedValue === 0}
-          onClick={() => onChange(toWeeklyTrainingDays(normalizedValue - 1))}
-          aria-label="Reducir días de entrenamiento"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
-        >
-          -
-        </button>
-        <span className="min-w-10 text-center text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
-          {normalizedValue}
-        </span>
-        <button
-          type="button"
-          disabled={normalizedValue === 7}
-          onClick={() => onChange(toWeeklyTrainingDays(normalizedValue + 1))}
-          aria-label="Aumentar días de entrenamiento"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
-        >
-          +
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function HouseholdSizeStepper({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (value: number) => void;
-}) {
-  const normalizedValue = Math.min(Math.max(value, 1), 6);
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
-      <FieldLabel>¿Para cuántas personas?</FieldLabel>
-      <div className="inline-flex items-center gap-2 rounded-full bg-[color:var(--color-surface-muted)] p-1">
-        <button
-          type="button"
-          disabled={normalizedValue === 1}
-          onClick={() => onChange(normalizedValue - 1)}
-          aria-label="Reducir personas del menú semanal"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
-        >
-          -
-        </button>
-        <span className="min-w-10 text-center text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
-          {normalizedValue}
-        </span>
-        <button
-          type="button"
-          disabled={normalizedValue === 6}
-          onClick={() => onChange(normalizedValue + 1)}
-          aria-label="Aumentar personas del menú semanal"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
-        >
-          +
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ChipCheckboxGroup<T extends string>({
+function ChoiceChips<T extends string | number>({
+  legend,
+  name,
+  type = "checkbox",
   options,
-  values,
-  onChange,
+  isSelected,
+  onToggle,
 }: {
+  legend: string;
+  name: string;
+  type?: "checkbox" | "radio";
   options: { label: string; value: T }[];
-  values: T[];
-  onChange: (values: T[]) => void;
+  isSelected: (value: T) => boolean;
+  onToggle: (value: T) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((option) => {
-        const isChecked = values.includes(option.value);
+    <fieldset className="space-y-2">
+      <legend className="t-body-strong mb-2 text-[color:var(--color-foreground)]">{legend}</legend>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((option) => {
+          const checked = isSelected(option.value);
 
-        return (
-          <label
-            key={option.value}
-            className={`${chipBaseClass} ${
-              isChecked
-                ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-foreground)]"
-                : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={isChecked}
-              onChange={() =>
-                onChange(
-                  isChecked
-                    ? values.filter((value) => value !== option.value)
-                    : [...values, option.value],
-                )
-              }
-              className="sr-only"
-            />
-            {option.label}
-          </label>
-        );
-      })}
-    </div>
+          return (
+            <label
+              key={String(option.value)}
+              className={`${chipBaseClass} ${type === "radio" ? "min-w-10" : ""} ${
+                checked
+                  ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-foreground)]"
+                  : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
+              }`}
+            >
+              <input
+                type={type}
+                name={name}
+                checked={checked}
+                onChange={() => onToggle(option.value)}
+                className="sr-only"
+              />
+              {option.label}
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+function StatusBadge({ status }: { status: SectionStatus }) {
+  const tone =
+    status === "saved"
+      ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-secondary-hover)]"
+      : status === "unsaved"
+        ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]"
+        : "border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)]";
+
+  return (
+    <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold ${tone}`}>
+      {statusLabels[status]}
+    </span>
+  );
+}
+
+type SectionSaveState =
+  | { status: "idle" }
+  | { status: "saving" }
+  | { status: "saved-local" | "saved-remote" | "pending" | "conflict" }
+  | { status: "invalid"; issues: ProfileValidationIssue[] };
+
+function SectionFeedback({ state }: { state: SectionSaveState | undefined }) {
+  if (!state || state.status === "idle") {
+    return null;
+  }
+
+  if (state.status === "invalid") {
+    return (
+      <div role="alert" className="space-y-1 text-[0.78rem] font-semibold text-[color:var(--color-danger)]">
+        {state.issues.map((issue) => (
+          <p key={`${issue.field}-${issue.message}`}>{issue.message}</p>
+        ))}
+      </div>
+    );
+  }
+
+  const messages: Record<Exclude<SectionSaveState["status"], "idle" | "invalid">, string> = {
+    saving: "Guardando…",
+    "saved-remote": "Guardado en tu cuenta",
+    "saved-local": "Guardado en este dispositivo",
+    pending: "No se pudo guardar en tu cuenta. El cambio queda pendiente en este dispositivo y se reintentará.",
+    conflict: "Tu cuenta tenía una versión más reciente: se muestra esa. Revisa y vuelve a guardar.",
+  };
+  const isProblem = state.status === "pending" || state.status === "conflict";
+
+  return (
+    <p
+      role="status"
+      className={`inline-flex items-center gap-2 text-[0.78rem] font-semibold ${
+        isProblem ? "text-[color:var(--color-danger)]" : "text-[color:var(--color-secondary-hover)]"
+      }`}
+    >
+      {state.status === "saved-remote" || state.status === "saved-local" ? (
+        <Check aria-hidden="true" className="h-4 w-4" />
+      ) : null}
+      {messages[state.status]}
+    </p>
+  );
+}
+
+function SectionCard({
+  section,
+  status,
+  children,
+  footer,
+}: {
+  section: ProfileSection;
+  status: SectionStatus;
+  children: ReactNode;
+  footer: ReactNode;
+}) {
+  const info = profileSectionInfo[section];
+
+  return (
+    <Card className="space-y-3 p-3.5 sm:p-4" aria-labelledby={`section-${section}`}>
+      <div className="flex items-start justify-between gap-3">
+        <h2 id={`section-${section}`} className="t-h2 min-w-0 text-[color:var(--color-foreground)]">
+          {info.title}
+        </h2>
+        <StatusBadge status={status} />
+      </div>
+      <p className="t-meta">{info.usage}</p>
+      {children}
+      {footer}
+    </Card>
   );
 }
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState<UserProfile>(defaultProfile);
-  const [dislikedFoodsText, setDislikedFoodsText] = useState("");
+  const [savedProfile, setSavedProfile] = useState<UserProfile | null>(null);
+  const [draft, setDraft] = useState<ProfileDraft>(emptyProfileDraft);
   const [hasLoadedProfile, setHasLoadedProfile] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<
-    "idle" | "saving" | "saved-local" | "saved-remote" | "error" | "invalid"
-  >("idle");
-  const [validationIssues, setValidationIssues] = useState<ProfileValidationIssue[]>([]);
+  const [saveStates, setSaveStates] = useState<Partial<Record<ProfileSection | "all", SectionSaveState>>>({});
+  const [isBodyOpen, setIsBodyOpen] = useState(false);
   const identity = useIdentity();
   const { signOut } = useIdentityActions();
   const userEmail = identity.email;
   const [syncState, setSyncState] = useState<SyncState>({});
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const isSaving = Object.values(saveStates).some((state) => state?.status === "saving");
   const dislikedFoodsCharacters = useMemo(
-    () => storedDislikedFoodsLength(dislikedFoodsText),
-    [dislikedFoodsText],
+    () => storedDislikedFoodsLength(draft.dislikedFoodsText),
+    [draft.dislikedFoodsText],
   );
   const dislikedFoodsTooLong = dislikedFoodsCharacters > dislikedFoodsMaxLength;
-  const otherGoalCharacters = useMemo(
-    () => profile.otherGoal?.length ?? 0,
-    [profile.otherGoal],
+  const statuses = useMemo(
+    () =>
+      Object.fromEntries(
+        profileSections.map((section) => [section, sectionStatus(draft, savedProfile, section)]),
+      ) as Record<ProfileSection, SectionStatus>,
+    [draft, savedProfile],
+  );
+  const pendingSections = profileSections.filter(
+    (section) => profileSectionInfo[section].required && statuses[section] === "pending",
   );
 
   useEffect(() => {
@@ -386,15 +303,16 @@ export default function ProfilePage() {
     let isCancelled = false;
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
     const applyProfile = (value: unknown) => {
-      const formProfile = toFormProfile(value) ?? defaultProfile;
-      setProfile(formProfile);
-      setDislikedFoodsText(dislikedFoodsToText(formProfile.dislikedFoods));
+      const profile = readStoredProfile(value);
+      setSavedProfile(profile);
+      setDraft(draftFromProfile(profile));
     };
 
     const loadTimer = window.setTimeout(() => {
-      setSaveStatus("idle");
+      setSaveStates({});
       setSyncState({});
       setConfirmSignOut(false);
+      setIsBodyOpen(false);
       applyProfile(readCachedProfile(dataIdentity));
       setHasLoadedProfile(!dataIdentity.userId);
 
@@ -419,96 +337,85 @@ export default function ProfilePage() {
     };
   }, [identity.status, identity.scope, identity.userId, identity.epoch]);
 
-  const updateProfile = (updates: Partial<UserProfile>) => {
-    setProfile((currentProfile) => ({ ...currentProfile, ...updates }));
-    setSaveStatus("idle");
-    setValidationIssues([]);
+  const updateDraft = (section: ProfileSection, updates: Partial<ProfileDraft>) => {
+    setDraft((current) => ({ ...current, ...updates }));
+    setSaveStates((current) => ({ ...current, [section]: { status: "idle" }, all: { status: "idle" } }));
   };
 
-  const handleDietaryRestrictionsChange = (
-    restrictions: DietaryRestriction[],
-  ) => {
-    let normalizedRestrictions = restrictions;
+  // Saves one section on top of the saved profile, or the whole profile the first time.
+  const save = async (target: ProfileSection | "all") => {
+    const sections = target === "all" ? profileSections : [target];
+    const built = target === "all" || !savedProfile
+      ? buildNewProfile(draft)
+      : applySection(savedProfile, draft, target);
 
-    if (
-      restrictions.includes("none") &&
-      !profile.dietaryRestrictions.includes("none")
-    ) {
-      normalizedRestrictions = ["none"];
-    } else if (restrictions.includes("none") && restrictions.length > 1) {
-      normalizedRestrictions = restrictions.filter(
-        (restriction) => restriction !== "none",
-      );
-    } else if (restrictions.length === 0) {
-      normalizedRestrictions = ["none"];
-    }
-
-    updateProfile({ dietaryRestrictions: normalizedRestrictions });
-  };
-
-  const handleGoalsChange = (goals: Goal[]) => {
-    const normalizedGoals = Array.from(new Set(goals));
-
-    updateProfile({
-      goals: normalizedGoals,
-      goal: legacyGoalFromGoals(normalizedGoals),
-      otherGoal: normalizedGoals.includes("other") ? profile.otherGoal : "",
-    });
-  };
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const profileToSave: UserProfile = {
-      ...profile,
-      otherTrainingType: profile.trainingTypes.includes("other")
-        ? profile.otherTrainingType?.trim()
-        : "",
-      goals: profile.goals,
-      goal: legacyGoalFromGoals(profile.goals),
-      otherGoal: profile.goals.includes("other")
-        ? normalizeOtherGoal(profile.otherGoal)
-        : "",
-      otherAllergies: profile.allergies.includes("other")
-        ? profile.otherAllergies?.trim()
-        : "",
-      dislikedFoods: textToDislikedFoods(dislikedFoodsText),
-    };
-
-    // Same ranges as the database CHECKs: nothing invalid reaches the cache or the server.
-    const issues = validateProfileForStorage(profileToSave);
-
-    if (issues.length > 0) {
-      setValidationIssues(issues);
-      setSaveStatus("invalid");
+    if (!built.ok) {
+      setSaveStates((current) => ({ ...current, [target]: { status: "invalid", issues: built.issues } }));
+      if (issuesBySection(built.issues).body) {
+        setIsBodyOpen(true);
+      }
       return;
     }
 
-    setValidationIssues([]);
-    setProfile(profileToSave);
-    setDislikedFoodsText(dislikedFoodsToText(profileToSave.dislikedFoods));
-    setSaveStatus("saving");
+    setSaveStates((current) => ({ ...current, [target]: { status: "saving" } }));
     setSyncState({});
 
-    const result = await saveProfile(
-      { scope: identity.scope, userId: identity.userId },
-      profileToSave,
-    );
+    const result = await saveProfile({ scope: identity.scope, userId: identity.userId }, built.profile);
 
-    if (result.status === "local") {
-      setSaveStatus("saved-local");
-    } else if (result.status === "synced") {
-      setSaveStatus("saved-remote");
-    } else if (result.status === "conflict") {
-      const remoteProfile = toFormProfile(result.remoteData) ?? defaultProfile;
-      setProfile(remoteProfile);
-      setDislikedFoodsText(dislikedFoodsToText(remoteProfile.dislikedFoods));
+    if (result.status === "conflict") {
+      const remoteProfile = readStoredProfile(result.remoteData);
+      setSavedProfile(remoteProfile);
+      setDraft((current) => resetSections(current, remoteProfile, sections));
       setSyncState({ conflict: true });
-      setSaveStatus("idle");
-    } else {
-      setSyncState({ pending: true });
-      setSaveStatus("error");
+      setSaveStates((current) => ({ ...current, [target]: { status: "conflict" } }));
+      return;
     }
+
+    // local, synced and pending all keep this profile in the device copy.
+    setSavedProfile(built.profile);
+    setDraft((current) => resetSections(current, built.profile, sections));
+    setSaveStates((current) => ({
+      ...current,
+      [target]: {
+        status: result.status === "local" ? "saved-local" : result.status === "synced" ? "saved-remote" : "pending",
+      },
+    }));
+    if (result.status === "pending") {
+      setSyncState({ pending: true });
+    }
+  };
+
+  const handleCreate = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void save("all");
+  };
+
+  const sectionFooter = (section: ProfileSection) => {
+    if (!savedProfile) {
+      return null;
+    }
+
+    const state = saveStates[section];
+    const canSave = statuses[section] !== "saved" && !isSaving;
+
+    return (
+      <div className="flex flex-col gap-2 border-t border-[color:var(--color-border)] pt-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-h-5">
+          <SectionFeedback state={state} />
+        </div>
+        <Button
+          type="button"
+          variant={statuses[section] === "saved" ? "soft" : "primary"}
+          size="sm"
+          disabled={!canSave}
+          onClick={() => void save(section)}
+          className="w-full rounded-full sm:w-auto"
+        >
+          <Save aria-hidden="true" className="h-4 w-4" />
+          {state?.status === "saving" ? "Guardando…" : "Guardar"}
+        </Button>
+      </div>
+    );
   };
 
   const handleSignOut = async () => {
@@ -533,6 +440,13 @@ export default function ProfilePage() {
     }
   };
 
+  const goalSummary = savedProfile
+    ? goalOptions.find((option) => option.value === savedProfile.goals[0])?.label ?? "Sin objetivo"
+    : "Perfil sin guardar";
+  const householdSummary = savedProfile
+    ? `${savedProfile.householdSize} ${savedProfile.householdSize === 1 ? "persona" : "personas"}`
+    : null;
+
   return (
     <main
       className={`${pageShellClass} px-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-6`}
@@ -542,239 +456,308 @@ export default function ProfilePage() {
           <div>
             <p className="t-eyebrow">Perfil</p>
             <h1 className="t-h1 mt-2 text-[color:var(--color-foreground)]">
-              Tu base nutricional
+              Lo que necesita tu menú
             </h1>
           </div>
         </section>
 
-        <Card className="flex items-center gap-3 p-3.5 sm:p-4">
-          <span
-            aria-hidden="true"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-soft)] text-lg font-semibold text-[color:var(--color-accent)]"
-          >
-            {(userEmail?.[0] ?? "B").toUpperCase()}
-          </span>
-          <div className="min-w-0">
-            <p className="t-body-strong truncate text-[color:var(--color-foreground)]">
-              {userEmail ?? "Modo local"}
-            </p>
-            <p className="t-meta mt-0.5">
-              {goalOptions.find(
-                (option) => option.value === (profile.goals[0] ?? profile.goal),
-              )?.label ?? "Sin objetivo"}{" "}
-              · {profile.householdSize}{" "}
-              {profile.householdSize === 1 ? "persona" : "personas"}
-            </p>
+        <Card className="space-y-3 p-3.5 sm:p-4">
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-soft)] text-lg font-semibold text-[color:var(--color-accent)]"
+            >
+              {(userEmail?.[0] ?? "B").toUpperCase()}
+            </span>
+            <div className="min-w-0">
+              <p className="t-body-strong truncate text-[color:var(--color-foreground)]">
+                {userEmail ?? "Modo local"}
+              </p>
+              <p className="t-meta mt-0.5">
+                {householdSummary ? `${goalSummary} · ${householdSummary}` : goalSummary}
+              </p>
+            </div>
           </div>
+          {hasLoadedProfile && pendingSections.length > 0 ? (
+            <p className="t-meta">
+              <span className="font-semibold text-[color:var(--color-foreground)]">Falta por completar:</span>{" "}
+              {pendingSections.map((section) => profileSectionInfo[section].title.replace(/^¿|\?$/g, "")).join(" · ")}
+            </p>
+          ) : null}
+          {!hasLoadedProfile ? <p className="t-meta">Cargando perfil</p> : null}
+          {/* The bottom bar goes away after the first save; its result stays visible here. */}
+          {savedProfile ? <SectionFeedback state={saveStates.all} /> : null}
         </Card>
 
-        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
-          <Card className="space-y-3 p-3.5 sm:p-4">
-            <SectionTitle title="Datos personales" />
-            <div className="space-y-3">
-              <InlineSexControl
-                value={profile.sex}
-                onChange={(sex) => updateProfile({ sex })}
-              />
+        <form onSubmit={handleCreate} className="space-y-3 sm:space-y-4" noValidate>
+          <SectionCard section="household" status={statuses.household} footer={sectionFooter("household")}>
+            <ChoiceChips
+              legend="Personas"
+              name="household"
+              type="radio"
+              options={householdOptions}
+              isSelected={(value) => draft.householdSize === value}
+              onToggle={(householdSize) => updateDraft("household", { householdSize })}
+            />
+          </SectionCard>
 
-              <label className="flex flex-col gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                <FieldLabel>Fecha de nacimiento</FieldLabel>
-                <input
-                  type="date"
-                  required
-                  value={profile.birthDate}
-                  onChange={(event) =>
-                    updateProfile({ birthDate: event.target.value })
-                  }
-                  className="min-w-0 bg-transparent text-[0.78rem] font-semibold text-[color:var(--color-foreground)] outline-none"
-                />
-              </label>
-
-              <div className="grid grid-cols-2 gap-2">
-                <label className="space-y-1.5">
-                  <FieldLabel>Altura</FieldLabel>
-                  <select
-                    value={profile.heightCm}
-                    onChange={(event) =>
-                      updateProfile({ heightCm: Number(event.target.value) })
-                    }
-                    className={compactInputClass}
-                  >
-                    {getNumberOptions(120, 230).map((height) => (
-                      <option key={height} value={height}>
-                        {height} cm
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="space-y-1.5">
-                  <FieldLabel>Peso</FieldLabel>
-                  <select
-                    value={profile.weightKg}
-                    onChange={(event) =>
-                      updateProfile({ weightKg: Number(event.target.value) })
-                    }
-                    className={compactInputClass}
-                  >
-                    {getNumberOptions(45, 200).map((weight) => (
-                      <option key={weight} value={weight}>
-                        {weight} kg
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="space-y-3 p-3.5 sm:p-4">
-            <SectionTitle title="Preferencias de menú" />
-
-            <div className="space-y-2">
-              <FieldLabel>Objetivos</FieldLabel>
-              <ChipCheckboxGroup
-                options={goalOptions}
-                values={profile.goals}
-                onChange={handleGoalsChange}
-              />
-            </div>
-            {profile.goals.includes("other") ? (
+          <SectionCard section="goals" status={statuses.goals} footer={sectionFooter("goals")}>
+            <ChoiceChips
+              legend="Elige uno o varios"
+              name="goals"
+              options={goalOptions}
+              isSelected={(value) => draft.goals.includes(value)}
+              onToggle={(value) => {
+                const goals = draft.goals.includes(value)
+                  ? draft.goals.filter((goal) => goal !== value)
+                  : [...draft.goals, value];
+                updateDraft("goals", { goals, otherGoal: goals.includes("other") ? draft.otherGoal : "" });
+              }}
+            />
+            {draft.goals.includes("other") ? (
               <label className="block space-y-1.5">
                 <FieldLabel>Cuéntanos tu objetivo</FieldLabel>
                 <textarea
-                  value={profile.otherGoal ?? ""}
+                  value={draft.otherGoal}
                   maxLength={otherGoalMaxLength}
                   placeholder="Ejemplo: mejorar digestiones, organizar comidas familiares o cuidar energía diaria."
                   onChange={(event) =>
-                    updateProfile({
-                      otherGoal: event.target.value.slice(
-                        0,
-                        otherGoalMaxLength,
-                      ),
-                    })
+                    updateDraft("goals", { otherGoal: event.target.value.slice(0, otherGoalMaxLength) })
                   }
                   className={`${compactInputClass} min-h-20 resize-y leading-5 placeholder:text-xs placeholder:italic placeholder:text-[color:var(--color-muted-foreground)]`}
                 />
                 <span className="block text-right text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)]">
-                  {otherGoalCharacters}/{otherGoalMaxLength}
+                  {draft.otherGoal.length}/{otherGoalMaxLength}
                 </span>
               </label>
             ) : null}
+          </SectionCard>
 
-            <div className="space-y-1.5">
-              <HouseholdSizeStepper
-                value={profile.householdSize}
-                onChange={(householdSize) =>
-                  updateProfile({
-                    householdSize,
-                  })
-                }
-              />
-              <span className="t-meta block">
-                Esta información se utiliza para calcular las cantidades de las recetas.
-              </span>
-            </div>
-
-            <TrainingDaysStepper
-              value={profile.weeklyTrainingDays}
-              onChange={(weeklyTrainingDays) =>
-                updateProfile({ weeklyTrainingDays })
+          <SectionCard section="restrictions" status={statuses.restrictions} footer={sectionFooter("restrictions")}>
+            <ChoiceChips
+              legend="Restricciones alimentarias"
+              name="dietary-restrictions"
+              options={dietaryRestrictionOptions}
+              isSelected={(value) => draft.dietaryRestrictions.includes(value)}
+              onToggle={(value) =>
+                updateDraft("restrictions", {
+                  dietaryRestrictions: toggleRestriction(draft.dietaryRestrictions, value),
+                })
               }
             />
 
-            <div className="space-y-2">
-              <FieldLabel>Tipos de entrenamiento</FieldLabel>
-              <ChipCheckboxGroup
-                options={trainingTypeOptions}
-                values={profile.trainingTypes}
-                onChange={(trainingTypes) => updateProfile({ trainingTypes })}
-              />
-            </div>
+            <ChoiceChips
+              legend="Alergias"
+              name="allergies"
+              options={allergyOptions}
+              isSelected={(value) =>
+                value === noAllergiesValue ? draft.noAllergies : draft.allergies.includes(value)
+              }
+              onToggle={(value) => {
+                if (value === noAllergiesValue) {
+                  updateDraft("restrictions", {
+                    noAllergies: !draft.noAllergies,
+                    allergies: [],
+                    otherAllergies: "",
+                  });
+                  return;
+                }
 
-            {profile.trainingTypes.includes("other") ? (
+                const allergies = draft.allergies.includes(value)
+                  ? draft.allergies.filter((allergy) => allergy !== value)
+                  : [...draft.allergies, value];
+                updateDraft("restrictions", {
+                  noAllergies: false,
+                  allergies,
+                  otherAllergies: allergies.includes("other") ? draft.otherAllergies : "",
+                });
+              }}
+            />
+
+            {!draft.noAllergies && draft.allergies.includes("other") ? (
               <label className="block space-y-1.5">
-                <FieldLabel>Otro entrenamiento</FieldLabel>
+                <FieldLabel>Otras alergias</FieldLabel>
                 <input
                   type="text"
-                  value={profile.otherTrainingType ?? ""}
-                  onChange={(event) =>
-                    updateProfile({ otherTrainingType: event.target.value })
-                  }
+                  value={draft.otherAllergies}
+                  onChange={(event) => updateDraft("restrictions", { otherAllergies: event.target.value })}
                   className={compactInputClass}
                 />
               </label>
             ) : null}
-          </Card>
 
-          <Card className="space-y-3 p-3.5 sm:p-4">
-            <SectionTitle title="Restricciones y alergias" />
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <FieldLabel>Restricciones alimentarias</FieldLabel>
-                <ChipCheckboxGroup
-                  options={dietaryRestrictionOptions}
-                  values={profile.dietaryRestrictions}
-                  onChange={handleDietaryRestrictionsChange}
-                />
+            <label className="block space-y-1.5">
+              <FieldLabel>Alimentos que no te gustan</FieldLabel>
+              <span className="t-meta block">Opcional. Sepáralos con comas.</span>
+              <textarea
+                value={draft.dislikedFoodsText}
+                aria-invalid={dislikedFoodsTooLong}
+                aria-describedby="disliked-foods-count"
+                placeholder="Ejemplo: brócoli, setas"
+                onChange={(event) => updateDraft("restrictions", { dislikedFoodsText: event.target.value })}
+                className={`${compactInputClass} min-h-20 resize-y leading-5 placeholder:text-xs placeholder:italic placeholder:text-[color:var(--color-muted-foreground)]`}
+              />
+              <span
+                id="disliked-foods-count"
+                className={`block text-right text-[0.68rem] font-semibold ${
+                  dislikedFoodsTooLong
+                    ? "text-[color:var(--color-danger)]"
+                    : "text-[color:var(--color-muted-foreground)]"
+                }`}
+              >
+                {dislikedFoodsTooLong
+                  ? `${dislikedFoodsCharacters}/${dislikedFoodsMaxLength} · Acorta la lista para poder guardar`
+                  : `${dislikedFoodsCharacters}/${dislikedFoodsMaxLength}`}
+              </span>
+            </label>
+          </SectionCard>
+
+          <SectionCard section="training" status={statuses.training} footer={sectionFooter("training")}>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
+              <FieldLabel id="training-days-label">Días que entrenas a la semana</FieldLabel>
+              <div
+                role="group"
+                aria-labelledby="training-days-label"
+                className="inline-flex items-center gap-2 rounded-full bg-[color:var(--color-surface-muted)] p-1"
+              >
+                <button
+                  type="button"
+                  disabled={draft.weeklyTrainingDays === 0}
+                  onClick={() =>
+                    updateDraft("training", { weeklyTrainingDays: toWeeklyTrainingDays(draft.weeklyTrainingDays - 1) })
+                  }
+                  aria-label="Reducir días de entrenamiento"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+                >
+                  -
+                </button>
+                <span aria-live="polite" className="min-w-10 text-center text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+                  {draft.weeklyTrainingDays}
+                </span>
+                <button
+                  type="button"
+                  disabled={draft.weeklyTrainingDays === 7}
+                  onClick={() =>
+                    updateDraft("training", { weeklyTrainingDays: toWeeklyTrainingDays(draft.weeklyTrainingDays + 1) })
+                  }
+                  aria-label="Aumentar días de entrenamiento"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+                >
+                  +
+                </button>
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <FieldLabel>Alergias</FieldLabel>
-                <ChipCheckboxGroup
-                  options={allergyOptions}
-                  values={profile.allergies}
-                  onChange={(allergies) => updateProfile({ allergies })}
+            <ChoiceChips
+              legend="Tipos de entrenamiento"
+              name="training-types"
+              options={trainingTypeOptions}
+              isSelected={(value) => draft.trainingTypes.includes(value)}
+              onToggle={(value) => {
+                const trainingTypes = draft.trainingTypes.includes(value)
+                  ? draft.trainingTypes.filter((type) => type !== value)
+                  : [...draft.trainingTypes, value];
+                updateDraft("training", {
+                  trainingTypes,
+                  otherTrainingType: trainingTypes.includes("other") ? draft.otherTrainingType : "",
+                });
+              }}
+            />
+
+            {draft.trainingTypes.includes("other") ? (
+              <label className="block space-y-1.5">
+                <FieldLabel>Otro entrenamiento</FieldLabel>
+                <input
+                  type="text"
+                  value={draft.otherTrainingType}
+                  onChange={(event) => updateDraft("training", { otherTrainingType: event.target.value })}
+                  className={compactInputClass}
                 />
-              </div>
+              </label>
+            ) : null}
+          </SectionCard>
 
-              {profile.allergies.includes("other") ? (
+          <SectionCard section="body" status={statuses.body} footer={sectionFooter("body")}>
+            <button
+              type="button"
+              aria-expanded={isBodyOpen}
+              aria-controls="body-fields"
+              onClick={() => setIsBodyOpen((open) => !open)}
+              className="flex min-h-10 w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-[0.78rem] font-semibold text-[color:var(--color-foreground)]"
+            >
+              {isBodyOpen ? "Ocultar datos corporales" : "Mostrar datos corporales"}
+              <ChevronDown
+                aria-hidden="true"
+                className={`h-4 w-4 transition-transform ${isBodyOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {isBodyOpen ? (
+              <div id="body-fields" className="space-y-3">
+                <ChoiceChips
+                  legend="Sexo"
+                  name="sex"
+                  type="radio"
+                  options={sexOptions}
+                  isSelected={(value) => draft.sex === value}
+                  onToggle={(sex) => updateDraft("body", { sex })}
+                />
+
                 <label className="block space-y-1.5">
-                  <FieldLabel>Otras alergias</FieldLabel>
+                  <FieldLabel>Fecha de nacimiento</FieldLabel>
                   <input
-                    type="text"
-                    value={profile.otherAllergies ?? ""}
-                    onChange={(event) =>
-                      updateProfile({ otherAllergies: event.target.value })
-                    }
+                    type="date"
+                    value={draft.birthDate}
+                    onChange={(event) => updateDraft("body", { birthDate: event.target.value })}
                     className={compactInputClass}
                   />
                 </label>
-              ) : null}
 
-              <label className="block space-y-1.5">
-                <FieldLabel>Alimentos que no te gustan</FieldLabel>
-                <textarea
-                  value={dislikedFoodsText}
-                  aria-invalid={dislikedFoodsTooLong}
-                  aria-describedby="disliked-foods-count"
-                  placeholder="Cuéntanos si hay algún alimento que prefieras evitar. Sepáralos con comas."
-                  onChange={(event) => {
-                    setDislikedFoodsText(event.target.value);
-                    updateProfile({
-                      dislikedFoods: textToDislikedFoods(event.target.value),
-                    });
-                  }}
-                  className={`${compactInputClass} min-h-20 resize-y leading-5 placeholder:text-xs placeholder:italic placeholder:text-[color:var(--color-muted-foreground)]`}
-                />
-                <span
-                  id="disliked-foods-count"
-                  className={`block text-right text-[0.68rem] font-semibold ${
-                    dislikedFoodsTooLong
-                      ? "text-[color:var(--color-danger)]"
-                      : "text-[color:var(--color-muted-foreground)]"
-                  }`}
-                >
-                  {dislikedFoodsTooLong
-                    ? `${dislikedFoodsCharacters}/${dislikedFoodsMaxLength} · Acorta la lista para poder guardar`
-                    : `${dislikedFoodsCharacters}/${dislikedFoodsMaxLength}`}
-                </span>
-              </label>
-            </div>
-          </Card>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block min-w-0 space-y-1.5">
+                    <FieldLabel>Altura</FieldLabel>
+                    <span className="relative block">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="off"
+                        placeholder={`${PROFILE_LIMITS.heightCm.min}–${PROFILE_LIMITS.heightCm.max}`}
+                        value={draft.heightCm}
+                        onChange={(event) => updateDraft("body", { heightCm: event.target.value })}
+                        className={`${compactInputClass} pr-10`}
+                      />
+                      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[0.78rem] font-semibold text-[color:var(--color-muted-foreground)]">
+                        cm
+                      </span>
+                    </span>
+                  </label>
+
+                  <label className="block min-w-0 space-y-1.5">
+                    <FieldLabel>Peso</FieldLabel>
+                    <span className="relative block">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="off"
+                        placeholder={`${PROFILE_LIMITS.weightKg.min}–${PROFILE_LIMITS.weightKg.max}`}
+                        value={draft.weightKg}
+                        onChange={(event) => updateDraft("body", { weightKg: event.target.value })}
+                        className={`${compactInputClass} pr-10`}
+                      />
+                      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[0.78rem] font-semibold text-[color:var(--color-muted-foreground)]">
+                        kg
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            ) : null}
+          </SectionCard>
 
           <Card className="space-y-3 p-3.5 sm:p-4">
-            <SectionTitle title="Cuenta" />
+            <h2 className="t-h2 text-[color:var(--color-foreground)]">Cuenta</h2>
             {userEmail ? <SyncNotice state={syncState} /> : null}
             {confirmSignOut ? (
               <p className="t-meta text-[color:var(--color-danger)]">
@@ -808,50 +791,24 @@ export default function ProfilePage() {
             </div>
           </Card>
 
-          <div className="sticky bottom-[calc(6rem+env(safe-area-inset-bottom))] z-20 -mx-3 border-t border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 px-3 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p
-                className={`min-h-5 text-[0.78rem] font-semibold ${
-                  saveStatus === "error" || saveStatus === "invalid"
-                    ? "text-[color:var(--color-danger)]"
-                    : "text-[color:var(--color-secondary-hover)]"
-                }`}
-              >
-                {saveStatus === "saved-remote" ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Check aria-hidden="true" className="h-4 w-4" />
-                    Perfil sincronizado
-                  </span>
-                ) : saveStatus === "saved-local" ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Check aria-hidden="true" className="h-4 w-4" />
-                    Perfil guardado en este dispositivo
-                  </span>
-                ) : saveStatus === "saving" ? (
-                  "Guardando perfil"
-                ) : saveStatus === "invalid" ? (
-                  <span role="alert">
-                    {validationIssues.map((issue) => issue.message).join(" ")}
-                  </span>
-                ) : saveStatus === "error" ? (
-                  "No se pudo guardar en tu cuenta. El cambio queda pendiente en este dispositivo y se reintentará."
-                ) : hasLoadedProfile ? (
-                  ""
-                ) : (
-                  "Cargando perfil"
-                )}
-              </p>
-              <PrimaryButton
-                type="submit"
-                disabled={saveStatus === "saving"}
-                size="lg"
-                className="w-full sm:w-auto"
-              >
-                <Save aria-hidden="true" className="h-4 w-4" />
-                {saveStatus === "saving" ? "Guardando..." : "Guardar perfil"}
-              </PrimaryButton>
+          {!savedProfile && hasLoadedProfile ? (
+            <div className="sticky bottom-[calc(6rem+env(safe-area-inset-bottom))] z-20 -mx-3 border-t border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 px-3 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+              <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-h-5 min-w-0">
+                  <SectionFeedback state={saveStates.all} />
+                </div>
+                <PrimaryButton
+                  type="submit"
+                  disabled={isSaving}
+                  size="lg"
+                  className="w-full sm:w-auto"
+                >
+                  <Save aria-hidden="true" className="h-4 w-4" />
+                  {saveStates.all?.status === "saving" ? "Guardando…" : "Guardar perfil"}
+                </PrimaryButton>
+              </div>
             </div>
-          </div>
+          ) : null}
         </form>
       </div>
     </main>

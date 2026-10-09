@@ -91,6 +91,17 @@
       "sha256": "8b56cd0db6829410bd0336841752a4b2c5cf7577475fbcc0611648e203adac0d",
       "executedBy": "Claude (conector Supabase)",
       "backup": "Backup completo externo en ~/Backups/becook/2026-10-09."
+    },
+    {
+      "appliedAt": "2026-10-09",
+      "type": "migration",
+      "ledger": true,
+      "version": "20261009223500",
+      "name": "pantry_item_writes",
+      "source": "supabase/migrations/20261009180000_pantry_item_writes.sql",
+      "sha256": "9abf6573e08c3164256e2becfaf9a03c46fd1305031c46c72c22045222286b85",
+      "executedBy": "Sergio (SQL Editor)",
+      "notes": "Aplicada por SQL Editor (el conector se bloquea con el DELETE de delete_pantry_items); registrada en supabase_migrations con esta versión."
     }
   ]
 }

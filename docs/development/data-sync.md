@@ -1,4 +1,4 @@
-# beCook: identidad, datos locales y sincronización (B1, B4, B6)
+# beCook: identidad, datos locales y sincronización (B1, B4, B6, B7)
 
 Pasos 06 y 07 del roadmap (H3, H7), sin cambios de base de datos, y paso 10 (B4, H8):
 escrituras de semana transaccionales con versión e idempotencia.
@@ -27,7 +27,7 @@ Entidades: `profile`, `pantry`, `week:YYYY-Www`, `selected-week`,
 Valor con versión de formato:
 `{ v: 1, data, savedAt, remoteVersion, pending }`. `remoteVersion` es la versión
 remota sobre la que se basa la copia (semana: `weeks.version`; perfil y despensa:
-`updated_at`); `pending` indica un cambio
+`updated_at`; despensa desde B7: ver «Despensa (B7)»); `pending` indica un cambio
 local no aceptado aún por el servidor (nunca en invitado).
 
 El borrador de «Crear menú» sigue en `sessionStorage` sin ámbito, a propósito:
@@ -67,8 +67,8 @@ Usuario autenticado (`src/lib/data/sync.ts`, `src/lib/data/repositories.ts`):
 La comparación usa siempre versiones del servidor, nunca el reloj del dispositivo.
 Versión por entidad: `weeks.version` (entero; el trigger `set_weeks_version` lo
 incrementa en cada INSERT/UPDATE de la semana, sea cual sea el cliente que escribe),
-`profiles.updated_at` y, para la despensa, el `updated_at` más reciente de sus
-artículos. `weeks.updated_at` sigue existiendo y sirve para saber si una lista de la
+`profiles.updated_at` y, para la despensa, `pantry_items.version` **por artículo** (B7;
+antes, el `updated_at` más reciente de todos sus artículos). `weeks.updated_at` sigue existiendo y sirve para saber si una lista de la
 compra es anterior al último cambio de la semana.
 
 Copias de semana guardadas antes de B4 tienen un `updated_at` como `remoteVersion`:
@@ -159,6 +159,53 @@ completa por clic) sigue funcionando y el cliente nuevo reutiliza su lista más
 reciente (escenario 8 de `scripts/shopping-db-tests.cjs`, con una copia congelada
 del cliente de 5a573ff en `tests/fixtures/`).
 
+## Despensa (B7)
+
+Paso 13 del roadmap (H8 §8). Código en `src/lib/data/pantry.ts`; migración
+`20261009180000_pantry_item_writes` (aditiva: `pantry_items.version`, trigger
+`set_pantry_items_version` y tres funciones `SECURITY INVOKER` solo para `authenticated`). Las
+filas existentes no se tocan (empiezan en versión 1).
+
+- **Nunca se reemplaza la despensa entera.** Antes, cada cambio era DELETE de todas las filas
+  del usuario + INSERT de la lista: un fallo entre ambos dejaba la cuenta vacía y dos
+  dispositivos a la vez duplicaban filas o perdían un cambio.
+- **Lectura**: despensa de la cuenta → si no responde, copia del dispositivo (aviso). Nada se
+  declara vacío sin confirmarlo la cuenta. Las filas se agrupan por categoría y nombre
+  normalizado (mayúsculas, acentos, espacios): las filas duplicadas por el cliente anterior se
+  ven como un artículo y cada cambio se aplica a todas ellas.
+- **Escrituras por artículo**, cada una con la versión de sus filas:
+  - `add_pantry_items(items)`: id elegido por el cliente → reenviar no crea nada
+    (`duplicate`). Si ya existe un artículo con esa categoría y nombre → `existing`, no se
+    duplica (dos dispositivos añadiendo lo mismo acaban con una fila). Enlaza el perfil propio
+    del usuario (el más reciente), nunca uno enviado por el cliente.
+  - `set_pantry_items_active(filas, valor)`: fija el valor (no alterna). Si ya lo tenía →
+    `applied` sin escribir (reenvío inofensivo). Versión distinta → `conflict`. Fila
+    inexistente → `missing`.
+  - `delete_pantry_items(filas)`: filas ya borradas → `applied`. Versión distinta → `conflict`.
+  - Todas toman un bloqueo de transacción por usuario: las escrituras de despensa de un
+    usuario van de una en una.
+- **Conflictos**: cambios en artículos distintos nunca chocan. Un cambio sobre un artículo que
+  otro dispositivo modificó o borró desde que se leyó se rechaza: **gana la cuenta**, se relee
+  y se muestra el aviso «Había cambios en este dispositivo que no se guardaron…».
+- **Sin conexión**: cada cambio queda pendiente en su artículo (`pending`: `add` con su id,
+  `active` o `delete`, con las versiones en que se basó) y se envía en la siguiente carga. Un
+  cambio cuya respuesta se perdió se reenvía sin efecto. Añadido y borrado sin conexión → no
+  llega nada a la cuenta.
+- **Despensa vacía**: si la cuenta confirma que no hay artículos, se muestran los de base y el
+  primer cambio los añade todos (una petición). Sin esa confirmación (sin copia y sin
+  conexión) solo se envía el artículo cambiado: nunca se siembran artículos en una cuenta que
+  ya tiene despensa.
+- **Copias anteriores a B7** con un cambio pendiente: si la cuenta sigue en la versión en que
+  se basaron (`updated_at` más reciente), el cambio se convierte en escrituras por artículo; si
+  no, gana la cuenta.
+- Invitado: solo local, como antes.
+
+Despliegue: migración antes que el código. El cliente de `main` (DELETE + INSERT) sigue
+funcionando; sus filas nuevas tienen versión 1 e ids nuevos, y el cliente nuevo, al no
+encontrar las filas que tenía, relee la cuenta en lugar de recrearlas (escenario 8 de
+`scripts/pantry-db-tests.cjs`, con una copia congelada del cliente de ab2433b en
+`tests/fixtures/`).
+
 ## Datos anteriores a B1 (sin ámbito)
 
 Al arrancar, las claves `becook-profile`, `becook-pantry-base` y
@@ -192,3 +239,10 @@ Nunca se asignan a una cuenta automáticamente. Con sesión iniciada aparece
   cachés antiguas, invitado y orden de marcados.
 - `scripts/shopping-db-tests.cjs` (en `test:db`): los mismos recorridos contra Supabase
   local, concurrencia, permisos (otro usuario, anon), validación y despliegue.
+- `tests/pantry-items.test.cjs`: despensa vacía y artículos de base, escritura por artículo,
+  dos dispositivos, conflicto, borrado en otro dispositivo, sin conexión, respuesta perdida,
+  añadir lo que ya existe, filas duplicadas, cambios rápidos, copias anteriores a B7, invitado
+  e importación.
+- `scripts/pantry-db-tests.cjs` (en `test:db`): el defecto reproducido (fallo de red a mitad),
+  dos dispositivos en paralelo (3 rondas), conflicto, respuesta perdida, despensa vacía,
+  permisos (otro usuario, anon), validación y despliegue con el cliente anterior.

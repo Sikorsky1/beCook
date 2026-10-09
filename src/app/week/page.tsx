@@ -13,6 +13,7 @@ import {
   formatIsoWeekTitle,
   getDayPosition,
   getIsoWeekDays,
+  getIsoWeekStorageId,
   getMadridToday,
   isSameIsoWeek,
   type IsoWeek,
@@ -29,6 +30,13 @@ import {
 import { pageShellClass } from "@/lib/ui";
 import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
 import { withWeekDates } from "@/lib/weekStorage";
+import {
+  getDayStripCells,
+  getWeekTodayLayout,
+  nextMadridToday,
+  selectedPositionFor,
+  type DaySelection,
+} from "@/lib/weekToday";
 
 const dayStrip = [
   { name: "Lunes", initial: "L" },
@@ -54,7 +62,7 @@ function WeekPageContent() {
   const [syncState, setSyncState] = useState<SyncState>({});
   const identity = useIdentity();
   const isSignedIn = identity.userId !== null;
-  const [activeDay, setActiveDay] = useState<number | null>(null);
+  const [daySelection, setDaySelection] = useState<DaySelection>(null);
   // Restrictions for «Otra idea»; always this identity's profile (B1). Until it has been read
   // for the current identity, no idea is offered (an empty profile would skip allergies).
   const profileKey = `${identity.scope}:${identity.epoch}`;
@@ -63,16 +71,21 @@ function WeekPageContent() {
 
   const isCurrentWeek =
     selectedIsoWeek && today ? isSameIsoWeek(selectedIsoWeek, today.week) : false;
+  const layout = useMemo(
+    () => (weekDays && selectedIsoWeek ? getWeekTodayLayout(weekDays, selectedIsoWeek, today) : null),
+    [weekDays, selectedIsoWeek, today],
+  );
   const todayIndex = isCurrentWeek && today ? today.position : null;
   // Partial weeks only have cards for some days; the strip only jumps to those.
   const presentPositions = useMemo(
     () => new Set((weekDays ?? []).map((day) => getDayPosition(day.day))),
     [weekDays],
   );
-  const firstPresentPosition = weekDays?.length ? getDayPosition(weekDays[0].day) : 0;
-  const effectiveActiveDay =
-    activeDay ??
-    (todayIndex !== null && presentPositions.has(todayIndex) ? todayIndex : firstPresentPosition);
+  const stripCells = getDayStripCells(
+    presentPositions,
+    todayIndex,
+    selectedIsoWeek ? selectedPositionFor(daySelection, selectedIsoWeek) : null,
+  );
   const weekDayNumbers = useMemo(
     () => (selectedIsoWeek ? getIsoWeekDays(selectedIsoWeek).map((day) => day.dayOfMonth) : null),
     [selectedIsoWeek],
@@ -117,6 +130,23 @@ function WeekPageContent() {
 
     return () => window.clearTimeout(timer);
   }, [router, weekParam, isoWeekParam, isoYearParam, identity.status, identity.scope, identity.userId]);
+
+  useEffect(() => {
+    // A page left open overnight shows the new «Hoy» when it is looked at again.
+    const refreshToday = () => {
+      if (document.visibilityState === "visible") {
+        setToday((current) => (current ? nextMadridToday(current, getMadridToday()) : current));
+      }
+    };
+
+    document.addEventListener("visibilitychange", refreshToday);
+    window.addEventListener("focus", refreshToday);
+
+    return () => {
+      document.removeEventListener("visibilitychange", refreshToday);
+      window.removeEventListener("focus", refreshToday);
+    };
+  }, []);
 
   useEffect(() => {
     // Identity first: nothing is read until we know whose data this is.
@@ -202,7 +232,7 @@ function WeekPageContent() {
 
   // Navigation goes through the URL, so the week is shareable and survives a reload.
   const goToWeek = (isoWeek: IsoWeek) => {
-    setActiveDay(null);
+    setDaySelection(null);
     setWeekNotice(null);
     router.push(buildWeekHref("/week", isoWeek), { scroll: false });
   };
@@ -214,7 +244,9 @@ function WeekPageContent() {
   };
 
   const handleSelectDay = (dayIndex: number) => {
-    setActiveDay(dayIndex);
+    if (selectedIsoWeek) {
+      setDaySelection({ weekId: getIsoWeekStorageId(selectedIsoWeek), position: dayIndex });
+    }
 
     const dayCard = document.getElementById(`week-day-${dayIndex}`);
 
@@ -345,32 +377,36 @@ function WeekPageContent() {
                 role="group"
                 aria-label="Ir a un día de la semana"
               >
-                {dayStrip.map((day, index) => {
-                  const hasCard = presentPositions.has(index);
-                  const isActive = hasCard && effectiveActiveDay === index;
-                  const isTodayCell = todayIndex === index;
+                {stripCells.map((cell) => {
+                  const day = dayStrip[cell.position];
+                  const dayNumber = weekDayNumbers[cell.position];
 
                   return (
                     <button
                       key={day.name}
                       type="button"
-                      onClick={() => handleSelectDay(index)}
-                      disabled={!hasCard}
-                      aria-label={`${day.name} ${weekDayNumbers[index]}${hasCard ? "" : ", sin menú"}`}
-                      aria-current={isActive ? "true" : undefined}
-                      className={`flex min-h-11 flex-col items-center justify-center rounded-xl border transition-colors disabled:cursor-default disabled:opacity-45 ${
-                        isActive
-                          ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary)] text-white"
-                          : isTodayCell
-                            ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
-                            : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)] hover:border-[color:var(--color-border-strong)]"
+                      onClick={() => handleSelectDay(cell.position)}
+                      disabled={!cell.hasMenu}
+                      aria-label={`${day.name} ${dayNumber}${cell.isToday ? ", hoy" : ""}${cell.hasMenu ? "" : ", sin menú"}`}
+                      aria-current={cell.isToday ? "date" : undefined}
+                      aria-pressed={cell.hasMenu ? cell.isSelected : undefined}
+                      className={`flex min-h-11 flex-col items-center justify-center rounded-xl border-2 transition-colors disabled:cursor-default disabled:opacity-45 ${
+                        cell.isToday
+                          ? "bg-[color:var(--color-accent)] text-white"
+                          : "bg-[color:var(--color-surface)] text-[color:var(--color-foreground)]"
+                      } ${
+                        cell.isSelected
+                          ? "border-[color:var(--color-foreground)]"
+                          : cell.isToday
+                            ? "border-[color:var(--color-accent)]"
+                            : "border-[color:var(--color-border)] hover:border-[color:var(--color-border-strong)]"
                       }`}
                     >
                       <span className="text-[0.82rem] font-bold leading-none">
                         {day.initial}
                       </span>
                       <span className="mt-0.5 text-[0.62rem] font-semibold leading-none opacity-75">
-                        {weekDayNumbers[index]}
+                        {dayNumber}
                       </span>
                     </button>
                   );
@@ -392,23 +428,52 @@ function WeekPageContent() {
         {isSignedIn ? <SyncNotice state={syncState} /> : null}
 
         <section>
-          {weekDays ? (
-            <div className="flex flex-col gap-2.5">
-              {weekDays.map((day) => (
-                <div
-                  key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}-${day.day}`}
-                  id={`week-day-${getDayPosition(day.day)}`}
-                  className="scroll-mt-[172px]"
-                >
-                  <WeekDayCard
-                    day={day}
-                    isToday={todayIndex !== null && getDayPosition(day.day) === todayIndex}
-                    onMealChange={handleMealChange}
-                    onRequestIdea={handleRequestIdea}
-                    loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
-                  />
+          {weekDays && layout ? (
+            <div className="flex flex-col gap-4">
+              {layout.todayPosition !== null ? (
+                <div id={`week-day-${layout.todayPosition}`} className="scroll-mt-[172px]">
+                  {layout.todayDay ? (
+                    <WeekDayCard
+                      key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}-${layout.todayDay.day}`}
+                      day={layout.todayDay}
+                      variant="today"
+                      onMealChange={handleMealChange}
+                      onRequestIdea={handleRequestIdea}
+                      loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
+                    />
+                  ) : (
+                    <p className="rounded-[var(--radius-card)] border-2 border-dashed border-[color:var(--color-accent)] bg-[color:var(--color-surface)] px-4 py-3 text-sm leading-6 text-[color:var(--color-muted-foreground)]">
+                      <span className="mr-1.5 rounded-full bg-[color:var(--color-accent)] px-2.5 py-1 text-xs font-semibold text-white">
+                        Hoy
+                      </span>
+                      No hay comidas planificadas para hoy en este menú.
+                    </p>
+                  )}
                 </div>
-              ))}
+              ) : null}
+
+              {layout.otherDays.length ? (
+                <div className="flex flex-col gap-2">
+                  {layout.todayPosition !== null ? (
+                    <h2 className="t-micro px-1">Resto de la semana</h2>
+                  ) : null}
+                  {layout.otherDays.map((day) => (
+                    <div
+                      key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}-${day.day}`}
+                      id={`week-day-${getDayPosition(day.day)}`}
+                      className="scroll-mt-[172px]"
+                    >
+                      <WeekDayCard
+                        day={day}
+                        variant="compact"
+                        onMealChange={handleMealChange}
+                        onRequestIdea={handleRequestIdea}
+                        loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] p-6 text-center">

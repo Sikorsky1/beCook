@@ -64,19 +64,6 @@ function parsePantryCategory(value: string | null): PantryCategory {
   throw new Error(`Unexpected value in pantry_items.category: ${parsedValue}.`);
 }
 
-function getPantryItemRow(
-  item: PantryItem,
-  options: { profileId?: string; userId?: string | null } = {},
-) {
-  return {
-    profile_id: options.profileId ?? item.profileId ?? null,
-    user_id: options.userId ?? item.userId ?? null,
-    name: item.name.trim(),
-    category: item.category,
-    active: item.active,
-  };
-}
-
 function rowToPantryItem(row: PantryItemRow): PantryItem {
   return {
     id: row.id,
@@ -86,48 +73,6 @@ function rowToPantryItem(row: PantryItemRow): PantryItem {
     category: parsePantryCategory(row.category),
     active: parseRequiredBoolean(row.active, "pantry_items.active"),
   };
-}
-
-export async function savePantryItemsToSupabase(
-  items: PantryItem[],
-  profileId?: string,
-  userId?: string | null,
-) {
-  if (!supabase) {
-    throw new Error(
-      "Supabase client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.",
-    );
-  }
-
-  if (!Array.isArray(items) || items.length === 0) {
-    throw new Error("Cannot save pantry items without items.");
-  }
-
-  const pantryItems = items.map((item) =>
-    getPantryItemRow(item, { profileId, userId }),
-  );
-  console.log("Saving pantry item with user:", userId ?? null);
-
-  const { data: insertedItems, error: pantryItemsError } = await supabase
-    .from("pantry_items")
-    .insert(pantryItems)
-    .select("id");
-
-  if (pantryItemsError) {
-    throw new Error(`Could not save pantry items: ${pantryItemsError.message}`);
-  }
-
-  const insertedIds = ((insertedItems ?? []) as { id?: string }[])
-    .map((item) => item.id)
-    .filter((id): id is string => Boolean(id));
-
-  if (insertedIds.length !== items.length) {
-    throw new Error(
-      `Could not save pantry items: expected ${items.length} ids, received ${insertedIds.length}.`,
-    );
-  }
-
-  return insertedIds;
 }
 
 export async function getLatestPantryItemsFromSupabase(
@@ -158,66 +103,135 @@ export async function getLatestPantryItemsFromSupabase(
   return ((pantryItems ?? []) as PantryItemRow[]).map(rowToPantryItem);
 }
 
-export async function replacePantryItemsInSupabase(
-  items: PantryItem[],
-  profileId?: string,
-  userId?: string | null,
-) {
+// One account row of the pantry and its version (pantry_items.version, B7).
+export type PantryRowState = {
+  id: string;
+  name: string;
+  category: PantryCategory;
+  active: boolean;
+  version: number;
+};
+
+export type PantryRowRef = { id: string; version: number };
+
+export type AddPantryItemResult = {
+  // The id sent by the client.
+  id: string;
+  // created · duplicate: already added with that id · existing: same category and name already there.
+  result: "created" | "duplicate" | "existing";
+  row: PantryRowState;
+};
+
+export type PantryRowsWriteResult = {
+  status: "applied" | "conflict" | "missing";
+  rows: PantryRowState[];
+};
+
+function requireSupabase() {
   if (!supabase) {
     throw new Error(
       "Supabase client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.",
     );
   }
-
-  let deleteQuery = supabase.from("pantry_items").delete();
-
-  if (userId) {
-    deleteQuery = deleteQuery.eq("user_id", userId);
-  } else {
-    deleteQuery = profileId
-      ? deleteQuery.eq("profile_id", profileId)
-      : deleteQuery.is("profile_id", null);
-  }
-
-  const { error: deleteError } = await deleteQuery;
-
-  if (deleteError) {
-    throw new Error(`Could not replace pantry items: ${deleteError.message}`);
-  }
-
-  if (items.length === 0) {
-    return [];
-  }
-
-  return savePantryItemsToSupabase(items, profileId, userId);
+  return supabase;
 }
 
-// The signed-in user's pantry and its version (latest updated_at; null when empty).
-export async function getPantryForUserFromSupabase(
-  userId: string,
-): Promise<{ items: PantryItem[]; version: string | null }> {
-  if (!supabase) {
-    throw new Error(
-      "Supabase client is not configured. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local.",
-    );
+function parseRowState(value: unknown): PantryRowState {
+  const row = value as { id?: unknown; name?: unknown; category?: unknown; active?: unknown; version?: unknown } | null;
+  if (!row || typeof row.id !== "string" || typeof row.version !== "number") {
+    throw new Error("Unexpected pantry row.");
   }
+  return {
+    id: row.id,
+    name: parseRequiredString(typeof row.name === "string" ? row.name : null, "pantry_items.name"),
+    category: parsePantryCategory(typeof row.category === "string" ? row.category : null),
+    active: parseRequiredBoolean(typeof row.active === "boolean" ? row.active : null, "pantry_items.active"),
+    version: row.version,
+  };
+}
 
-  const { data: rows, error } = await supabase
+// The signed-in user's pantry rows, oldest first (the first row of an item names it), and the
+// latest updated_at (only to recognise device copies saved before B7; null when empty).
+export async function getPantryRowsForUserFromSupabase(
+  userId: string,
+): Promise<{ rows: PantryRowState[]; version: string | null }> {
+  const { data, error } = await requireSupabase()
     .from("pantry_items")
-    .select("id,profile_id,user_id,name,category,active,updated_at")
+    .select("id,name,category,active,version,updated_at")
     .eq("user_id", userId)
-    .order("category", { ascending: true })
-    .order("name", { ascending: true });
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
 
   if (error) {
     throw new Error(`Could not read pantry items: ${error.message}`);
   }
 
-  const typedRows = (rows ?? []) as (PantryItemRow & { updated_at: string | null })[];
-  const version = typedRows.reduce<string | null>(
+  const rows = (data ?? []) as { updated_at: string | null }[];
+  const version = rows.reduce<string | null>(
     (latest, row) => (row.updated_at && (!latest || row.updated_at > latest) ? row.updated_at : latest),
     null,
   );
 
-  return { items: typedRows.map(rowToPantryItem), version };
+  return { rows: rows.map(parseRowState), version };
+}
+
+// add_pantry_items: ids chosen by the client, so a retried request changes nothing.
+export async function addPantryItemsInSupabase(
+  items: { id: string; name: string; category: PantryCategory; active: boolean }[],
+): Promise<AddPantryItemResult[]> {
+  const { data, error } = await requireSupabase().rpc("add_pantry_items", {
+    p_items: items.map(({ id, name, category, active }) => ({ id, name, category, active })),
+  });
+
+  if (error) {
+    throw new Error(`Could not add pantry items: ${error.message}`);
+  }
+
+  const result = data as { status?: string; items?: { id?: unknown; result?: unknown; row?: unknown }[] } | null;
+  if (result?.status !== "applied" || !Array.isArray(result.items)) {
+    throw new Error("Unexpected add_pantry_items result.");
+  }
+
+  return result.items.map((item) => {
+    if (typeof item.id !== "string" || !["created", "duplicate", "existing"].includes(String(item.result))) {
+      throw new Error("Unexpected add_pantry_items result.");
+    }
+    return { id: item.id, result: item.result as AddPantryItemResult["result"], row: parseRowState(item.row) };
+  });
+}
+
+function parseRowsWrite(data: unknown, name: string): PantryRowsWriteResult {
+  const result = data as { status?: string; rows?: unknown } | null;
+  if ((result?.status === "applied" || result?.status === "conflict" || result?.status === "missing")
+    && (result.rows === null || Array.isArray(result.rows))) {
+    return { status: result.status, rows: ((result.rows ?? []) as unknown[]).map(parseRowState) };
+  }
+  throw new Error(`Unexpected ${name} result.`);
+}
+
+// set_pantry_items_active: sets (never toggles) the value of every row of one visible item.
+export async function setPantryItemsActiveInSupabase(rows: PantryRowRef[], active: boolean) {
+  const { data, error } = await requireSupabase().rpc("set_pantry_items_active", {
+    p_rows: rows.map(({ id, version }) => ({ id, version })),
+    p_active: active,
+  });
+
+  if (error) {
+    throw new Error(`Could not update pantry items: ${error.message}`);
+  }
+
+  return parseRowsWrite(data, "set_pantry_items_active");
+}
+
+// delete_pantry_items: rows already gone count as deleted.
+export async function deletePantryItemsInSupabase(rows: PantryRowRef[]) {
+  const { data, error } = await requireSupabase().rpc("delete_pantry_items", {
+    p_rows: rows.map(({ id, version }) => ({ id, version })),
+  });
+
+  if (error) {
+    throw new Error(`Could not delete pantry items: ${error.message}`);
+  }
+
+  return parseRowsWrite(data, "delete_pantry_items");
 }
