@@ -35,16 +35,15 @@ import {
   type IsoWeek,
 } from "@/lib/isoWeek";
 import {
-  loadPantry,
   newRequestKey,
   loadProfile,
-  readCachedPantry,
   readCachedProfile,
   readRemoteWeek,
   readSelectedWeek,
   saveWeek,
   writeSelectedWeek,
 } from "@/lib/data/repositories";
+import { loadPantry, readCachedPantry } from "@/lib/data/pantry";
 import { pantryItemsOrDefault } from "@/lib/pantryStorage";
 import { ensureShoppingList } from "@/lib/data/shopping";
 import { getAccessToken } from "@/lib/supabase/auth";

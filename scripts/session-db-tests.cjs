@@ -7,6 +7,7 @@ async function runSessionTests({ check, id, supabase }) {
   const { createDevice, useDevice } = require(path.join(__dirname, "../tests/helpers/fake-browser.cjs"));
   const { createIdentityStore } = require("../src/lib/session/identity.ts");
   const repos = require("../src/lib/data/repositories.ts");
+  const pantry = require("../src/lib/data/pantry.ts");
   const restoreDevice = useDevice(createDevice());
   const store = createIdentityStore(supabase);
   try {
@@ -15,7 +16,7 @@ async function runSessionTests({ check, id, supabase }) {
     await store.start();
     const asA = store.getSnapshot();
     const profileA = await repos.loadProfile(asA);
-    const pantryA = await repos.loadPantry(asA);
+    const pantryA = await pantry.loadPantry(asA);
     check("B1 session: A resolves to its own scope and loads its own profile and pantry", () => {
       assert.equal(asA.userId, id("0", 1));
       assert.equal(profileA.source, "remote");
@@ -38,7 +39,7 @@ async function runSessionTests({ check, id, supabase }) {
     });
     const cachedForB = repos.readCachedProfile(asB);
     const profileB = await repos.loadProfile(asB);
-    const pantryB = await repos.loadPantry(asB);
+    const pantryB = await pantry.loadPantry(asB);
     check("B1 session: B sees only B's profile and pantry, never A's", () => {
       assert.equal(cachedForB, null);
       assert.equal(profileB.data.id, id("1", 2));

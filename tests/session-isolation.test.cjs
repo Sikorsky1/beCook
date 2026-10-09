@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const {createDevice, useDevice} = require("./helpers/fake-browser.cjs");
 const {createIdentityStore} = require("../src/lib/session/identity.ts");
 const repos = require("../src/lib/data/repositories.ts");
+const pantry = require("../src/lib/data/pantry.ts");
+const {createPantryBackend} = require("./helpers/fake-pantry.cjs");
 const {migrateLegacyStorage, readLegacyOrigin} = require("../src/lib/storage/legacy.ts");
 const {importLegacyData, declineLegacyImport, hasPendingLegacyData} = require("../src/lib/data/legacy-import.ts");
 const {readEnvelope, scopeForUser, scopeHasPendingChanges} = require("../src/lib/storage/scoped-storage.ts");
@@ -18,7 +20,8 @@ const daysOf = dish => [{day: "Lunes", date: "5 oct", lunch: dish, dinner: "LIBR
 function createRemoteBackend() {
  let clock = 0;
  const tick = () => `2026-10-06T10:00:00.${String(++clock).padStart(6, "0")}+00:00`;
- const state = {profiles: new Map(), weeks: new Map(), pantries: new Map(), down: false, calls: 0};
+ const state = {profiles: new Map(), weeks: new Map(), down: false, calls: 0};
+ const pantryBackend = createPantryBackend();
  const entity = (map, key) => ({
   async fetch() {
    state.calls++;
@@ -37,7 +40,7 @@ function createRemoteBackend() {
  const remotes = {
   profile: userId => entity(state.profiles, userId),
   week: (userId, isoWeek) => entity(state.weeks, `${userId}:${isoWeek.isoYear}-${isoWeek.isoWeek}`),
-  pantry: userId => entity(state.pantries, userId),
+  pantry: userId => pantryBackend.remote(userId),
   shopping: () => ({fetch: async () => ({week: null, list: null}), save: async () => ({status: "no_week"}), setChecked: async () => ({status: "missing"})}),
  };
  return {state, remotes, editElsewhere: (map, key, data) => map.set(key, {data, version: tick()})};
@@ -79,7 +82,7 @@ test("H3 regression: A signs in, saves, signs out; B signs in on the same device
  assert.equal(asA.scope, scopeForUser(A));
  assert.equal((await repos.saveProfile(asA, profileOf("A", {id: "profile-of-A"}))).status, "synced");
  assert.equal((await repos.saveWeek(asA, week41, daysOf("Plato de A"))).status, "synced");
- assert.equal((await repos.savePantry(asA, [{name: "Azafrán de A", category: "especias", active: true}])).status, "synced");
+ assert.equal((await pantry.addPantryItem(asA, "especias", "Azafrán de A")).status, "synced");
 
  await store.signOut();
  assert.equal(store.getSnapshot().scope, "guest");
@@ -93,7 +96,7 @@ test("H3 regression: A signs in, saves, signs out; B signs in on the same device
  assert.equal(repos.readCachedWeek(asB, week41), null);
  assert.equal((await repos.loadProfile(asB)).data, null, "B has no profile of its own");
  assert.equal((await repos.loadWeek(asB, week41)).data, null);
- assert.equal((await repos.loadPantry(asB)).data, null);
+ assert.equal((await pantry.loadPantry(asB)).data, null);
  assert.ok(!JSON.stringify(window.localStorage.map).includes("Plato de A"));
  assert.ok(!JSON.stringify(window.localStorage.map).includes("profile-of-A"));
 });
@@ -192,9 +195,9 @@ test("an explicit overwrite (user confirmed replacing the week) skips the versio
 
 test("rapid saves on one device never conflict with each other; the last one wins", async () => {
  const me = {scope: scopeForUser(A), userId: A};
- const results = await Promise.all([1, 2, 3].map(n => repos.savePantry(me, [{name: `Item ${n}`, category: "otros", active: true}])));
+ const results = await Promise.all([1, 2, 3].map(n => repos.saveProfile(me, profileOf(`Item ${n}`))));
  assert.ok(results.every(r => r.status === "synced"), JSON.stringify(results));
- assert.equal((await backend.remotes.pantry(A).fetch()).data[0].name, "Item 3");
+ assert.equal((await backend.remotes.profile(A).fetch()).data.dislikedFoods[0], "Item 3");
  assert.equal(scopeHasPendingChanges(me.scope), false);
 });
 

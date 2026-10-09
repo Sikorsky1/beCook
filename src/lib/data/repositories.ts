@@ -2,7 +2,6 @@
 // Pages call these instead of touching localStorage or Supabase directly.
 import type { WeekDay } from "@/data/mockWeek";
 import { getIsoWeekStorageId, parseIsoWeek, type IsoWeek } from "@/lib/isoWeek";
-import type { PantryStorageItem } from "@/lib/pantryStorage";
 import type { GeneratedShoppingListItem } from "@/lib/shoppingList";
 import {
   loadEntity,
@@ -20,6 +19,13 @@ import {
   writeScoped,
   type StorageScope,
 } from "@/lib/storage/scoped-storage";
+import type {
+  AddPantryItemResult,
+  PantryCategory,
+  PantryRowRef,
+  PantryRowState,
+  PantryRowsWriteResult,
+} from "@/lib/supabase/pantry";
 import type { UserProfile } from "@/lib/supabase/profiles";
 import type { SaveShoppingListResult, SetShoppingItemsCheckedResult, ShoppingList } from "@/lib/supabase/shopping-lists";
 import type { MealKind, WeekWriteResult } from "@/lib/supabase/weeks";
@@ -66,10 +72,19 @@ export type ShoppingRemote = {
   setChecked: (itemIds: string[], checked: boolean) => Promise<SetShoppingItemsCheckedResult>;
 };
 
+// The account side of the pantry (B7): its rows, and writes of one item at a time.
+export type PantryRemote = {
+  // version: latest updated_at (only to recognise device copies saved before B7).
+  fetch: () => Promise<{ rows: PantryRowState[]; version: string | null }>;
+  add: (items: { id: string; name: string; category: PantryCategory; active: boolean }[]) => Promise<AddPantryItemResult[]>;
+  setActive: (rows: PantryRowRef[], active: boolean) => Promise<PantryRowsWriteResult>;
+  remove: (rows: PantryRowRef[]) => Promise<PantryRowsWriteResult>;
+};
+
 export type Remotes = {
   profile: (userId: string) => EntityRemote<UserProfile>;
   week: (userId: string, isoWeek: IsoWeek, options?: WeekPushOptions) => EntityRemote<WeekDay[]>;
-  pantry: (userId: string) => EntityRemote<PantryStorageItem[]>;
+  pantry: (userId: string) => PantryRemote;
   shopping: (userId: string, isoWeek: IsoWeek) => ShoppingRemote;
 };
 
@@ -134,21 +149,22 @@ const supabaseRemotes: Remotes = {
     };
   },
   pantry(userId) {
-    const fetch = async () => {
-      const { getPantryForUserFromSupabase } = await import("@/lib/supabase/pantry");
-      const remote = await getPantryForUserFromSupabase(userId);
-      const items = remote.items.map(({ name, category, active }) => ({ name, category, active }));
-      return { data: items.length ? items : null, version: remote.version };
-    };
     return {
-      fetch,
-      async push(items) {
-        // The pantry links to the user's OWN profile, read from the server, never from a cache.
-        const { getProfileForUserFromSupabase } = await import("@/lib/supabase/profiles");
-        const { replacePantryItemsInSupabase } = await import("@/lib/supabase/pantry");
-        const ownProfile = await getProfileForUserFromSupabase(userId);
-        await replacePantryItemsInSupabase(items, ownProfile?.profile.id, userId);
-        return { version: (await fetch()).version };
+      async fetch() {
+        const { getPantryRowsForUserFromSupabase } = await import("@/lib/supabase/pantry");
+        return getPantryRowsForUserFromSupabase(userId);
+      },
+      async add(items) {
+        const { addPantryItemsInSupabase } = await import("@/lib/supabase/pantry");
+        return addPantryItemsInSupabase(items);
+      },
+      async setActive(rows, active) {
+        const { setPantryItemsActiveInSupabase } = await import("@/lib/supabase/pantry");
+        return setPantryItemsActiveInSupabase(rows, active);
+      },
+      async remove(rows) {
+        const { deletePantryItemsInSupabase } = await import("@/lib/supabase/pantry");
+        return deletePantryItemsInSupabase(rows);
       },
     };
   },
@@ -250,17 +266,9 @@ export function saveWeekSlot(
   );
 }
 
-// --- Pantry --------------------------------------------------------------
-export function readCachedPantry(identity: DataIdentity) {
-  return readCached<PantryStorageItem[]>({ scope: identity.scope, entity: "pantry" })?.data ?? null;
-}
-
-export function loadPantry(identity: DataIdentity): Promise<LoadResult<PantryStorageItem[]>> {
-  return loadEntity({ scope: identity.scope, entity: "pantry" }, identity.userId ? remotes.pantry(identity.userId) : null);
-}
-
-export function savePantry(identity: DataIdentity, items: PantryStorageItem[]): Promise<SaveResult<PantryStorageItem[]>> {
-  return saveEntity({ scope: identity.scope, entity: "pantry" }, items, identity.userId ? remotes.pantry(identity.userId) : null);
+// --- Pantry (item by item, see @/lib/data/pantry) ------------------------
+export function pantryRemote(identity: DataIdentity) {
+  return identity.userId ? remotes.pantry(identity.userId) : null;
 }
 
 // --- Selected week (device preference, per scope) ------------------------
