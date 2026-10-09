@@ -117,6 +117,11 @@ function normalizeIngredientUnit(unit: string) {
   return normalizeDisplayText(unit).toLowerCase();
 }
 
+// Visible identity of an item: the same ingredient and unit in one category is one line.
+export function getShoppingItemId(item: Pick<GeneratedShoppingListItem, "name" | "unit" | "category">) {
+  return `${item.category}-${normalizeIngredientName(item.name)}-${normalizeIngredientUnit(item.unit)}`;
+}
+
 export function groupShoppingListItems(
   items: GeneratedShoppingListItem[],
 ): ShoppingCategoryGroup[] {
@@ -160,7 +165,7 @@ export function groupShoppingListItems(
         .filter((item) => item.category === category)
         .map((item) => ({
           ...item,
-          id: `${item.category}-${normalizeIngredientName(item.name)}-${normalizeIngredientUnit(item.unit)}`,
+          id: getShoppingItemId(item),
         }))
         .sort((firstItem, secondItem) =>
           firstItem.name.localeCompare(secondItem.name, "es"),

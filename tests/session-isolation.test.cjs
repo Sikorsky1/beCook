@@ -36,9 +36,9 @@ function createRemoteBackend() {
  });
  const remotes = {
   profile: userId => entity(state.profiles, userId),
-  week: (userId, isoWeek) => ({...entity(state.weeks, `${userId}:${isoWeek.isoYear}-${isoWeek.isoWeek}`), weekId: async () => null}),
+  week: (userId, isoWeek) => entity(state.weeks, `${userId}:${isoWeek.isoYear}-${isoWeek.isoWeek}`),
   pantry: userId => entity(state.pantries, userId),
-  shoppingForWeek: async () => null,
+  shopping: () => ({fetch: async () => ({week: null, list: null}), save: async () => ({status: "no_week"}), setChecked: async () => ({status: "missing"})}),
  };
  return {state, remotes, editElsewhere: (map, key, data) => map.set(key, {data, version: tick()})};
 }

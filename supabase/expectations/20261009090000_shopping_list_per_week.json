@@ -1,0 +1,69 @@
+{
+  "migration": "20261009090000_shopping_list_per_week",
+  "replaces": {},
+  "supersedes": {
+    "schema": "Nothing: purely additive (no constraint, function, index or policy redefined). Existing lists and items are not modified.",
+    "client": [
+      "src/lib/supabase/shopping-lists.ts saveShoppingListToSupabase: one INSERT of a whole list and all its items on every generation and every click on an item (replaced by save_shopping_list once per week content and set_shopping_items_checked per item).",
+      "Shopping page reading this device's cache before the account list (now the account list of that week first; the cache only when the account cannot be reached).",
+      "List freshness by generated_at < weeks.updated_at, which since B4 also moves when the same menu is applied again (now the canonical week signature; the old rule only for lists without one).",
+      "Shopping generation aborted when leaving the page and started again on return (now one generation per week content, shared by every caller)."
+    ],
+    "rollout": "The previous client keeps working with this migration applied, and the new client reuses its lists (scripts/shopping-db-tests.cjs, scenario 8)."
+  },
+  "columns": [
+    {
+      "table_name": "shopping_lists",
+      "name": "week_signature",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "shopping_lists_week_signature_len_chk",
+      "table_name": "shopping_lists",
+      "definition": "CHECK (((week_signature IS NULL) OR ((char_length(week_signature) >= 1) AND (char_length(week_signature) <= 8000))))"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "shopping_lists",
+      "indexname": "shopping_lists_week_id_created_at_idx",
+      "indexdef": "CREATE INDEX shopping_lists_week_id_created_at_idx ON public.shopping_lists USING btree (week_id, created_at DESC, id DESC)"
+    }
+  ],
+  "functions": [
+    {
+      "proname": "save_shopping_list",
+      "definition": "CREATE OR REPLACE FUNCTION public.save_shopping_list(p_iso_year integer, p_iso_week integer, p_week_signature text, p_items jsonb, p_expected_week_version bigint DEFAULT NULL::bigint)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_categories constant text[] := ARRAY['frutería','carnicería','pescadería','lácteos','despensa','congelados','otros'];\n  v_week public.weeks%ROWTYPE;\n  v_list public.shopping_lists%ROWTYPE;\n  v_count integer;\n  v_now timestamptz;\n  v_status text;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'save_shopping_list: authentication required';\n  END IF;\n  IF p_week_signature IS NULL OR char_length(p_week_signature) NOT BETWEEN 1 AND 8000 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_shopping_list: week signature required';\n  END IF;\n  IF jsonb_typeof(p_items) IS DISTINCT FROM 'array' OR jsonb_array_length(p_items) NOT BETWEEN 1 AND 300 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_shopping_list: 1 to 300 items required';\n  END IF;\n\n  SELECT count(*) INTO v_count\n  FROM jsonb_to_recordset(p_items) AS i(name text, quantity numeric, unit text, category text)\n  WHERE char_length(btrim(coalesce(i.name, ''))) BETWEEN 1 AND 120\n    AND i.quantity > 0 AND i.quantity <= 100000\n    AND char_length(btrim(coalesce(i.unit, ''))) BETWEEN 1 AND 40\n    AND i.category = ANY (v_categories);\n  IF v_count <> jsonb_array_length(p_items) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_shopping_list: invalid item';\n  END IF;\n\n  SELECT * INTO v_week FROM public.weeks\n  WHERE user_id = v_user AND iso_year = p_iso_year AND iso_week = p_iso_week\n  FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'no_week', 'list', NULL, 'week_version', NULL);\n  END IF;\n  IF p_expected_week_version IS NOT NULL AND v_week.version <> p_expected_week_version THEN\n    RETURN jsonb_build_object('status', 'week_changed', 'list', NULL, 'week_version', v_week.version);\n  END IF;\n\n  SELECT * INTO v_list FROM public.shopping_lists\n  WHERE week_id = v_week.id\n  ORDER BY created_at DESC, id DESC\n  LIMIT 1;\n  IF FOUND AND v_list.week_signature IS NOT DISTINCT FROM p_week_signature THEN\n    v_status := 'existing';\n  ELSE\n    -- clock_timestamp, not now(): a save that waited for the lock is newer than the one it waited for.\n    v_now := clock_timestamp();\n    INSERT INTO public.shopping_lists (week_id, generated_at, created_at, updated_at, week_signature)\n    VALUES (v_week.id, v_now, v_now, v_now, p_week_signature)\n    RETURNING * INTO v_list;\n\n    INSERT INTO public.shopping_items (shopping_list_id, name, quantity, unit, category, checked)\n    SELECT v_list.id, btrim(i.name), i.quantity, btrim(i.unit), i.category, false\n    FROM jsonb_to_recordset(p_items) AS i(name text, quantity numeric, unit text, category text);\n    v_status := 'created';\n  END IF;\n\n  RETURN jsonb_build_object(\n    'status', v_status,\n    'week_version', v_week.version,\n    'list', jsonb_build_object(\n      'id', v_list.id,\n      'week_id', v_list.week_id,\n      'generated_at', v_list.generated_at,\n      'week_signature', v_list.week_signature,\n      'items', (\n        SELECT coalesce(jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name, 'quantity', s.quantity,\n          'unit', s.unit, 'category', s.category, 'checked', s.checked) ORDER BY s.created_at, s.id), '[]')\n        FROM public.shopping_items s WHERE s.shopping_list_id = v_list.id)));\nEND;\n$function$\n"
+    },
+    {
+      "proname": "set_shopping_items_checked",
+      "definition": "CREATE OR REPLACE FUNCTION public.set_shopping_items_checked(p_item_ids uuid[], p_checked boolean)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_list_ids uuid[];\n  v_found integer;\n  v_week_id uuid;\n  v_current uuid;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'set_shopping_items_checked: authentication required';\n  END IF;\n  IF p_checked IS NULL OR p_item_ids IS NULL OR cardinality(p_item_ids) NOT BETWEEN 1 AND 50\n     OR array_position(p_item_ids, NULL) IS NOT NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'set_shopping_items_checked: invalid items';\n  END IF;\n\n  SELECT count(*), array_agg(DISTINCT shopping_list_id) INTO v_found, v_list_ids\n  FROM public.shopping_items\n  WHERE id = ANY (p_item_ids);\n  IF v_found <> (SELECT count(DISTINCT x) FROM unnest(p_item_ids) AS x) OR cardinality(v_list_ids) <> 1 THEN\n    RETURN jsonb_build_object('status', 'missing', 'list_id', NULL, 'current_list_id', NULL);\n  END IF;\n\n  -- Shared lock on the week: waits for a list save of the same week in progress.\n  SELECT w.id INTO v_week_id\n  FROM public.weeks w JOIN public.shopping_lists l ON l.week_id = w.id\n  WHERE l.id = v_list_ids[1]\n  FOR SHARE OF w;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'missing', 'list_id', NULL, 'current_list_id', NULL);\n  END IF;\n\n  SELECT id INTO v_current FROM public.shopping_lists\n  WHERE week_id = v_week_id\n  ORDER BY created_at DESC, id DESC\n  LIMIT 1;\n  IF v_current <> v_list_ids[1] THEN\n    RETURN jsonb_build_object('status', 'stale', 'list_id', v_list_ids[1], 'current_list_id', v_current);\n  END IF;\n\n  UPDATE public.shopping_items\n  SET checked = p_checked\n  WHERE id = ANY (p_item_ids) AND checked IS DISTINCT FROM p_checked;\n\n  RETURN jsonb_build_object('status', 'applied', 'list_id', v_current, 'current_list_id', v_current);\nEND;\n$function$\n"
+    }
+  ],
+  "function_grants": [
+    {
+      "routine_name": "save_shopping_list",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "save_shopping_list",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_shopping_items_checked",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_shopping_items_checked",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    }
+  ]
+}
