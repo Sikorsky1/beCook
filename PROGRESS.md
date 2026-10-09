@@ -238,8 +238,8 @@ Paso 23 del roadmap.
 | enforce_reference_ownership | ✅ | ✅ 20260924112917 | ✅ 20261005220924 |
 | ai_usage_quotas | ✅ | ✅ 20261006115739 | ✅ 20261006171007 |
 | profiles_training_days_0_7 | ✅ | ✅ 20261007122056 | ✅ 20261007143519 |
-| week_transactional_writes | ✅ | ⏳ | ⏳ |
-| shopping_list_per_week | ✅ | ⏳ | ⏳ |
+| week_transactional_writes | ✅ | ✅ 20261008205929, 20261008205940, 20261008210218 | ✅ 20261008211358 (backup_before_b4), 20261008211427, 20261008211456, 20261008211526 |
+| shopping_list_per_week | ✅ | ✅ 20261009154554 | ⏳ |
 
 ## Decisiones
 | # | Decisión | Fecha |

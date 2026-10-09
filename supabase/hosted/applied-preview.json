@@ -28,6 +28,13 @@
       "source": "supabase/migrations/20261007090000_profiles_training_days_0_7.sql",
       "sha256": "886184cf1230914547562be0074a95909086f225405683b5b5dad3f640331c9f",
       "appliedAt": "2026-10-07"
+    },
+    {
+      "version": "20261009154554",
+      "name": "shopping_list_per_week",
+      "source": "supabase/migrations/20261009090000_shopping_list_per_week.sql",
+      "sha256": "8b56cd0db6829410bd0336841752a4b2c5cf7577475fbcc0611648e203adac0d",
+      "appliedAt": "2026-10-09"
     }
   ]
 }
