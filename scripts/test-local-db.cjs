@@ -10,6 +10,7 @@ const { runAuthFlowTests } = require("./auth-db-tests.cjs");
 const { runProfileContractTests } = require("./profile-db-tests.cjs");
 const { runWeekWriteTests } = require("./week-write-db-tests.cjs");
 const { runShoppingTests } = require("./shopping-db-tests.cjs");
+const { runPantryTests } = require("./pantry-db-tests.cjs");
 const { createClient } = require("@supabase/supabase-js");
 const id = (prefix, n) => prefix + "0000000-0000-4000-8000-00000000000" + n;
 let failures = 0, passed = 0;
@@ -161,6 +162,8 @@ async function main() {
   await runWeekWriteTests({check, sql, id, supabase});
   // B6: shopping list per week, per-item marks, stable signature and rollout with the previous client.
   await runShoppingTests({check, sql, id, supabase, api, createClient});
+  // B7: pantry item by item, two devices, lost answers, permissions and rollout with the previous client.
+  await runPantryTests({check, sql, id, supabase, api, createClient});
   console.log(passed + " passed; " + failures + " failed. No production connection; SQL probes rolled back.");
   process.exitCode = failures ? 1 : 0;
 }

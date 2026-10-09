@@ -15,11 +15,10 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import type { WeekDay } from "@/data/mockWeek";
 import { isAiLoginRequiredError } from "@/lib/ai-client";
 import {
-  loadPantry,
   loadWeek,
-  readCachedPantry,
   readSelectedWeek,
 } from "@/lib/data/repositories";
+import { loadPantry, readCachedPantry } from "@/lib/data/pantry";
 import {
   generateShoppingList,
   loadShoppingList,

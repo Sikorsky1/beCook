@@ -1,11 +1,10 @@
 // Explicit, user-confirmed import of pre-B1 device data (now held in the guest scope).
 // Never overwrites the account: an entity is imported only if the account has none.
 import type { WeekDay } from "@/data/mockWeek";
+import { importPantryItems, loadPantry } from "@/lib/data/pantry";
 import {
-  loadPantry,
   loadProfile,
   loadWeek,
-  savePantry,
   saveProfile,
   saveWeek,
   type DataIdentity,
@@ -47,7 +46,7 @@ export async function importLegacyData(identity: DataIdentity): Promise<LegacyIm
         const remote = await loadPantry(identity);
         if (remote.offline) outcome = "failed";
         else if (remote.data) outcome = "kept";
-        else outcome = (await savePantry(identity, local)).status === "synced" ? "imported" : "failed";
+        else outcome = (await importPantryItems(identity, local)) === "synced" ? "imported" : "failed";
       } else if (entity.startsWith("week:")) {
         const isoWeek = isoWeekFromId(entity.slice(5));
         const local = readScoped<WeekDay[]>("guest", "week", entity.slice(5));

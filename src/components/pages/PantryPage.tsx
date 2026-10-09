@@ -15,13 +15,18 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { TextInput } from "@/components/ui/TextInput";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
-import { loadPantry, readCachedPantry, savePantry } from "@/lib/data/repositories";
+import {
+  addPantryItem,
+  deletePantryItem,
+  loadPantry,
+  readPantryView,
+  setPantryItemActive,
+  type PantryChangeResult,
+} from "@/lib/data/pantry";
 import { pageShellClass } from "@/lib/ui";
 import {
   capitalizePantryItemName,
   normalizePantryItemName,
-  normalizePantryItems,
-  pantryItemsOrDefault,
   type PantryCategory,
   type PantryStorageItem,
 } from "@/lib/pantryStorage";
@@ -271,7 +276,7 @@ export default function PantryPage() {
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
     const loadTimer = window.setTimeout(() => {
       setSyncState({});
-      setPantryItems(pantryItemsOrDefault(readCachedPantry(dataIdentity)));
+      setPantryItems(readPantryView(dataIdentity));
       setHasLoadedPantry(true);
 
       void loadPantry(dataIdentity).then((result) => {
@@ -279,7 +284,8 @@ export default function PantryPage() {
           return;
         }
 
-        setPantryItems(pantryItemsOrDefault(result.data));
+        // The device copy now holds the account pantry plus any change made meanwhile.
+        setPantryItems(readPantryView(dataIdentity));
         setSyncState({
           offline: result.offline,
           discardedLocalChanges: result.discardedLocalChanges,
@@ -294,13 +300,15 @@ export default function PantryPage() {
     };
   }, [identity.status, identity.scope, identity.userId, identity.epoch]);
 
-  const persistPantryItems = (nextPantryItems: PantryStorageItem[]) => {
-    const normalizedItems = normalizePantryItems(nextPantryItems);
-    setPantryItems(normalizedItems);
-    void savePantry({ scope: identity.scope, userId: identity.userId }, normalizedItems).then((result) => {
+  // B7: each change writes only that item. The device copy changes at once and is shown; the
+  // list shown after the account answers is the device copy at that moment (later changes kept).
+  const dataIdentity = { scope: identity.scope, userId: identity.userId };
+  const showChange = (change: Promise<PantryChangeResult>) => {
+    setPantryItems(readPantryView(dataIdentity));
+    void change.then((result) => {
+      setPantryItems(readPantryView(dataIdentity));
       if (result.status === "conflict") {
-        setPantryItems(pantryItemsOrDefault(result.remoteData));
-        setSyncState({ conflict: true });
+        setSyncState({ discardedLocalChanges: true });
       } else {
         setSyncState(result.status === "pending" ? { pending: true } : {});
       }
@@ -346,14 +354,7 @@ export default function PantryPage() {
       return;
     }
 
-    persistPantryItems([
-      ...pantryItems,
-      {
-        name: displayName,
-        category,
-        active: true,
-      },
-    ]);
+    showChange(addPantryItem(dataIdentity, category, displayName));
     setSelectedCategory(category);
     setAddingCategory(null);
     setDraftItemName("");
@@ -361,25 +362,19 @@ export default function PantryPage() {
 
   const toggleItem = (category: PantryCategory, itemName: string) => {
     const normalizedItemName = normalizePantryItemName(itemName);
-    const nextPantryItems = pantryItems.map((item) =>
-      item.category === category &&
-      normalizePantryItemName(item.name) === normalizedItemName
-        ? { ...item, active: !item.active }
-        : item,
+    const item = pantryItems.find(
+      (pantryItem) =>
+        pantryItem.category === category &&
+        normalizePantryItemName(pantryItem.name) === normalizedItemName,
     );
 
-    persistPantryItems(nextPantryItems);
+    if (item) {
+      showChange(setPantryItemActive(dataIdentity, category, item.name, !item.active));
+    }
   };
 
   const deleteItem = (category: PantryCategory, itemName: string) => {
-    const normalizedItemName = normalizePantryItemName(itemName);
-    const nextPantryItems = pantryItems.filter(
-      (item) =>
-        item.category !== category ||
-        normalizePantryItemName(item.name) !== normalizedItemName,
-    );
-
-    persistPantryItems(nextPantryItems);
+    showChange(deletePantryItem(dataIdentity, category, itemName));
   };
 
   const pantryGroups = groupPantryItems(pantryItems);

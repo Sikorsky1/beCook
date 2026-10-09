@@ -1,0 +1,83 @@
+{
+  "migration": "20261009180000_pantry_item_writes",
+  "replaces": {},
+  "supersedes": {
+    "schema": "Nothing: purely additive (no constraint, function, index or policy redefined). Existing rows are not modified; they start at version 1.",
+    "client": [
+      "src/lib/supabase/pantry.ts replacePantryItemsInSupabase / savePantryItemsToSupabase: DELETE of every pantry row of the user followed by one INSERT of the whole list on every change (replaced by add_pantry_items, set_pantry_items_active and delete_pantry_items, one item per write). A failure between both requests emptied the account pantry.",
+      "Pantry version as the latest updated_at of the list, compared by a separate read before writing (now pantry_items.version per row, compared inside each function).",
+      "Whole-pantry conflicts: two devices changing different items refused or duplicated each other (now only a change to the same item since it was read is refused)."
+    ],
+    "rollout": "The previous client keeps replacing and reading the pantry with this migration applied; the new client re-reads the items it replaced and never duplicates them (scripts/pantry-db-tests.cjs, scenario 8)."
+  },
+  "columns": [
+    {
+      "table_name": "pantry_items",
+      "name": "version",
+      "type": "bigint",
+      "not_null": true,
+      "default_expr": "1"
+    }
+  ],
+  "functions": [
+    {
+      "proname": "set_pantry_items_active",
+      "definition": "CREATE OR REPLACE FUNCTION public.set_pantry_items_active(p_rows jsonb, p_active boolean)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_ids uuid[];\n  v_found integer;\n  v_changed integer;\n  v_unchanged integer;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'set_pantry_items_active: authentication required';\n  END IF;\n  IF p_active IS NULL OR jsonb_typeof(p_rows) IS DISTINCT FROM 'array' OR jsonb_array_length(p_rows) NOT BETWEEN 1 AND 20 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'set_pantry_items_active: 1 to 20 rows required';\n  END IF;\n  SELECT array_agg(DISTINCT r.id) INTO v_ids\n  FROM jsonb_to_recordset(p_rows) AS r(id uuid, version bigint)\n  WHERE r.id IS NOT NULL AND r.version IS NOT NULL;\n  IF cardinality(v_ids) IS DISTINCT FROM jsonb_array_length(p_rows) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'set_pantry_items_active: invalid or repeated row';\n  END IF;\n\n  PERFORM pg_advisory_xact_lock(hashtextextended('pantry_items:' || v_user::text, 0));\n\n  SELECT count(*),\n         count(*) FILTER (WHERE p.version <> r.version),\n         count(*) FILTER (WHERE p.active = p_active)\n    INTO v_found, v_changed, v_unchanged\n  FROM jsonb_to_recordset(p_rows) AS r(id uuid, version bigint)\n  JOIN public.pantry_items p ON p.id = r.id AND p.user_id = v_user;\n\n  IF v_found <> cardinality(v_ids) THEN\n    RETURN jsonb_build_object('status', 'missing', 'rows', '[]'::jsonb);\n  END IF;\n  IF v_unchanged = v_found THEN\n    -- Already so (a retried request, or the same change made on another device).\n    NULL;\n  ELSIF v_changed > 0 THEN\n    RETURN jsonb_build_object('status', 'conflict', 'rows', (\n      SELECT jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name, 'category', p.category,\n        'active', p.active, 'version', p.version) ORDER BY p.created_at, p.id)\n      FROM public.pantry_items p WHERE p.id = ANY (v_ids) AND p.user_id = v_user));\n  ELSE\n    UPDATE public.pantry_items\n    SET active = p_active\n    WHERE id = ANY (v_ids) AND user_id = v_user AND active IS DISTINCT FROM p_active;\n  END IF;\n\n  RETURN jsonb_build_object('status', 'applied', 'rows', (\n    SELECT jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name, 'category', p.category,\n      'active', p.active, 'version', p.version) ORDER BY p.created_at, p.id)\n    FROM public.pantry_items p WHERE p.id = ANY (v_ids) AND p.user_id = v_user));\nEND;\n$function$\n"
+    },
+    {
+      "proname": "delete_pantry_items",
+      "definition": "CREATE OR REPLACE FUNCTION public.delete_pantry_items(p_rows jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_ids uuid[];\n  v_changed integer;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'delete_pantry_items: authentication required';\n  END IF;\n  IF jsonb_typeof(p_rows) IS DISTINCT FROM 'array' OR jsonb_array_length(p_rows) NOT BETWEEN 1 AND 20 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'delete_pantry_items: 1 to 20 rows required';\n  END IF;\n  SELECT array_agg(DISTINCT r.id) INTO v_ids\n  FROM jsonb_to_recordset(p_rows) AS r(id uuid, version bigint)\n  WHERE r.id IS NOT NULL AND r.version IS NOT NULL;\n  IF cardinality(v_ids) IS DISTINCT FROM jsonb_array_length(p_rows) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'delete_pantry_items: invalid or repeated row';\n  END IF;\n\n  PERFORM pg_advisory_xact_lock(hashtextextended('pantry_items:' || v_user::text, 0));\n\n  SELECT count(*) INTO v_changed\n  FROM jsonb_to_recordset(p_rows) AS r(id uuid, version bigint)\n  JOIN public.pantry_items p ON p.id = r.id AND p.user_id = v_user\n  WHERE p.version <> r.version;\n\n  IF v_changed > 0 THEN\n    RETURN jsonb_build_object('status', 'conflict', 'rows', (\n      SELECT jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name, 'category', p.category,\n        'active', p.active, 'version', p.version) ORDER BY p.created_at, p.id)\n      FROM public.pantry_items p WHERE p.id = ANY (v_ids) AND p.user_id = v_user));\n  END IF;\n\n  DELETE FROM public.pantry_items WHERE id = ANY (v_ids) AND user_id = v_user;\n  RETURN jsonb_build_object('status', 'applied', 'rows', '[]'::jsonb);\nEND;\n$function$\n"
+    },
+    {
+      "proname": "pantry_items_set_version",
+      "definition": "CREATE OR REPLACE FUNCTION public.pantry_items_set_version()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nBEGIN\n  IF TG_OP = 'INSERT' THEN\n    NEW.version := 1;\n  ELSE\n    NEW.version := OLD.version + 1;\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+    },
+    {
+      "proname": "add_pantry_items",
+      "definition": "CREATE OR REPLACE FUNCTION public.add_pantry_items(p_items jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_categories constant text[] := ARRAY['básicos','especias','aceites y vinagres','salsas','conservas','congelados','otros'];\n  v_profile uuid;\n  v_count integer;\n  v_item record;\n  v_name text;\n  v_row public.pantry_items%ROWTYPE;\n  v_result text;\n  v_results jsonb := '[]';\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'add_pantry_items: authentication required';\n  END IF;\n  IF jsonb_typeof(p_items) IS DISTINCT FROM 'array' OR jsonb_array_length(p_items) NOT BETWEEN 1 AND 100 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'add_pantry_items: 1 to 100 items required';\n  END IF;\n\n  SELECT count(*) INTO v_count\n  FROM jsonb_to_recordset(p_items) AS i(id uuid, name text, category text, active boolean)\n  WHERE i.id IS NOT NULL\n    AND char_length(regexp_replace(btrim(coalesce(i.name, '')), '\\s+', ' ', 'g')) BETWEEN 1 AND 80\n    AND i.category = ANY (v_categories)\n    AND i.active IS NOT NULL;\n  IF v_count <> jsonb_array_length(p_items)\n     OR (SELECT count(DISTINCT i.id) FROM jsonb_to_recordset(p_items) AS i(id uuid)) <> v_count THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'add_pantry_items: invalid or repeated item';\n  END IF;\n\n  PERFORM pg_advisory_xact_lock(hashtextextended('pantry_items:' || v_user::text, 0));\n\n  -- The pantry links to the caller's own profile, never one sent by the client.\n  SELECT id INTO v_profile FROM public.profiles\n  WHERE user_id = v_user\n  ORDER BY updated_at DESC\n  LIMIT 1;\n\n  FOR v_item IN\n    SELECT (e.value->>'id')::uuid AS id, e.value->>'name' AS name, e.value->>'category' AS category,\n      (e.value->>'active')::boolean AS active\n    FROM jsonb_array_elements(p_items) WITH ORDINALITY AS e(value, ord)\n    ORDER BY e.ord\n  LOOP\n    v_name := regexp_replace(btrim(v_item.name), '\\s+', ' ', 'g');\n    SELECT * INTO v_row FROM public.pantry_items WHERE id = v_item.id AND user_id = v_user;\n    IF FOUND THEN\n      v_result := 'duplicate';\n    ELSE\n      SELECT * INTO v_row FROM public.pantry_items p\n      WHERE p.user_id = v_user AND p.category = v_item.category\n        AND regexp_replace(normalize(lower(regexp_replace(btrim(p.name), '\\s+', ' ', 'g')), NFD), '[̀-ͯ]', '', 'g')\n          = regexp_replace(normalize(lower(v_name), NFD), '[̀-ͯ]', '', 'g')\n      ORDER BY p.created_at, p.id\n      LIMIT 1;\n      IF FOUND THEN\n        v_result := 'existing';\n      ELSE\n        INSERT INTO public.pantry_items (id, user_id, profile_id, name, category, active)\n        VALUES (v_item.id, v_user, v_profile, v_name, v_item.category, v_item.active)\n        RETURNING * INTO v_row;\n        v_result := 'created';\n      END IF;\n    END IF;\n    v_results := v_results || jsonb_build_array(jsonb_build_object(\n      'id', v_item.id,\n      'result', v_result,\n      'row', jsonb_build_object('id', v_row.id, 'name', v_row.name, 'category', v_row.category,\n        'active', v_row.active, 'version', v_row.version)));\n  END LOOP;\n\n  RETURN jsonb_build_object('status', 'applied', 'items', v_results);\nEND;\n$function$\n"
+    }
+  ],
+  "triggers": [
+    {
+      "table_name": "pantry_items",
+      "definition": "CREATE TRIGGER set_pantry_items_version BEFORE INSERT OR UPDATE ON public.pantry_items FOR EACH ROW EXECUTE FUNCTION pantry_items_set_version()"
+    }
+  ],
+  "function_grants": [
+    {
+      "routine_name": "add_pantry_items",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "add_pantry_items",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "delete_pantry_items",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "delete_pantry_items",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "pantry_items_set_version",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_pantry_items_active",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_pantry_items_active",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    }
+  ]
+}
