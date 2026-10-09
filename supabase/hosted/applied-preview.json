@@ -30,6 +30,30 @@
       "appliedAt": "2026-10-07"
     },
     {
+      "version": "20261008205929",
+      "name": "week_transactional_writes_columns",
+      "source": "supabase/migrations/20261008090000_week_transactional_writes.sql",
+      "sha256": "8f827a9ae28963dcc80e799dda2e353b51c89c664e8f6fceab594b8c35fa269a",
+      "appliedAt": "2026-10-08",
+      "notes": "Fichero aplicado en 3 partes en el ledger remoto (_columns, _version_trigger, _update_week_slot); sha256 del fichero completo."
+    },
+    {
+      "version": "20261008205940",
+      "name": "week_transactional_writes_version_trigger",
+      "source": "supabase/migrations/20261008090000_week_transactional_writes.sql",
+      "sha256": "8f827a9ae28963dcc80e799dda2e353b51c89c664e8f6fceab594b8c35fa269a",
+      "appliedAt": "2026-10-08",
+      "notes": "Fichero aplicado en 3 partes en el ledger remoto (_columns, _version_trigger, _update_week_slot); sha256 del fichero completo."
+    },
+    {
+      "version": "20261008210218",
+      "name": "week_transactional_writes_update_week_slot",
+      "source": "supabase/migrations/20261008090000_week_transactional_writes.sql",
+      "sha256": "8f827a9ae28963dcc80e799dda2e353b51c89c664e8f6fceab594b8c35fa269a",
+      "appliedAt": "2026-10-08",
+      "notes": "Fichero aplicado en 3 partes en el ledger remoto (_columns, _version_trigger, _update_week_slot); sha256 del fichero completo."
+    },
+    {
       "version": "20261009154554",
       "name": "shopping_list_per_week",
       "source": "supabase/migrations/20261009090000_shopping_list_per_week.sql",
