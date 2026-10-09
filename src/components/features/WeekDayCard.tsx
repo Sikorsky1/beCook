@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { GhostButton, PrimaryButton, SecondaryButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
@@ -23,9 +23,22 @@ export type RequestDishIdea = (
   signal?: AbortSignal,
 ) => DishIdea | Promise<DishIdea>;
 
+const shortDayNames: Record<string, string> = {
+  Lunes: "Lun",
+  Martes: "Mar",
+  Miércoles: "Mié",
+  Jueves: "Jue",
+  Viernes: "Vie",
+  Sábado: "Sáb",
+  Domingo: "Dom",
+};
+
+const shortDayName = (dayName: string) => shortDayNames[dayName] ?? dayName;
+
 type WeekDayCardProps = {
   day: WeekDay;
-  isToday?: boolean;
+  // «today»: the featured block of step 29; «compact»: the remaining days.
+  variant?: "today" | "compact";
   onMealChange: (dayName: string, mealKey: MealKey, value: string) => void;
   // «Otra idea» (step 21). Without it the card only offers manual editing.
   onRequestIdea?: RequestDishIdea;
@@ -53,7 +66,7 @@ const emptyIdeaState = (current: string): IdeaState => ({
 
 export function WeekDayCard({
   day,
-  isToday = false,
+  variant = "compact",
   onMealChange,
   onRequestIdea,
   loginReturnPath = "/week",
@@ -62,6 +75,7 @@ export function WeekDayCard({
   const [draftValue, setDraftValue] = useState("");
   const [idea, setIdea] = useState<IdeaState>(emptyIdeaState(""));
   const ideaAbortRef = useRef<AbortController | null>(null);
+  const headingId = `${useId()}-day`;
 
   const startEditing = (mealKey: MealKey) => {
     const current = day[mealKey] === "LIBRE" ? "" : day[mealKey];
@@ -125,142 +139,208 @@ export function WeekDayCard({
     cancelEditing();
   };
 
-  return (
-    <article className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-3 shadow-[var(--shadow-card)] sm:p-4">
-      <div className="flex items-center justify-between gap-2 border-b border-[color:var(--color-border)] pb-2">
-        <h2 className="t-h3 text-[color:var(--color-foreground)]">
-          {day.day}
-          <span className="t-meta ml-1.5">{day.date}</span>
-        </h2>
-        {isToday ? (
-          <span className="rounded-full bg-[color:var(--color-accent-soft)] px-2.5 py-1 text-xs font-semibold text-[color:var(--color-accent)]">
+  const renderEditor = (meal: (typeof mealLabels)[number]) => (
+    <div className="mt-1.5 space-y-2">
+      <TextInput
+        value={draftValue}
+        onChange={(event) => setDraftValue(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            saveMeal();
+          }
+
+          if (event.key === "Escape") {
+            cancelEditing();
+          }
+        }}
+        autoFocus
+        placeholder={`Escribe la ${meal.label.toLowerCase()}`}
+        className="block w-full text-base font-semibold"
+      />
+      {onRequestIdea ? (
+        <div className="space-y-2">
+          <GhostButton
+            onClick={() => void requestIdea("catalog")}
+            disabled={idea.loading}
+            aria-label={`Otra idea para la ${meal.label.toLowerCase()} de ${day.day}`}
+            className="w-full"
+          >
+            Otra idea
+          </GhostButton>
+          {idea.source ? (
+            <p className="t-meta" role="status">
+              {idea.source === "catalog"
+                ? "Receta del catálogo revisado. Guarda para cambiar solo este plato."
+                : "Idea propuesta por IA. Guarda para cambiar solo este plato."}
+            </p>
+          ) : null}
+          {idea.message ? (
+            <p className="text-sm leading-6 text-[color:var(--color-danger)]" role="alert">
+              {idea.message}
+            </p>
+          ) : null}
+          {idea.loginRequired ? (
+            <p className="t-meta" role="status">
+              No quedan recetas del catálogo que encajen con tu semana.{" "}
+              <Link href={loginHrefFor(loginReturnPath)} className="font-semibold underline">
+                {aiLoginRequiredMessage}
+              </Link>
+            </p>
+          ) : null}
+          {idea.offerAi || idea.loading ? (
+            <div className="space-y-2">
+              {!idea.message ? (
+                <p className="t-meta" role="status">
+                  No quedan recetas del catálogo que encajen con tu perfil y tu semana.
+                  Una idea con IA cuenta como uno de tus menús de hoy.
+                </p>
+              ) : null}
+              <SecondaryButton
+                onClick={() => void requestIdea("ai")}
+                disabled={idea.loading}
+                className="w-full"
+              >
+                {idea.loading ? "Pidiendo idea…" : "Pedir idea a la IA"}
+              </SecondaryButton>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="grid grid-cols-2 gap-2">
+        <PrimaryButton
+          onClick={saveMeal}
+          aria-label={`Guardar ${meal.label.toLowerCase()} de ${day.day}`}
+          className="w-full"
+        >
+          Guardar
+        </PrimaryButton>
+        <SecondaryButton
+          onClick={cancelEditing}
+          aria-label={`Cancelar edición de ${meal.label.toLowerCase()} de ${day.day}`}
+          className="w-full"
+        >
+          Cancelar
+        </SecondaryButton>
+      </div>
+    </div>
+  );
+
+  // Tapping a dish edits that meal only (saved per slot, B4). The dish sheet arrives with C2.
+  const mealButtonClass = (isFree: boolean, size: string) =>
+    `flex w-full rounded-[var(--radius-input)] text-left transition-[background-color,color,transform] duration-200 ease-out active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 ${size} ${
+      isFree
+        ? "border border-dashed border-[color:var(--color-border-strong)] bg-transparent hover:bg-[color:var(--color-accent-soft)]/45"
+        : "bg-[color:var(--color-surface-muted)] hover:bg-[color:var(--color-accent-soft)]"
+    }`;
+
+  const dishText = (value: string, isFree: boolean) => (isFree ? "+ Añadir plato" : value);
+  const dishTextColor = (isFree: boolean) =>
+    isFree ? "text-[color:var(--color-muted-foreground)]" : "text-[color:var(--color-foreground)]";
+
+  if (variant === "today") {
+    return (
+      <article
+        aria-labelledby={headingId}
+        className="rounded-[var(--radius-card)] border-2 border-[color:var(--color-accent)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-card)] sm:p-5"
+      >
+        <div className="flex items-baseline gap-2">
+          <span className="rounded-full bg-[color:var(--color-accent)] px-2.5 py-1 text-xs font-semibold leading-none text-white">
             Hoy
           </span>
-        ) : null}
-      </div>
+          <h2 id={headingId} className="t-h2 text-[color:var(--color-foreground)]">
+            {day.day}
+            <span className="t-meta ml-1.5">{day.date}</span>
+          </h2>
+        </div>
 
-      <div className="mt-2.5 grid grid-cols-2 gap-2">
-        {mealLabels.map((meal) => {
-          const value = day[meal.key];
-          const isFree = value === "LIBRE";
-          const isEditing = editingMeal === meal.key;
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {mealLabels.map((meal) => {
+            const value = day[meal.key];
+            const isFree = value === "LIBRE";
+            const isEditing = editingMeal === meal.key;
 
-          return (
-            <section
-              key={meal.key}
-              className={`min-w-0 ${isEditing ? "col-span-2" : ""}`}
-            >
-              <h3 className="t-micro">{meal.label}</h3>
-
-              {isEditing ? (
-                <div className="mt-1.5 space-y-2">
-                  <TextInput
-                    value={draftValue}
-                    onChange={(event) => setDraftValue(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        saveMeal();
-                      }
-
-                      if (event.key === "Escape") {
-                        cancelEditing();
-                      }
-                    }}
-                    autoFocus
-                    placeholder={`Escribe la ${meal.label.toLowerCase()}`}
-                    className="block w-full text-base font-semibold"
-                  />
-                  {onRequestIdea ? (
-                    <div className="space-y-2">
-                      <GhostButton
-                        onClick={() => void requestIdea("catalog")}
-                        disabled={idea.loading}
-                        aria-label={`Otra idea para la ${meal.label.toLowerCase()} de ${day.day}`}
-                        className="w-full"
-                      >
-                        Otra idea
-                      </GhostButton>
-                      {idea.source ? (
-                        <p className="t-meta" role="status">
-                          {idea.source === "catalog"
-                            ? "Receta del catálogo revisado. Guarda para cambiar solo este plato."
-                            : "Idea propuesta por IA. Guarda para cambiar solo este plato."}
-                        </p>
-                      ) : null}
-                      {idea.message ? (
-                        <p className="text-sm leading-6 text-[color:var(--color-danger)]" role="alert">
-                          {idea.message}
-                        </p>
-                      ) : null}
-                      {idea.loginRequired ? (
-                        <p className="t-meta" role="status">
-                          No quedan recetas del catálogo que encajen con tu semana.{" "}
-                          <Link href={loginHrefFor(loginReturnPath)} className="font-semibold underline">
-                            {aiLoginRequiredMessage}
-                          </Link>
-                        </p>
-                      ) : null}
-                      {idea.offerAi || idea.loading ? (
-                        <div className="space-y-2">
-                          {!idea.message ? (
-                            <p className="t-meta" role="status">
-                              No quedan recetas del catálogo que encajen con tu perfil y tu semana.
-                              Una idea con IA cuenta como uno de tus menús de hoy.
-                            </p>
-                          ) : null}
-                          <SecondaryButton
-                            onClick={() => void requestIdea("ai")}
-                            disabled={idea.loading}
-                            className="w-full"
-                          >
-                            {idea.loading ? "Pidiendo idea…" : "Pedir idea a la IA"}
-                          </SecondaryButton>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <div className="grid grid-cols-2 gap-2">
-                    <PrimaryButton
-                      onClick={saveMeal}
-                      aria-label={`Guardar ${meal.label.toLowerCase()} de ${day.day}`}
-                      className="w-full"
-                    >
-                      Guardar
-                    </PrimaryButton>
-                    <SecondaryButton
-                      onClick={cancelEditing}
-                      aria-label={`Cancelar edición de ${meal.label.toLowerCase()} de ${day.day}`}
-                      className="w-full"
-                    >
-                      Cancelar
-                    </SecondaryButton>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => startEditing(meal.key)}
-                  className={`mt-1.5 flex min-h-11 w-full items-center rounded-[var(--radius-input)] px-3 py-2 text-left transition-[background-color,color,transform] duration-200 ease-out active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 ${
-                    isFree
-                      ? "border border-dashed border-[color:var(--color-border-strong)] bg-transparent hover:bg-[color:var(--color-accent-soft)]/45"
-                      : "bg-[color:var(--color-surface-muted)] hover:bg-[color:var(--color-accent-soft)]"
-                  }`}
-                >
-                  <span
-                    className={
-                      isFree
-                        ? "t-body-strong text-[color:var(--color-muted-foreground)]"
-                        : "t-body-strong text-[color:var(--color-foreground)]"
-                    }
+            return (
+              <section key={meal.key} className={`min-w-0 ${isEditing ? "sm:col-span-2" : ""}`}>
+                <h3 className="t-micro">{meal.label}</h3>
+                {isEditing ? (
+                  renderEditor(meal)
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => startEditing(meal.key)}
+                    aria-label={`${meal.label} de hoy: ${isFree ? "sin plato, añadir" : value}. Editar`}
+                    className={`mt-1.5 ${mealButtonClass(isFree, "min-h-16 items-center px-4 py-3")}`}
                   >
-                    {isFree ? "+ Añadir plato" : value}
-                  </span>
-                </button>
-              )}
-            </section>
-          );
-        })}
+                    <span
+                      className={`text-lg font-semibold leading-snug [overflow-wrap:anywhere] ${dishTextColor(isFree)}`}
+                    >
+                      {dishText(value, isFree)}
+                    </span>
+                  </button>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      </article>
+    );
+  }
+
+  // Compact row: short day label, then lunch and dinner stacked so long titles keep the full width.
+  const editedMeal = mealLabels.find((meal) => meal.key === editingMeal);
+
+  return (
+    <article
+      aria-labelledby={headingId}
+      className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5 shadow-[0_6px_18px_rgba(46,42,38,0.04)]"
+    >
+      <div className="flex gap-3">
+        <h2 id={headingId} className="w-11 shrink-0 pt-1.5 leading-tight">
+          <span aria-hidden="true" className="block text-sm font-semibold text-[color:var(--color-foreground)]">
+            {shortDayName(day.day)}
+          </span>
+          <span aria-hidden="true" className="t-meta block text-xs">
+            {day.date}
+          </span>
+          <span className="sr-only">
+            {day.day} {day.date}
+          </span>
+        </h2>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          {mealLabels.map((meal) => {
+            const value = day[meal.key];
+            const isFree = value === "LIBRE";
+
+            return (
+              <button
+                key={meal.key}
+                type="button"
+                onClick={() => startEditing(meal.key)}
+                aria-label={`${meal.label} del ${day.day}: ${isFree ? "sin plato, añadir" : value}. Editar`}
+                aria-expanded={editingMeal === meal.key}
+                className={`${mealButtonClass(isFree, "min-h-11 flex-col items-start gap-1 px-2.5 py-1.5")} ${
+                  editingMeal === meal.key ? "ring-2 ring-[color:var(--color-border-strong)]" : ""
+                }`}
+              >
+                <span className="t-micro">{meal.label}</span>
+                <span
+                  className={`max-w-full text-[0.9375rem] font-semibold leading-snug [overflow-wrap:anywhere] ${dishTextColor(isFree)}`}
+                >
+                  {dishText(value, isFree)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
+      {editedMeal ? (
+        <section className="mt-2.5 border-t border-[color:var(--color-border)] pt-2.5">
+          <h3 className="t-micro">
+            {editedMeal.label} · {day.day}
+          </h3>
+          {renderEditor(editedMeal)}
+        </section>
+      ) : null}
     </article>
   );
 }
