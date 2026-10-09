@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-09 · Rama: `audit-opt` (= `main` tras PR #11, más B6, C5 paso 21 y D1 paso 23 integrados en local, sin push) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-09 · Rama: `audit-opt` (= `main` tras PR #12, más commits de documentación) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -133,7 +133,7 @@ Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver not
 | Observaciones | Un pendiente que el servidor rechaza siempre queda `pending` hasta la siguiente carga (resultados explícitos y reintento: B5). Tras editar un plato, la caché guarda la copia de la pestaña con la versión nueva hasta la siguiente revalidación. El script manual desactivado `scripts/test-save-week.ts` se eliminó (usaba la ruta borrada) |
 | Producción | [PR #11](https://github.com/Sikorsky1/beCook/pull/11), merge commit `5a573ff` (2026-10-08 21:33 UTC), checks en verde (application, database, Vercel). Migración aplicada antes del merge, registrada en remoto en varias partes: becook-preview `20261008205929` `_columns`, `20261008205940` `_version_trigger`, `20261008210218` `_update_week_slot`; becook `20261008211358` `backup_before_b4`, `20261008211427` `_columns`, `20261008211456` `_version_trigger`, `20261008211526` `_update_week_slot` (ninguna entrada se llama `apply_week`). Comprobado por metadatos en ambos: columnas, `UNIQUE`, CHECK, trigger, `apply_week`/`update_week_slot` con EXECUTE solo `authenticated` y definiciones idénticas entre proyectos. Despliegue be-cook `dpl_DkQ7Zv1LwPuZoueVDcCJK98vaZFA` READY en `www.becook.xyz` (anterior para rollback: `dpl_GXNNPUjw2ZR2VBK4rCCvytpPq3i8`). `/week`, `/create-menu`, `/login` 200 · `/` 307 · `POST /api/generate-menu` sin `Authorization` 401. `audit-opt` = `main` por fast-forward antes de este commit de documentación. Falta registrar la migración en `supabase/hosted/applied-*.json` |
 
-## Iteración B6 — Compra ligada a su semana y firma estable 🟡 (2026-10-09, integrada en `audit-opt`; migración aplicada en becook-preview y becook)
+## Iteración B6 — Compra ligada a su semana y firma estable ✅ (2026-10-09, en producción el 2026-10-09)
 Pasos 12 y 14 del roadmap (H7; §5, §9, §13).
 
 | Elemento | Detalle |
@@ -153,7 +153,7 @@ Pasos 12 y 14 del roadmap (H7; §5, §9, §13).
 | Pendiente | Prueba manual en navegador (Sergio); validar la Preview |
 | Integración | 2026-10-09: `audit/p23-login`, `audit/p21-reglas` y `audit/b6-compra` integradas en `audit-opt` (en ese orden, `merge --no-ff`, sin conflictos). Tras cada merge: lint, typecheck, test y build en verde (147 → 167 → 184 tests). Con todo junto: `db:reset` + `db:seed` + `test:db` 358/358. Sin push |
 
-## Iteración C5 — Reglas culinarias y sustitución selectiva 🟡 (2026-10-09, integrada en `audit-opt`; falta CI y Preview)
+## Iteración C5 — Reglas culinarias y sustitución selectiva ✅ (2026-10-09, en producción el 2026-10-09)
 Paso 21 del roadmap.
 
 | Elemento | Detalle |
@@ -171,7 +171,7 @@ Paso 21 del roadmap.
 | Observaciones | El catálogo es pequeño (27 recetas; 5 compatibles con vegano y 4 tras quitar el pesto), así que con restricciones se agota pronto y se llega a la IA. Las ideas de IA no se distinguen de los menús en `ai_usage_events` (mismo flujo); solo en el log `dish_substitution`. Si se quiere una cuota propia, hace falta migración (`flow` admite solo `menu`, `import`, `shopping`). La edición manual de un plato y los menús importados siguen sin pasar por las reglas (paso 22: advertir sin modificar la elección del usuario). «Otra idea» en la vista previa de Crear menú es el paso 28 (D3) |
 | Integración | 2026-10-09: `audit/p23-login`, `audit/p21-reglas` y `audit/b6-compra` integradas en `audit-opt` (en ese orden, `merge --no-ff`, sin conflictos). Tras cada merge: lint, typecheck, test y build en verde (147 → 167 → 184 tests). Con todo junto: `db:reset` + `db:seed` + `test:db` 358/358. Sin push |
 
-## Iteración D1 — Alta, login y recuperación de cuenta 🟡 (2026-10-09, integrada en `audit-opt`; falta configurar Auth remoto)
+## Iteración D1 — Alta, login y recuperación de cuenta ✅ (2026-10-09, en producción el 2026-10-09; falta parte de la configuración de Auth)
 Paso 23 del roadmap.
 
 | Elemento | Detalle |
@@ -190,6 +190,15 @@ Paso 23 del roadmap.
 | Decisiones a confirmar | Destino por defecto tras login `/week` y tras alta `/profile`; contraseña nueva ≥ 8 en cliente; una sesión ya iniciada que abre `/reset-password` puede cambiar la contraseña sin la anterior (comportamiento por defecto de Supabase con `secure_password_change = false`) |
 | Integración | 2026-10-09: `audit/p23-login`, `audit/p21-reglas` y `audit/b6-compra` integradas en `audit-opt` (en ese orden, `merge --no-ff`, sin conflictos). Tras cada merge: lint, typecheck, test y build en verde (147 → 167 → 184 tests). Con todo junto: `db:reset` + `db:seed` + `test:db` 358/358. Sin push |
 
+## B6, C5 y D1 en producción ✅ (2026-10-09)
+| Elemento | Resultado |
+|---|---|
+| PR | [#12](https://github.com/Sikorsky1/beCook/pull/12) `audit-opt` → `main`, merge commit (sin squash/rebase); checks en verde (application, database, Vercel) |
+| Commit de merge | `ab2433b` (2026-10-09 16:28 UTC); `audit-opt` sincronizada por fast-forward |
+| Migración | `shopping_list_per_week` aplicada antes del merge: becook-preview `20261009154554`, becook `20261009161800` (tras backup completo en ~/Backups/becook/2026-10-09). C5 y D1 sin cambios de esquema |
+| Auth | Redirect URLs configuradas en becook-preview y becook; Site URL `https://becook.xyz` |
+| Pendiente | Comprobar el despliegue de producción en Vercel (no revisado en esta sesión); prueba manual en navegador de B6, C5 y D1 (Sergio); resto de Auth de D1 (plantillas en español, mínimo 8, SMTP propio) |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
@@ -204,18 +213,18 @@ Paso 23 del roadmap.
 | 09 Calendario ISO | B3 | ✅ | En producción desde 2026-10-08 (PR #10): URL `?week=`, fechas por nombre de día, semana 53 rechazada; ver B3 |
 | 10 Escrituras de semana seguras | B4 | ✅ | En producción desde 2026-10-08 (PR #11): `apply_week`/`update_week_slot`, versión e idempotencia; ver B4 |
 | 11 Aplicar menú ≠ generar compra | B5 | ⏳ | |
-| 12 Compra ligada a su semana | B6 | 🟡 | Integrado en `audit-opt` (2026-10-09): lista vigente por semana, lectura remota primero, marcado por artículo; migración solo local; ver B6 |
+| 12 Compra ligada a su semana | B6 | ✅ | En producción desde 2026-10-09 (PR #12): lista vigente por semana, lectura remota primero, marcado por artículo; ver B6 |
 | 13 Despensa remota segura | B7 | ⏳ | |
-| 14 Firma de compra estable | B6 | 🟡 | Integrado en `audit-opt` (2026-10-09): firma canónica sin fechas ni versión; mismo menú → misma lista; ver B6 |
+| 14 Firma de compra estable | B6 | ✅ | En producción desde 2026-10-09 (PR #12): firma canónica sin fechas ni versión; mismo menú → misma lista; ver B6 |
 | 15 Estados de sincronización visibles | B5 | ⏳ | |
 | 16 Contexto alimentario por semana | C1 | ⏳ | |
 | 17 Fichas de plato versionadas | C2 | ⏳ | |
 | 18 Validación de restricciones | C3 | ⏳ | |
 | 19 Compra desde recetas y despensa | C4 | ⏳ | |
 | 20 Reconciliar cambios de plato | C4 | ⏳ | |
-| 21 Reglas culinarias y sustitución | C5 | 🟡 | Integrado en `audit-opt` (2026-10-09): reglas de títulos, «Otra idea» con catálogo y luego IA (flujo `menu`); ver C5 |
+| 21 Reglas culinarias y sustitución | C5 | ✅ | En producción desde 2026-10-09 (PR #12): reglas de títulos, «Otra idea» con catálogo y luego IA (flujo `menu`); ver C5 |
 | 22 Importación y borradores | C6 | ⏳ | |
-| 23 Alta, login y recuperación | D1 | 🟡 | Integrado en `audit-opt` (2026-10-09): alta, login con `next`, recuperación; falta Auth remoto (URLs, plantillas); ver D1 |
+| 23 Alta, login y recuperación | D1 | ✅ | En producción desde 2026-10-09 (PR #12): alta, login con `next`, recuperación; Redirect URLs configuradas, faltan plantillas, mínimo 8 y SMTP; ver D1 |
 | 24 Perfil simplificado | D2 | ⏳ | |
 | 25 Onboarding y primer menú | D2 | ⏳ | |
 | 26 Aplicar propuesta visible y segura | D3 | ⏳ | |
