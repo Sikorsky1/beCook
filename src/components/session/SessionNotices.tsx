@@ -1,8 +1,7 @@
 "use client";
 
 import { LogIn } from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { PrimaryButton, SecondaryButton } from "@/components/ui/Button";
@@ -14,7 +13,8 @@ import {
   importLegacyData,
   type LegacyImportResult,
 } from "@/lib/data/legacy-import";
-import { loginHrefFor } from "@/lib/navigation";
+import { isAuthPath } from "@/lib/navigation";
+import { loginHrefForCurrentPage, runBeforeLoginSavers } from "@/lib/session/login-return";
 
 function describeResult(result: LegacyImportResult) {
   const parts: string[] = [];
@@ -30,6 +30,7 @@ export function SessionNotices() {
   const identity = useIdentity();
   const { dismissExpiredNotice, refresh } = useIdentityActions();
   const pathname = usePathname();
+  const router = useRouter();
   const [legacyOffer, setLegacyOffer] = useState(false);
   const [importStatus, setImportStatus] = useState<"idle" | "working">("idle");
   const [importMessage, setImportMessage] = useState("");
@@ -51,17 +52,23 @@ export function SessionNotices() {
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-3 px-3 pt-3 empty:hidden sm:px-6">
-      {identity.sessionExpired ? (
+      {/* The account screens already are the way back in: no banner there. */}
+      {identity.sessionExpired && !isAuthPath(pathname) ? (
         <StateMessage
           className="mt-0"
           title="Tu sesión ha caducado."
           action={
             <div className="flex flex-wrap gap-2">
-              <PrimaryButton asChild size="md">
-                <Link href={loginHrefFor(pathname || "/week")}>
-                  <LogIn aria-hidden="true" className="h-4 w-4" />
-                  Iniciar sesión
-                </Link>
+              <PrimaryButton
+                size="md"
+                onClick={() => {
+                  // Keep unsent input and come back to this same page (with its ?week=).
+                  runBeforeLoginSavers();
+                  router.push(loginHrefForCurrentPage());
+                }}
+              >
+                <LogIn aria-hidden="true" className="h-4 w-4" />
+                Iniciar sesión
               </PrimaryButton>
               <SecondaryButton size="md" onClick={dismissExpiredNotice}>
                 Seguir sin cuenta

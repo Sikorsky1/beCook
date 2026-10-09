@@ -1,74 +1,75 @@
 "use client";
 
-import { LogIn, UserPlus } from "lucide-react";
+import { LogIn, MailCheck, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
-import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import {
+  AuthPageShell,
+  FieldLabel,
+  FormError,
+  FormNotice,
+  useNextParam,
+} from "@/components/session/AuthPageShell";
+import { useIdentity } from "@/components/session/IdentityProvider";
+import { PrimaryButton, SecondaryButton, TertiaryButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
-import { getCurrentUser, signUp } from "@/lib/supabase/auth";
-import { pageContentClass, pageShellClass } from "@/lib/ui";
+import {
+  newPasswordMinLength,
+  resendSignupConfirmation,
+  signUpWithEmail,
+} from "@/lib/auth/account";
+import { authHref, authRedirectUrl, defaultAfterSignupPath } from "@/lib/navigation";
+import { supabase } from "@/lib/supabase/client";
 
-export default function SignupPage() {
+function SignupForm() {
   const router = useRouter();
+  const identity = useIdentity();
+  const next = useNextParam();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [resendNotice, setResendNotice] = useState("");
+
+  const confirmationUrl = () => authRedirectUrl(window.location.origin, "/auth/callback", next);
 
   async function handleSignup() {
-    const trimmedEmail = email.trim();
-
-    if (!trimmedEmail) {
-      setErrorMessage("Introduce tu email para crear la cuenta.");
-      return;
-    }
-
-    if (!password) {
-      setErrorMessage("Introduce una contraseña.");
-      return;
-    }
-
-    if (!confirmPassword) {
-      setErrorMessage("Confirma la contraseña.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setErrorMessage("Las contraseñas no coinciden.");
-      return;
-    }
-
     setIsSubmitting(true);
     setErrorMessage("");
-    setMessage("");
-
-    try {
-      await signUp(trimmedEmail, password);
-      const currentUser = await getCurrentUser();
-
-      if (currentUser) {
-        setMessage("Cuenta creada y sesión iniciada.");
-        router.push("/profile");
-        router.refresh();
-        return;
-      }
-
-      setMessage("Revisa tu email para confirmar la cuenta.");
-    } catch (error: unknown) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "No se pudo crear la cuenta.",
-      );
-    } finally {
-      setIsSubmitting(false);
+    const result = await signUpWithEmail(supabase, {
+      email,
+      password,
+      confirmation: confirmPassword,
+      redirectTo: confirmationUrl(),
+    });
+    if (result.ok && result.status === "signed_in") {
+      router.replace(next ?? defaultAfterSignupPath);
+      return;
     }
+    setIsSubmitting(false);
+    if (result.ok) {
+      setSentTo(result.email);
+      setPassword("");
+      setConfirmPassword("");
+      return;
+    }
+    setErrorMessage(result.message);
+  }
+
+  async function handleResend() {
+    if (!sentTo) return;
+    setIsSubmitting(true);
+    setResendNotice("");
+    setErrorMessage("");
+    const result = await resendSignupConfirmation(supabase, { email: sentTo, redirectTo: confirmationUrl() });
+    setIsSubmitting(false);
+    if (result.ok) setResendNotice("Te hemos enviado otro enlace.");
+    else setErrorMessage(result.message);
   }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -76,99 +77,133 @@ export default function SignupPage() {
     void handleSignup();
   };
 
+  if (identity.status === "ready" && identity.userId && !isSubmitting) {
+    return (
+      <AuthPageShell title="Ya tienes la sesión iniciada">
+        <p className="text-sm leading-6 text-[color:var(--color-foreground)]">
+          Estás usando beCook con <strong className="break-all">{identity.email ?? "tu cuenta"}</strong>.
+          Para crear otra cuenta, cierra antes la sesión en Perfil.
+        </p>
+        <PrimaryButton asChild className="w-full">
+          <Link href={next ?? defaultAfterSignupPath} replace>Continuar</Link>
+        </PrimaryButton>
+      </AuthPageShell>
+    );
+  }
+
+  if (sentTo) {
+    return (
+      <AuthPageShell title="Revisa tu email" guestHref={next ?? "/week"}>
+        <div className="flex gap-3">
+          <MailCheck aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-[color:var(--color-secondary-hover)]" />
+          <div className="space-y-2 text-sm leading-6 text-[color:var(--color-foreground)]">
+            <p>
+              Te hemos enviado un enlace a <strong className="break-all">{sentTo}</strong>. Ábrelo para
+              activar tu cuenta; después volverás a beCook con la sesión iniciada.
+            </p>
+            <p className="text-[color:var(--color-muted-foreground)]">
+              Si no lo ves en unos minutos, mira en la carpeta de spam. Si ya tenías cuenta con este
+              email, inicia sesión o recupera tu contraseña.
+            </p>
+          </div>
+        </div>
+        {errorMessage ? <FormError>{errorMessage}</FormError> : null}
+        {resendNotice ? <FormNotice>{resendNotice}</FormNotice> : null}
+        <div className="grid gap-2 sm:grid-cols-2">
+          <SecondaryButton type="button" disabled={isSubmitting} onClick={() => void handleResend()}>
+            Reenviar enlace
+          </SecondaryButton>
+          <TertiaryButton asChild>
+            <Link href={authHref("/login", next)}>
+              <LogIn aria-hidden="true" className="h-4 w-4" />
+              Ir a iniciar sesión
+            </Link>
+          </TertiaryButton>
+        </div>
+      </AuthPageShell>
+    );
+  }
+
   return (
-    <main className={pageShellClass}>
-      <div className={`${pageContentClass} gap-5 sm:gap-6`}>
-        <section>
-          <p className="ui-eyebrow text-[0.78rem]">Cuenta beCook</p>
-          <h1 className="mt-2 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
-            Crea tu cuenta
-          </h1>
-          <p className="mt-2 text-sm font-medium leading-6 text-[color:var(--color-muted-foreground)]">
-            Asocia tus próximos perfiles y planes a Supabase sin perder el modo
-            local.
+    <AuthPageShell
+      title="Crea tu cuenta"
+      guestHref={next ?? "/week"}
+      lede={
+        <p>
+          Guarda tu menú de la semana, la lista de la compra y la despensa, y ábrelos
+          desde cualquier dispositivo. Con cuenta también puedes crear menús con IA.
+        </p>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-3" noValidate>
+        <div className="space-y-1.5">
+          <FieldLabel htmlFor="signup-email">Email</FieldLabel>
+          <TextInput
+            id="signup-email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="tu@email.com"
+            required
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <FieldLabel htmlFor="signup-password">Contraseña</FieldLabel>
+          <TextInput
+            id="signup-password"
+            type="password"
+            autoComplete="new-password"
+            minLength={newPasswordMinLength}
+            aria-describedby="signup-password-hint"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+          <p id="signup-password-hint" className="text-xs text-[color:var(--color-muted-foreground)]">
+            Al menos {newPasswordMinLength} caracteres.
           </p>
-        </section>
+        </div>
 
-        <Card className="space-y-4 p-4 sm:p-5">
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <label className="block space-y-1.5">
-              <span className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
-                Email
-              </span>
-              <TextInput
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="tu@email.com"
-              />
-            </label>
+        <div className="space-y-1.5">
+          <FieldLabel htmlFor="signup-confirm">Repite la contraseña</FieldLabel>
+          <TextInput
+            id="signup-confirm"
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            required
+          />
+        </div>
 
-            <label className="block space-y-1.5">
-              <span className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
-                Contraseña
-              </span>
-              <TextInput
-                type="password"
-                autoComplete="new-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Mínimo 6 caracteres"
-              />
-            </label>
+        {errorMessage ? <FormError>{errorMessage}</FormError> : null}
 
-            <label className="block space-y-1.5">
-              <span className="text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
-                Confirmar contraseña
-              </span>
-              <TextInput
-                type="password"
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder="Repite la contraseña"
-              />
-            </label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <PrimaryButton type="submit" disabled={isSubmitting} className="w-full">
+            <UserPlus aria-hidden="true" className="h-4 w-4" />
+            {isSubmitting ? "Creando…" : "Crear cuenta"}
+          </PrimaryButton>
+          <TertiaryButton asChild>
+            <Link href={authHref("/login", next)}>
+              <LogIn aria-hidden="true" className="h-4 w-4" />
+              Ya tengo cuenta
+            </Link>
+          </TertiaryButton>
+        </div>
+      </form>
+    </AuthPageShell>
+  );
+}
 
-            {errorMessage ? (
-              <p className="rounded-[var(--radius-control)] border border-[color:var(--color-danger-soft)] bg-[color:var(--color-danger-soft)] px-3 py-2 text-sm font-semibold text-[color:var(--color-danger)]">
-                {errorMessage}
-              </p>
-            ) : null}
-
-            {message ? (
-              <p className="rounded-[var(--radius-control)] border border-[color:var(--color-secondary-soft)] bg-[color:var(--color-secondary-soft)] px-3 py-2 text-sm font-semibold text-[color:var(--color-secondary-hover)]">
-                {message}
-              </p>
-            ) : null}
-
-            <div className="grid gap-2 sm:grid-cols-2">
-              <PrimaryButton
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full"
-              >
-                <UserPlus aria-hidden="true" className="h-4 w-4" />
-                Crear cuenta
-              </PrimaryButton>
-              <TertiaryButton asChild>
-                <Link href="/login">
-                  <LogIn aria-hidden="true" className="h-4 w-4" />
-                  Ya tengo cuenta
-                </Link>
-              </TertiaryButton>
-            </div>
-          </form>
-        </Card>
-
-        <Link
-          href="/week"
-          className="text-center text-sm font-semibold text-[color:var(--color-muted-foreground)] underline-offset-4 hover:text-[color:var(--color-foreground)] hover:underline"
-        >
-          Seguir sin iniciar sesión
-        </Link>
-      </div>
-    </main>
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
   );
 }

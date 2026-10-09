@@ -6,6 +6,7 @@ const { fingerprintSql, probeSql } = require("./db-test-probe.cjs");
 const { runOwnershipTests } = require("./reference-ownership-tests.cjs");
 const { runAiUsageTests } = require("./ai-usage-db-tests.cjs");
 const { runSessionTests } = require("./session-db-tests.cjs");
+const { runAuthFlowTests } = require("./auth-db-tests.cjs");
 const { runProfileContractTests } = require("./profile-db-tests.cjs");
 const { runWeekWriteTests } = require("./week-write-db-tests.cjs");
 const { createClient } = require("@supabase/supabase-js");
@@ -151,6 +152,8 @@ async function main() {
   await userClient.auth.signOut({scope:"local"});
   // B1: identity-scoped device data with the application's own Supabase client.
   await runSessionTests({check, id, supabase});
+  // D1 (step 23): sign-up, recovery link and new password against the real local Auth.
+  await runAuthFlowTests({check, api, createClient});
   // B2: profile contract (save → reload → read on another device) with the application adapter.
   await runProfileContractTests({check, sql, id, api, createClient, supabase});
   // B4: transactional week writes, concurrency, idempotency and slot edits through the application.
