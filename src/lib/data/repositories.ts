@@ -3,7 +3,7 @@
 import type { WeekDay } from "@/data/mockWeek";
 import { getIsoWeekStorageId, parseIsoWeek, type IsoWeek } from "@/lib/isoWeek";
 import type { PantryStorageItem } from "@/lib/pantryStorage";
-import type { GeneratedShoppingListResponse } from "@/lib/shoppingList";
+import type { GeneratedShoppingListItem } from "@/lib/shoppingList";
 import {
   loadEntity,
   readCached,
@@ -21,6 +21,7 @@ import {
   type StorageScope,
 } from "@/lib/storage/scoped-storage";
 import type { UserProfile } from "@/lib/supabase/profiles";
+import type { SaveShoppingListResult, SetShoppingItemsCheckedResult, ShoppingList } from "@/lib/supabase/shopping-lists";
 import type { MealKind, WeekWriteResult } from "@/lib/supabase/weeks";
 import { mealSlotToSupabase, supabaseWeekToWeekDays, weekDaysToSupabaseWeek } from "@/lib/weekStorage";
 
@@ -48,19 +49,28 @@ export function weekWriteToPush(result: WeekWriteResult): PushResult {
   return { version: String(result.version), duplicate: result.status === "duplicate" };
 }
 
-export type RemoteShoppingList = {
-  items: GeneratedShoppingListResponse["items"];
-  checkedItemIds: string[];
-  weekId: string;
+// The account side of one calendar week's shopping (B6): the week as it is now and its current list.
+export type RemoteShoppingState = {
+  // null: the account has no such week.
+  week: { days: WeekDay[]; version: number | null; updatedAt: string | null } | null;
+  list: ShoppingList | null;
+};
+
+export type ShoppingRemote = {
+  fetch: () => Promise<RemoteShoppingState>;
+  save: (input: {
+    signature: string;
+    items: GeneratedShoppingListItem[];
+    expectedWeekVersion: number | null;
+  }) => Promise<SaveShoppingListResult>;
+  setChecked: (itemIds: string[], checked: boolean) => Promise<SetShoppingItemsCheckedResult>;
 };
 
 export type Remotes = {
   profile: (userId: string) => EntityRemote<UserProfile>;
-  week: (userId: string, isoWeek: IsoWeek, options?: WeekPushOptions) => EntityRemote<WeekDay[]> & {
-    weekId: () => Promise<string | null>;
-  };
+  week: (userId: string, isoWeek: IsoWeek, options?: WeekPushOptions) => EntityRemote<WeekDay[]>;
   pantry: (userId: string) => EntityRemote<PantryStorageItem[]>;
-  shoppingForWeek: (userId: string, isoWeek: IsoWeek) => Promise<RemoteShoppingList | null>;
+  shopping: (userId: string, isoWeek: IsoWeek) => ShoppingRemote;
 };
 
 const supabaseRemotes: Remotes = {
@@ -94,7 +104,6 @@ const supabaseRemotes: Remotes = {
       fetch,
       // apply_week / update_week_slot compare the version in the same transaction as the write.
       checksVersion: true,
-      weekId: async () => (await read())?.id ?? null,
       async push(weekDays, { baseVersion, overwrite }) {
         const { applyWeekInSupabase, updateWeekSlotInSupabase } = await import("@/lib/supabase/weeks");
         const expectedVersion = toWeekVersion(baseVersion);
@@ -143,20 +152,33 @@ const supabaseRemotes: Remotes = {
       },
     };
   },
-  async shoppingForWeek(userId, isoWeek) {
-    const { getWeekFromSupabaseByIsoWeek } = await import("@/lib/supabase/weeks");
-    const week = await getWeekFromSupabaseByIsoWeek({ isoYear: isoWeek.isoYear, isoWeek: isoWeek.isoWeek, userId });
-    if (!week?.id) return null;
-    const { getLatestShoppingListForWeekFromSupabase } = await import("@/lib/supabase/shopping-lists");
-    const list = await getLatestShoppingListForWeekFromSupabase(week.id);
-    if (!list || list.items.length === 0) return null;
-    // A list generated before the last change of the week no longer matches its dishes.
-    if (week.updatedAt && list.generatedAt < week.updatedAt) return null;
-    const { groupShoppingListItems } = await import("@/lib/shoppingList");
-    const items = list.items.map(({ name, quantity, unit, category }) => ({ name, quantity, unit, category }));
-    const checked = list.items.filter((item) => item.checked).map(({ name, quantity, unit, category }) => ({ name, quantity, unit, category }));
-    const checkedItemIds = groupShoppingListItems(checked).flatMap((group) => group.items.map((item) => item.id));
-    return { items, checkedItemIds, weekId: week.id };
+  shopping(userId, isoWeek) {
+    return {
+      async fetch() {
+        const { getWeekFromSupabaseByIsoWeek } = await import("@/lib/supabase/weeks");
+        const week = await getWeekFromSupabaseByIsoWeek({ isoYear: isoWeek.isoYear, isoWeek: isoWeek.isoWeek, userId });
+        if (!week?.id) return { week: null, list: null };
+        const { getLatestShoppingListForWeekFromSupabase } = await import("@/lib/supabase/shopping-lists");
+        return {
+          week: { days: supabaseWeekToWeekDays(week, isoWeek), version: week.version ?? null, updatedAt: week.updatedAt ?? null },
+          list: await getLatestShoppingListForWeekFromSupabase(week.id),
+        };
+      },
+      async save({ signature, items, expectedWeekVersion }) {
+        const { saveShoppingListInSupabase } = await import("@/lib/supabase/shopping-lists");
+        return saveShoppingListInSupabase({
+          isoYear: isoWeek.isoYear,
+          isoWeek: isoWeek.isoWeek,
+          weekSignature: signature,
+          items,
+          expectedWeekVersion,
+        });
+      },
+      async setChecked(itemIds, checked) {
+        const { setShoppingItemsCheckedInSupabase } = await import("@/lib/supabase/shopping-lists");
+        return setShoppingItemsCheckedInSupabase(itemIds, checked);
+      },
+    };
   },
 };
 
@@ -228,10 +250,6 @@ export function saveWeekSlot(
   );
 }
 
-export async function getRemoteWeekId(identity: DataIdentity, isoWeek: IsoWeek) {
-  return identity.userId ? remotes.week(identity.userId, isoWeek).weekId() : null;
-}
-
 // --- Pantry --------------------------------------------------------------
 export function readCachedPantry(identity: DataIdentity) {
   return readCached<PantryStorageItem[]>({ scope: identity.scope, entity: "pantry" })?.data ?? null;
@@ -254,11 +272,16 @@ export function writeSelectedWeek(identity: DataIdentity, isoWeek: IsoWeek) {
   writeScoped(identity.scope, "selected-week", isoWeek);
 }
 
-// --- Shopping cache (per week; remote list consulted before generating) ---
+// --- Shopping (per week; the account list is read first, see @/lib/data/shopping) ---
 export type ShoppingCache = {
   weekSignature: string;
-  items: GeneratedShoppingListResponse["items"];
+  items: GeneratedShoppingListItem[];
   checkedItemIds: string[];
+  // B6. listId: the account list these items are (null: only on this device so far).
+  // itemIds: account rows of each visible item. pendingChecks: marks the account has not accepted yet.
+  listId?: string | null;
+  itemIds?: Record<string, string[]>;
+  pendingChecks?: Record<string, boolean>;
 };
 
 export function readShoppingCache(identity: DataIdentity, isoWeek: IsoWeek) {
@@ -273,6 +296,13 @@ export function clearShoppingCache(identity: DataIdentity, isoWeek: IsoWeek) {
   removeScoped(identity.scope, "shopping", weekKey(isoWeek));
 }
 
-export async function loadRemoteShoppingList(identity: DataIdentity, isoWeek: IsoWeek) {
-  return identity.userId ? remotes.shoppingForWeek(identity.userId, isoWeek) : null;
+export function shoppingRemote(identity: DataIdentity, isoWeek: IsoWeek) {
+  return identity.userId ? remotes.shopping(identity.userId, isoWeek) : null;
+}
+
+// Account version of the week as last seen on this device (null: unknown).
+export function readCachedWeekVersion(identity: DataIdentity, isoWeek: IsoWeek) {
+  const version = readCached<WeekDay[]>({ scope: identity.scope, entity: "week", week: weekKey(isoWeek) })?.remoteVersion ?? null;
+  const parsed = toWeekVersion(version);
+  return parsed === null || parsed < 0 ? null : parsed;
 }

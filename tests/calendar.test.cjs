@@ -8,7 +8,7 @@ const iso = require("../src/lib/isoWeek.ts");
 const {resolveWeekSelection, buildWeekHref} = require("../src/lib/weekSelection.ts");
 const {importedMenuToWeekDays} = require("../src/lib/importMenu.ts");
 const {withWeekDates} = require("../src/lib/weekStorage.ts");
-const {getWeekSignature, matchesWeekSignature} = require("../src/lib/shoppingListStorage.ts");
+const {getShoppingSignature, matchesShoppingSignature} = require("../src/lib/shoppingListStorage.ts");
 
 const week = (isoYear, isoWeek) => ({isoYear, isoWeek});
 const slot = dishName => ({status: "planned", dishName});
@@ -119,11 +119,12 @@ test("shopping signature has no presented date and still accepts existing caches
   const target = week(2026, 41);
   const preview = importedMenuToWeekDays(imported("Lunes", "Miércoles"), target);
   const stored = withWeekDates(preview.map(day => ({...day, date: ""})), target);
-  assert.equal(getWeekSignature(preview), getWeekSignature(stored));
-  assert.doesNotMatch(getWeekSignature(preview), /oct/);
-  assert.equal(getWeekSignature(withWeekDates(preview, week(2026, 42))), getWeekSignature(preview));
+  const sign = days => getShoppingSignature(target, days);
+  assert.equal(sign(preview), sign(stored));
+  assert.doesNotMatch(sign(preview), /oct/);
+  assert.equal(sign(withWeekDates(preview, week(2026, 42))), sign(preview));
   // Caches written before B3 signed JSON.stringify(weekDays) with the real dates.
-  assert.ok(matchesWeekSignature(JSON.stringify(stored), stored));
-  assert.ok(matchesWeekSignature(getWeekSignature(stored), stored));
-  assert.equal(matchesWeekSignature(getWeekSignature(stored), [{...stored[0], lunch: "Otro plato"}, stored[1]]), false);
+  assert.ok(matchesShoppingSignature(JSON.stringify(stored), target, stored));
+  assert.ok(matchesShoppingSignature(sign(stored), target, stored));
+  assert.equal(matchesShoppingSignature(sign(stored), target, [{...stored[0], lunch: "Otro plato"}, stored[1]]), false);
 });
