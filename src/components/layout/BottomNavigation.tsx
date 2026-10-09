@@ -10,6 +10,8 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { isAuthPath } from "@/lib/navigation";
+
 type BottomNavigationItem = {
   href: string;
   label: string;
@@ -45,9 +47,7 @@ const navigationItems: BottomNavigationItem[] = [
     label: "Perfil",
     Icon: UserRound,
     isActive: (pathname) =>
-      pathname.startsWith("/profile") ||
-      pathname.startsWith("/login") ||
-      pathname.startsWith("/signup"),
+      pathname.startsWith("/profile") || isAuthPath(pathname),
   },
 ];
 

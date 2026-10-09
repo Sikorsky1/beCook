@@ -1,6 +1,6 @@
 import "server-only";
 import OpenAI from "openai";
-import { menuSystemPrompt } from "./prompt";
+import { menuSystemPrompt, substitutionSystemPrompt } from "./prompt";
 import { menuSelectionSchema } from "./validation";
 
 // Menu settings are separate from the legacy import/shopping configuration.
@@ -32,4 +32,29 @@ export async function createMenuCompletion(openai: OpenAI, userPrompt: string, a
     }
   }
   throw new Error("no_model");
+}
+
+export const substitutionTimeoutMs = 15_000;
+export const substitutionSchema = {
+  type: "object", additionalProperties: false, required: ["dish"],
+  properties: {dish: {type: "string", minLength: 8, maxLength: 110}},
+};
+
+// Dish substitution: exactly one bounded attempt with the menu model; no fallback, no retry.
+export async function createSubstitutionCompletion(openai: OpenAI, userPrompt: string, attempts: MenuAttempt[], signal?: AbortSignal) {
+  const start = performance.now();
+  try {
+    const completion = await openai.chat.completions.create({
+      model: menuModel,
+      ...(/^gpt-5/.test(menuModel) ? {reasoning_effort: menuReasoningEffort} : {}),
+      max_completion_tokens: 120, store: false,
+      response_format: {type: "json_schema", json_schema: {name: "dish_substitution", strict: true, schema: substitutionSchema}},
+      messages: [{role: "system", content: substitutionSystemPrompt}, {role: "user", content: userPrompt}],
+    }, {timeout: substitutionTimeoutMs, maxRetries: 0, signal});
+    attempts.push({model: menuModel, durationMs: Math.round(performance.now() - start), status: 200, outcome: "success"});
+    return completion;
+  } catch (error) {
+    attempts.push({model: menuModel, durationMs: Math.round(performance.now() - start), status: error instanceof OpenAI.APIError ? error.status ?? null : null, outcome: "error"});
+    throw error;
+  }
 }

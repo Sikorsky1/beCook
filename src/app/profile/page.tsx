@@ -10,6 +10,7 @@ import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
 import { Button, PrimaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { loadProfile, readCachedProfile, saveProfile } from "@/lib/data/repositories";
+import { loginHrefFor } from "@/lib/navigation";
 import { scopeHasPendingChanges } from "@/lib/storage/scoped-storage";
 import {
   PROFILE_LIMITS,
@@ -798,7 +799,7 @@ export default function ProfilePage() {
                 </Button>
               ) : (
                 <Link
-                  href="/login"
+                  href={loginHrefFor("/profile")}
                   className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-xs font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
                 >
                   Entrar o crear cuenta

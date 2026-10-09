@@ -1,4 +1,5 @@
 import type { ImportedMenuResponse } from "@/lib/importMenu";
+import { culinaryIssue } from "./culinary-rules";
 
 export const dayNames = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"] as const;
 
@@ -13,7 +14,7 @@ const meat = /\b(pollo|pavo|ternera|cordero|conejo|carne|vacuno|buey|cecina|solo
 const seafood = /\b(gambas?|langostinos?|langosta|cangrejo|marisco|mejillones?|almejas?|chirlas?|sepia|calamares?|pulpo|vieiras?|berberechos?)\b/;
 const fish = /\b(pescado|salmon|merluza|bacalao|atun|bonito|sardinas?|anchoas?|boquerones?|lubina|dorada|caballa|ventresca|emperador|rape|trucha|gulas)\b/;
 const egg = /\b(huevos?|tortilla|revuelto|mayonesa|mahonesa|carbonara)\b/;
-const dairy = /\b(leche|queso|nata|mantequilla|yogur|feta|ricotta|mozzarella|parmesano|bechamel)\b/;
+const dairy = /\b(leche|queso|nata|mantequilla|yogur|feta|ricotta|mozzarella|parmesano|bechamel|pesto|carbonara)\b/;
 const nuts = /\b(frutos secos|almendras?|nueces|nuez|avellanas?|pistachos?|anacardos?|cacahuetes?|pinones?|pesto)\b/;
 const gluten = /\b(trigo|cebada|centeno|pan|tostas?|tostadas?|pasta|espaguetis|macarrones|fideos|cuscus|bulgur|pizza|lasana|rebozado|empanado|seitan)\b/;
 
@@ -46,6 +47,10 @@ export function visibleFoodConflict(name: string, profile: MenuProfile): boolean
   return false;
 }
 
+export function isGenericDish(dish: string) {
+  return /^(pescado con verduras|carne con guarnicion|pasta con salsa|ensalada completa|crema de verduras|verduras variadas|salteado saludable|bowl mediterraneo|power bowl|ensalada mixta)$/.test(normalizeFood(dish));
+}
+
 export const menuSelectionSchema = {
   type: "object", additionalProperties: false, required: ["lunches", "dinners"],
   properties: Object.fromEntries(["lunches", "dinners"].map(key => [key, {
@@ -62,7 +67,8 @@ export function selectionToMenu(value: unknown, profile: MenuProfile): ImportedM
   if (dishes.some(dish => typeof dish !== "string" || dish.trim().length < 8 || dish.length > 110)) throw new Error("invalid_dish");
   if (new Set(dishes.map(normalizeFood)).size !== 14) throw new Error("duplicate_dish");
   if (dishes.some(dish => visibleFoodConflict(dish, profile))) throw new Error("restriction_conflict");
-  if (dishes.some(dish => /^(pescado con verduras|carne con guarnicion|pasta con salsa|ensalada completa|crema de verduras|verduras variadas|salteado saludable|bowl mediterraneo|power bowl|ensalada mixta)$/.test(normalizeFood(dish)))) throw new Error("generic_dish");
+  if (dishes.some(isGenericDish)) throw new Error("generic_dish");
+  if (dishes.some(dish => culinaryIssue(dish) !== null)) throw new Error("ambiguous_dish");
   const lunches = selection.lunches as string[];
   const dinners = selection.dinners as string[];
   return {

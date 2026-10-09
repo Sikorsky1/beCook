@@ -6,8 +6,10 @@ const { fingerprintSql, probeSql } = require("./db-test-probe.cjs");
 const { runOwnershipTests } = require("./reference-ownership-tests.cjs");
 const { runAiUsageTests } = require("./ai-usage-db-tests.cjs");
 const { runSessionTests } = require("./session-db-tests.cjs");
+const { runAuthFlowTests } = require("./auth-db-tests.cjs");
 const { runProfileContractTests } = require("./profile-db-tests.cjs");
 const { runWeekWriteTests } = require("./week-write-db-tests.cjs");
+const { runShoppingTests } = require("./shopping-db-tests.cjs");
 const { createClient } = require("@supabase/supabase-js");
 const id = (prefix, n) => prefix + "0000000-0000-4000-8000-00000000000" + n;
 let failures = 0, passed = 0;
@@ -151,10 +153,14 @@ async function main() {
   await userClient.auth.signOut({scope:"local"});
   // B1: identity-scoped device data with the application's own Supabase client.
   await runSessionTests({check, id, supabase});
+  // D1 (step 23): sign-up, recovery link and new password against the real local Auth.
+  await runAuthFlowTests({check, api, createClient});
   // B2: profile contract (save → reload → read on another device) with the application adapter.
   await runProfileContractTests({check, sql, id, api, createClient, supabase});
   // B4: transactional week writes, concurrency, idempotency and slot edits through the application.
   await runWeekWriteTests({check, sql, id, supabase});
+  // B6: shopping list per week, per-item marks, stable signature and rollout with the previous client.
+  await runShoppingTests({check, sql, id, supabase, api, createClient});
   console.log(passed + " passed; " + failures + " failed. No production connection; SQL probes rolled back.");
   process.exitCode = failures ? 1 : 0;
 }

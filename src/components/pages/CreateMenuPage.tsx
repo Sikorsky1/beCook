@@ -19,6 +19,7 @@ import {
   type ApplyWeekAttempt,
 } from "@/lib/applyWeek";
 import { consumeCreateMenuDraft, saveCreateMenuDraft } from "@/lib/createMenuDraft";
+import { registerBeforeLoginSaver } from "@/lib/session/login-return";
 import {
   importedMenuToWeekDays,
   type GeneratedMenuApiResponse,
@@ -34,8 +35,6 @@ import {
   type IsoWeek,
 } from "@/lib/isoWeek";
 import {
-  clearShoppingCache,
-  getRemoteWeekId,
   loadPantry,
   newRequestKey,
   loadProfile,
@@ -47,10 +46,7 @@ import {
   writeSelectedWeek,
 } from "@/lib/data/repositories";
 import { pantryItemsOrDefault } from "@/lib/pantryStorage";
-import {
-  generateAndCacheShoppingListForWeek,
-  syncShoppingListToSupabase,
-} from "@/lib/shoppingListStorage";
+import { ensureShoppingList } from "@/lib/data/shopping";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
 import type { UserProfile } from "@/lib/supabase/profiles";
@@ -271,6 +267,22 @@ export default function CreateMenuPage() {
       elaborationLevel,
     });
   };
+
+  useEffect(
+    // The expired-session banner also leads to /login: the form must survive that trip too.
+    () =>
+      registerBeforeLoginSaver(() =>
+        saveCreateMenuDraft({
+          mode,
+          menuText,
+          freeTextPrompt,
+          peopleCount,
+          menuStyles,
+          elaborationLevel,
+        }),
+      ),
+    [mode, menuText, freeTextPrompt, peopleCount, menuStyles, elaborationLevel],
+  );
 
   const requireSession = async () => {
     if (await getAccessToken()) {
@@ -588,38 +600,14 @@ export default function CreateMenuPage() {
         return;
       }
 
-      clearShoppingCache(dataIdentity, weekForUse);
-      const weekId =
-        result.status === "synced"
-          ? await getRemoteWeekId(dataIdentity, weekForUse).catch(() => null)
-          : null;
-      let generatedItems:
-        | Awaited<ReturnType<typeof generateAndCacheShoppingListForWeek>>
-        | null = null;
-
+      // The week's list: kept if its dishes did not change, otherwise generated and saved (B6).
       try {
-        generatedItems =
-          await generateAndCacheShoppingListForWeek(
-            dataIdentity,
-            weekForUse,
-            importedWeekDays,
-          );
+        await ensureShoppingList(dataIdentity, weekForUse, importedWeekDays);
       } catch (error: unknown) {
         console.warn(
           "No se pudo generar automáticamente la lista de la compra:",
           error instanceof Error ? error.message : error,
         );
-      }
-
-      if (weekId && generatedItems) {
-        try {
-          await syncShoppingListToSupabase(generatedItems, [], weekId);
-        } catch (error: unknown) {
-          console.warn(
-            "No se pudo sincronizar automáticamente la lista de la compra:",
-            error instanceof Error ? error.message : error,
-          );
-        }
       }
 
       setUseWeekStatus("success");

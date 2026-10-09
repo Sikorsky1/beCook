@@ -15,16 +15,17 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import type { WeekDay } from "@/data/mockWeek";
 import { isAiLoginRequiredError } from "@/lib/ai-client";
 import {
-  getRemoteWeekId,
   loadPantry,
-  loadRemoteShoppingList,
   loadWeek,
   readCachedPantry,
   readSelectedWeek,
-  readShoppingCache,
-  writeShoppingCache,
-  type ShoppingCache,
 } from "@/lib/data/repositories";
+import {
+  generateShoppingList,
+  loadShoppingList,
+  setShoppingItemChecked,
+  type ShoppingLoad,
+} from "@/lib/data/shopping";
 import { getCurrentIsoWeek, type IsoWeek } from "@/lib/isoWeek";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { pageShellClass } from "@/lib/ui";
@@ -39,13 +40,7 @@ import {
   type ShoppingListItem,
   type SupermarketCategory,
 } from "@/lib/shoppingList";
-import {
-  generateAndCacheShoppingListForWeek,
-  ShoppingListApiError,
-  getWeekSignature,
-  matchesWeekSignature,
-  syncShoppingListToSupabase,
-} from "@/lib/shoppingListStorage";
+import { ShoppingListApiError } from "@/lib/shoppingListStorage";
 import { withWeekDates } from "@/lib/weekStorage";
 
 function capitalizeIngredientName(name: string) {
@@ -54,15 +49,6 @@ function capitalizeIngredientName(name: string) {
   }
 
   return name.charAt(0).toUpperCase() + name.slice(1);
-}
-
-// Las categorías visibles son 6: los congelados se agrupan bajo "otros".
-function withVisibleCategories<T extends { category: SupermarketCategory }>(
-  items: T[],
-): T[] {
-  return items.map((item) =>
-    item.category === "congelados" ? { ...item, category: "otros" } : item,
-  );
 }
 
 type CategoryProgress = {
@@ -202,13 +188,16 @@ export default function ShoppingListPage() {
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [needsLogin, setNeedsLogin] = useState(false);
+  const [accountUnreachable, setAccountUnreachable] = useState(false);
   const [selectedCategory, setSelectedCategory] =
     useState<SupermarketCategory | null>(null);
 
   const identity = useIdentity();
   const [isoWeek, setIsoWeek] = useState<IsoWeek | null>(null);
-  const [remoteWeekId, setRemoteWeekId] = useState<string | null>(null);
-  const [syncState, setSyncState] = useState<SyncState>({});
+  const [weekSyncState, setWeekSyncState] = useState<SyncState>({});
+  const [listSyncState, setListSyncState] = useState<SyncState>({});
+  // Bumped to read the list again (retry, or the account replaced the list).
+  const [listReload, setListReload] = useState(0);
 
   useEffect(() => {
     // Identity first: pantry, week and list all belong to the current identity.
@@ -225,8 +214,9 @@ export default function ShoppingListPage() {
       setCheckedItems([]);
       setErrorMessage("");
       setNeedsLogin(false);
-      setSyncState({});
-      setRemoteWeekId(null);
+      setAccountUnreachable(false);
+      setWeekSyncState({});
+      setListSyncState({});
       setIsoWeek(weekToLoad);
       setPantryItems(activePantryNames(pantryItemsOrDefault(readCachedPantry(dataIdentity))));
 
@@ -243,7 +233,7 @@ export default function ShoppingListPage() {
         }
 
         setWeekDays(result.data?.length ? withWeekDates(result.data, weekToLoad) : null);
-        setSyncState({ offline: result.offline, pending: result.pending });
+        setWeekSyncState({ offline: result.offline, pending: result.pending });
         setHasLoadedWeek(true);
       });
     }, 0);
@@ -259,108 +249,71 @@ export default function ShoppingListPage() {
       return;
     }
 
-    const controller = new AbortController();
+    // Leaving the page never cancels a generation: coming back waits for the same request.
+    let isCancelled = false;
     const currentWeekDays = weekDays;
     const currentIsoWeek = isoWeek;
-    const weekSignature = getWeekSignature(weekDays);
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
 
-    const showItems = (items: ShoppingCache["items"], checkedItemIds: string[]) => {
-      const visibleItems = groupShoppingListItems(withVisibleCategories(items)).flatMap(
-        (group) => group.items,
-      );
-      const visibleIds = new Set(visibleItems.map((item) => item.id));
-      setGeneratedItems(visibleItems);
-      setCheckedItems(checkedItemIds.filter((itemId) => visibleIds.has(itemId)));
+    const show = (loaded: ShoppingLoad) => {
+      if (isCancelled) return false;
+      if (loaded.status !== "ready") return false;
+      setGeneratedItems(loaded.view.items);
+      setCheckedItems(loaded.view.checkedItemIds);
+      setListSyncState({
+        offline: loaded.view.offline,
+        pending: loaded.view.pending,
+        discardedLocalChanges: loaded.view.discardedLocalChanges,
+      });
       setErrorMessage("");
       setNeedsLogin(false);
+      setAccountUnreachable(false);
+      return true;
     };
 
     async function resolveShoppingList() {
-      if (dataIdentity.userId) {
-        void getRemoteWeekId(dataIdentity, currentIsoWeek)
-          .then((weekId) => {
-            if (!controller.signal.aborted) setRemoteWeekId(weekId);
-          })
-          .catch(() => undefined);
-      }
+      // 1. The account list of this week (this device's copy only if the account is unreachable).
+      const loaded = await loadShoppingList(dataIdentity, currentIsoWeek, currentWeekDays);
 
-      // 1. This identity's cache for this exact week content.
-      const cachedShoppingList = readShoppingCache(dataIdentity, currentIsoWeek);
-
-      if (cachedShoppingList && matchesWeekSignature(cachedShoppingList.weekSignature, currentWeekDays)) {
-        if (cachedShoppingList.weekSignature !== weekSignature) {
-          writeShoppingCache(dataIdentity, currentIsoWeek, { ...cachedShoppingList, weekSignature });
-        }
-        showItems(cachedShoppingList.items, cachedShoppingList.checkedItemIds);
+      if (isCancelled || show(loaded)) {
         return;
       }
 
-      // 2. The account's list for this week (another device may have created it).
-      if (dataIdentity.userId) {
-        try {
-          const remoteList = await loadRemoteShoppingList(dataIdentity, currentIsoWeek);
+      if (loaded.status === "no_week") {
+        setWeekDays(null);
+        return;
+      }
 
-          if (controller.signal.aborted) {
-            return;
-          }
-
-          if (remoteList) {
-            writeShoppingCache(dataIdentity, currentIsoWeek, {
-              weekSignature,
-              items: remoteList.items,
-              checkedItemIds: remoteList.checkedItemIds,
-            });
-            setRemoteWeekId(remoteList.weekId);
-            showItems(remoteList.items, remoteList.checkedItemIds);
-            return;
-          }
-        } catch {
-          // Unreachable account: fall through; generating needs the network anyway.
-        }
+      // Without checking the account, generating could duplicate a list that already exists.
+      if (loaded.status === "missing" && loaded.offline) {
+        setGeneratedItems([]);
+        setAccountUnreachable(true);
+        return;
       }
 
       // Guests keep reading their local week; only the AI call needs a session.
       if (!(await getAccessToken())) {
-        if (!controller.signal.aborted) {
+        if (!isCancelled) {
           setGeneratedItems([]);
           setNeedsLogin(true);
         }
         return;
       }
 
-      // 3. Generate with AI only when no list exists for this week.
+      // 2. Generate with AI only when the account has no list for this week's dishes.
       setNeedsLogin(false);
       setIsLoadingList(true);
       setErrorMessage("");
 
       try {
-        const groupedItems = await generateAndCacheShoppingListForWeek(
-          dataIdentity,
-          currentIsoWeek,
-          currentWeekDays,
-          controller.signal,
-        );
-        const weekId = await getRemoteWeekId(dataIdentity, currentIsoWeek).catch(() => null);
-        setRemoteWeekId(weekId);
+        const generated = await generateShoppingList(dataIdentity, currentIsoWeek, currentWeekDays);
 
-        void syncShoppingListToSupabase(groupedItems, [], weekId).catch(
-          (error: unknown) => {
-            console.warn(
-              "No se pudo sincronizar la lista de la compra con Supabase:",
-              error instanceof Error ? error.message : error,
-            );
-          },
-        );
-
-        setGeneratedItems(
-          groupShoppingListItems(withVisibleCategories(groupedItems)).flatMap(
-            (group) => group.items,
-          ),
-        );
-        setCheckedItems([]);
+        if (!show(generated) && !isCancelled) {
+          // The week changed while generating: read it again.
+          setListReload((value) => value + 1);
+        }
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
+        if (isCancelled) {
           return;
         }
 
@@ -377,39 +330,18 @@ export default function ShoppingListPage() {
             : "Ha fallado la conexión al generar la lista de la compra.",
         );
       } finally {
-        setIsLoadingList(false);
+        if (!isCancelled) {
+          setIsLoadingList(false);
+        }
       }
     }
 
     void resolveShoppingList();
 
-    return () => controller.abort();
-  }, [hasLoadedWeek, weekDays, isoWeek, identity.scope, identity.userId]);
-
-  useEffect(() => {
-    if (!weekDays || weekDays.length === 0 || generatedItems.length === 0 || !isoWeek) {
-      return;
-    }
-
-    const dataIdentity = { scope: identity.scope, userId: identity.userId };
-    const weekSignature = getWeekSignature(weekDays);
-    const cachedShoppingList = readShoppingCache(dataIdentity, isoWeek);
-
-    if (!cachedShoppingList || !matchesWeekSignature(cachedShoppingList.weekSignature, weekDays)) {
-      return;
-    }
-
-    const availableItemIds = new Set(generatedItems.map((item) => item.id));
-    const persistedCheckedItems = checkedItems.filter((itemId) =>
-      availableItemIds.has(itemId),
-    );
-
-    writeShoppingCache(dataIdentity, isoWeek, {
-      ...cachedShoppingList,
-      weekSignature,
-      checkedItemIds: persistedCheckedItems,
-    });
-  }, [checkedItems, generatedItems, weekDays, isoWeek, identity.scope, identity.userId]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [hasLoadedWeek, weekDays, isoWeek, identity.scope, identity.userId, listReload]);
 
   const shoppingList = useMemo(() => {
     return groupShoppingListItems(generatedItems);
@@ -432,24 +364,32 @@ export default function ShoppingListPage() {
   }, [selectedCategory, shoppingList]);
 
   const toggleCheckedItem = (itemId: string) => {
-    const nextCheckedItems = checkedItems.includes(itemId)
-      ? checkedItems.filter((currentItemId) => currentItemId !== itemId)
-      : [...checkedItems, itemId];
-
-    setCheckedItems(nextCheckedItems);
-
-    if (!identity.userId) {
+    if (!isoWeek) {
       return;
     }
 
-    void syncShoppingListToSupabase(generatedItems, nextCheckedItems, remoteWeekId).catch(
-      (error: unknown) => {
-        console.warn(
-          "No se pudo sincronizar la lista de la compra con Supabase:",
-          error instanceof Error ? error.message : error,
-        );
-      },
+    const checked = !checkedItems.includes(itemId);
+    setCheckedItems((current) =>
+      checked ? [...current, itemId] : current.filter((currentItemId) => currentItemId !== itemId),
     );
+
+    // Only this item is written; the list and the other items stay as they are.
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    void setShoppingItemChecked(dataIdentity, isoWeek, itemId, checked).then((result) => {
+      if (result.status === "stale") {
+        setListSyncState({ conflict: true });
+        setListReload((value) => value + 1);
+      } else if (result.status === "pending") {
+        setListSyncState((current) => ({ ...current, pending: true }));
+      }
+    });
+  };
+
+  const syncState: SyncState = {
+    offline: weekSyncState.offline || listSyncState.offline,
+    pending: weekSyncState.pending || listSyncState.pending,
+    conflict: listSyncState.conflict,
+    discardedLocalChanges: listSyncState.discardedLocalChanges,
   };
 
   const totalVisibleItems = shoppingList.reduce(
@@ -547,6 +487,24 @@ export default function ShoppingListPage() {
               returnPath="/shopping/list"
               description="Tu semana sigue guardada en este dispositivo. Inicia sesión para calcular la lista de la compra con IA."
             />
+          ) : accountUnreachable ? (
+            <StateMessage
+              className="p-6 sm:p-7"
+              title="No se ha podido comprobar tu lista."
+              variant="error"
+            >
+              <p className="max-w-xl text-base leading-7">
+                Revisa la conexión. No generamos otra lista hasta comprobar la que ya tienes en tu
+                cuenta.
+              </p>
+              <button
+                type="button"
+                onClick={() => setListReload((value) => value + 1)}
+                className="mt-4 min-h-11 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)]"
+              >
+                Reintentar
+              </button>
+            </StateMessage>
           ) : errorMessage ? (
             <StateMessage
               className="p-6 sm:p-7"

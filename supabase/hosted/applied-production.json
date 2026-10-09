@@ -42,6 +42,55 @@
       "source": "supabase/migrations/20261007090000_profiles_training_days_0_7.sql",
       "sha256": "886184cf1230914547562be0074a95909086f225405683b5b5dad3f640331c9f",
       "verification": "CHECK 0–7 coincide con supabase/expectations; 13 CHECK en profiles (igual que antes). Solo amplía el rango: compatible con el código de main."
+    },
+    {
+      "appliedAt": "2026-10-08",
+      "type": "backup",
+      "ledger": true,
+      "version": "20261008211358",
+      "name": "backup_before_b4",
+      "notes": "Copia interna de las filas afectadas antes de B4; no procede de un fichero del repositorio."
+    },
+    {
+      "appliedAt": "2026-10-08",
+      "type": "migration",
+      "ledger": true,
+      "version": "20261008211427",
+      "name": "week_transactional_writes_columns",
+      "source": "supabase/migrations/20261008090000_week_transactional_writes.sql",
+      "sha256": "8f827a9ae28963dcc80e799dda2e353b51c89c664e8f6fceab594b8c35fa269a",
+      "notes": "Fichero aplicado en 3 partes en el ledger remoto (_columns, _version_trigger, _update_week_slot); sha256 del fichero completo."
+    },
+    {
+      "appliedAt": "2026-10-08",
+      "type": "migration",
+      "ledger": true,
+      "version": "20261008211456",
+      "name": "week_transactional_writes_version_trigger",
+      "source": "supabase/migrations/20261008090000_week_transactional_writes.sql",
+      "sha256": "8f827a9ae28963dcc80e799dda2e353b51c89c664e8f6fceab594b8c35fa269a",
+      "notes": "Fichero aplicado en 3 partes en el ledger remoto (_columns, _version_trigger, _update_week_slot); sha256 del fichero completo."
+    },
+    {
+      "appliedAt": "2026-10-08",
+      "type": "migration",
+      "ledger": true,
+      "version": "20261008211526",
+      "name": "week_transactional_writes_update_week_slot",
+      "source": "supabase/migrations/20261008090000_week_transactional_writes.sql",
+      "sha256": "8f827a9ae28963dcc80e799dda2e353b51c89c664e8f6fceab594b8c35fa269a",
+      "notes": "Fichero aplicado en 3 partes en el ledger remoto (_columns, _version_trigger, _update_week_slot); sha256 del fichero completo."
+    },
+    {
+      "appliedAt": "2026-10-09",
+      "type": "migration",
+      "ledger": true,
+      "version": "20261009161800",
+      "name": "shopping_list_per_week",
+      "source": "supabase/migrations/20261009090000_shopping_list_per_week.sql",
+      "sha256": "8b56cd0db6829410bd0336841752a4b2c5cf7577475fbcc0611648e203adac0d",
+      "executedBy": "Claude (conector Supabase)",
+      "backup": "Backup completo externo en ~/Backups/becook/2026-10-09."
     }
   ]
 }

@@ -1,4 +1,4 @@
-# beCook: identidad, datos locales y sincronización (B1, B4)
+# beCook: identidad, datos locales y sincronización (B1, B4, B6)
 
 Pasos 06 y 07 del roadmap (H3, H7), sin cambios de base de datos, y paso 10 (B4, H8):
 escrituras de semana transaccionales con versión e idempotencia.
@@ -113,10 +113,51 @@ aplicada: sus escrituras incrementan `weeks.version`, de modo que una pestaña c
 cliente nuevo y una versión anterior recibe conflicto (test de `test:db`, escenario 7,
 con una copia congelada del cliente de 806738e en `tests/fixtures/`).
 
-Compra: caché de la semana → lista remota de esa semana (si no es anterior al último
-cambio de la semana) → solo entonces IA. La lista se guarda siempre ligada a la
-semana explícita: desapareció el «última semana» por defecto. La actualización por
-artículo y el resto de H7 son de B6.
+## Lista de la compra (B6)
+
+Pasos 12 y 14 del roadmap (H7). Código en `src/lib/data/shopping.ts`; migración
+`20261009090000_shopping_list_per_week` (aditiva: `shopping_lists.week_signature`,
+su CHECK de longitud, índice `(week_id, created_at DESC, id DESC)` y dos funciones
+`SECURITY INVOKER` solo para `authenticated`). Las listas existentes no se tocan.
+
+- **Lista vigente**: la más reciente de su semana (`created_at`, luego `id`). Las
+  anteriores se conservan como historial hasta decidir una limpieza.
+- **Firma** (`getShoppingSignature`): semana ISO, platos por posición del día
+  (sin mayúsculas ni espacios sobrantes; un día con las dos comidas libres equivale a
+  no tenerlo), raciones, restricciones y origen de ingredientes
+  (`shoppingListContext`: hoy 2 personas, sin restricciones, `dish-titles-v1`).
+  Nunca fechas presentadas ni `weeks.version`: la versión sube con cualquier
+  escritura, también al aplicar otra vez el mismo menú; se usa solo como guarda de
+  concurrencia al guardar. Listas sin firma (anteriores a B6): valen si se generaron
+  después del último cambio de la semana (regla anterior). Cachés del dispositivo
+  con la firma de B3 o anterior se aceptan y se reescriben.
+- **Orden de lectura** (con sesión): lista de la cuenta para esa semana → si la cuenta
+  no responde, copia del dispositivo (aviso) → si no hay copia, error con «Reintentar»
+  y **no se genera** (podría duplicar una lista existente). Se genera con IA solo si
+  la cuenta confirma que no hay lista para ese contenido.
+- `save_shopping_list(año, semana, firma, artículos, versión esperada)`: bloquea la
+  semana (`FOR UPDATE`, igual que `apply_week`). `existing` si la lista vigente ya
+  tiene esa firma (dos dispositivos o pestañas generando a la vez acaban con una
+  lista); `week_changed` si la semana cambió mientras se generaba (si los platos son
+  los mismos, el cliente reintenta con la versión nueva; si no, la lista se descarta);
+  `no_week`; `created`. Valida 1–300 artículos y categorías.
+- `set_shopping_items_checked(ids, valor)`: fija (no alterna) el valor de las filas de
+  un artículo visible, solo si su lista sigue vigente; si no, `stale` y no escribe
+  nada (la pantalla relee la lista de la cuenta). Los marcados de una semana salen en
+  cola y en orden: el último gana.
+- **Sin conexión**: un marcado queda en `pendingChecks` y se reenvía en la siguiente
+  carga si la lista sigue siendo la misma; una lista generada sin poder guardarse se
+  guarda en la siguiente carga **sin volver a llamar a la IA**.
+- **Una generación por contenido**: la petición a la IA no se cancela al salir de
+  Compra; volver a la página, o abrir Compra justo después de «Usar este menú», espera
+  la misma petición (el doble cobro observado en A4).
+- «Usar este menú» llama a `ensureShoppingList`: si los platos no cambiaron, se
+  mantiene la lista con sus marcados.
+
+Despliegue: migración antes que el código. El cliente de `main` (un INSERT de lista
+completa por clic) sigue funcionando y el cliente nuevo reutiliza su lista más
+reciente (escenario 8 de `scripts/shopping-db-tests.cjs`, con una copia congelada
+del cliente de 5a573ff en `tests/fixtures/`).
 
 ## Datos anteriores a B1 (sin ámbito)
 
@@ -145,3 +186,9 @@ Nunca se asignan a una cuenta automáticamente. Con sesión iniciada aparece
 - `scripts/week-write-db-tests.cjs` (en `test:db`): fallo a mitad, dos dispositivos en
   paralelo, doble clic, creación simultánea, edición de un plato, petición de
   generación ajena y compatibilidad con el cliente anterior.
+- `tests/shopping-week.test.cjs`: firma, lectura remota primero, marcado por artículo,
+  segundo dispositivo, mismo menú otra vez, cambio de plato, semana pasada, lista
+  sustituida, sin conexión, generación única, semana cambiada al generar, listas y
+  cachés antiguas, invitado y orden de marcados.
+- `scripts/shopping-db-tests.cjs` (en `test:db`): los mismos recorridos contra Supabase
+  local, concurrencia, permisos (otro usuario, anon), validación y despliegue.
