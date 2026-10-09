@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
-import { WeekDayCard } from "@/components/features/WeekDayCard";
+import { type RequestDishIdea, WeekDayCard } from "@/components/features/WeekDayCard";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
 import { type MealKey, type WeekDay } from "@/data/mockWeek";
@@ -17,7 +17,9 @@ import {
   isSameIsoWeek,
   type IsoWeek,
 } from "@/lib/isoWeek";
+import { nextCatalogIdea, requestAiIdea } from "@/lib/dishSubstitution";
 import {
+  loadProfile,
   loadWeek,
   readCachedWeek,
   readSelectedWeek,
@@ -53,6 +55,10 @@ function WeekPageContent() {
   const identity = useIdentity();
   const isSignedIn = identity.userId !== null;
   const [activeDay, setActiveDay] = useState<number | null>(null);
+  // Restrictions for «Otra idea»; always this identity's profile (B1). Until it has been read
+  // for the current identity, no idea is offered (an empty profile would skip allergies).
+  const profileKey = `${identity.scope}:${identity.epoch}`;
+  const [profileEntry, setProfileEntry] = useState<{ key: string; data: unknown } | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
 
   const isCurrentWeek =
@@ -153,6 +159,46 @@ function WeekPageContent() {
     };
     // epoch: any sign-in, sign-out or user switch reloads with the new identity.
   }, [selectedIsoWeek, identity.status, identity.scope, identity.userId, identity.epoch]);
+
+  useEffect(() => {
+    if (identity.status !== "ready") {
+      return;
+    }
+
+    let isCancelled = false;
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    const key = `${identity.scope}:${identity.epoch}`;
+    void loadProfile(dataIdentity).then((result) => {
+      // Signed in, unreachable and nothing cached: restrictions are unknown.
+      if (!isCancelled && !(result.offline && !result.data)) setProfileEntry({ key, data: result.data ?? null });
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [identity.status, identity.scope, identity.userId, identity.epoch]);
+
+  // «Otra idea»: reviewed catalogue first (free); AI only when the user asks after it runs out.
+  const handleRequestIdea: RequestDishIdea = (dayName, mealKey, rejected, mode, signal) => {
+    if (!weekDays) {
+      return { status: "error", message: "Carga la semana antes de pedir otra idea." };
+    }
+
+    if (profileEntry?.key !== profileKey) {
+      return { status: "error", message: "Aún no hemos podido leer tu perfil. Inténtalo en unos segundos." };
+    }
+
+    const profile = profileEntry.data;
+
+    const slot = { day: dayName, meal: mealKey };
+
+    if (mode === "catalog") {
+      const result = nextCatalogIdea(weekDays, slot, rejected, profile);
+      return result.status === "catalog_exhausted" && !isSignedIn ? { status: "login_required" } : result;
+    }
+
+    return requestAiIdea(weekDays, slot, rejected, profile, signal);
+  };
 
   // Navigation goes through the URL, so the week is shareable and survives a reload.
   const goToWeek = (isoWeek: IsoWeek) => {
@@ -358,6 +404,8 @@ function WeekPageContent() {
                     day={day}
                     isToday={todayIndex !== null && getDayPosition(day.day) === todayIndex}
                     onMealChange={handleMealChange}
+                    onRequestIdea={handleRequestIdea}
+                    loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
                   />
                 </div>
               ))}

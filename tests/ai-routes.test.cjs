@@ -14,6 +14,8 @@ const shoppingList = {items: [{name: "lentejas", quantity: 500, unit: "g", categ
 const routes = {
  "generate-menu": {valid: {peopleCount: 2}, invalidShape: {peopleCount: 9}, maxBytes: 64 * 1024},
  "import-menu": {valid: {text: "Lunes\tLentejas\tLIBRE"}, invalidShape: {text: 42}, maxBytes: 32 * 1024},
+ // Vegan profile whose compatible catalogue recipes are already in the week: needs the AI.
+ "substitute-dish": {valid: {profile: {dietaryRestrictions: ["vegan"]}, day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: ["Lentejas estofadas", "Espaguetis con brócoli", "Escalibada", "Espárragos, berenjena, calabacín y zanahoria plancha"]}, invalidShape: {day: "Lunes", meal: "brunch"}, maxBytes: 16 * 1024},
  "generate-shopping-list": {valid: {week: [{day: "Lunes", date: "5 oct", lunch: "Lentejas", dinner: "LIBRE"}]}, invalidShape: {week: [{day: "Lunes", date: "5 oct", lunch: {dish: "x"}, dinner: "LIBRE"}]}, maxBytes: 16 * 1024},
 };
 
@@ -23,7 +25,8 @@ function openAIResponder(url, init) {
  if (url.endsWith("/responses")) {
   return Response.json({id: "resp_test", object: "response", status: "completed", model: "gpt-5.6-sol", output: [{type: "message", id: "msg_test", role: "assistant", status: "completed", content: [{type: "output_text", text: JSON.stringify(shoppingList), annotations: []}]}], usage: {input_tokens: 10, output_tokens: 10, total_tokens: 20}});
  }
- const content = JSON.parse(init.body).response_format?.json_schema?.name === "imported_menu" ? importedMenu : selection;
+ const schema = JSON.parse(init.body).response_format?.json_schema?.name;
+ const content = schema === "imported_menu" ? importedMenu : schema === "dish_substitution" ? {dish: "Garbanzos con espinacas y comino"} : selection;
  return Response.json({choices: [{finish_reason: "stop", message: {content: JSON.stringify(content)}}], usage: {prompt_tokens: 10, completion_tokens: 10, total_tokens: 20}});
 }
 
