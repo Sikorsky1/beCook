@@ -6,6 +6,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { type RequestDishIdea, WeekDayCard } from "@/components/features/WeekDayCard";
 import { useIdentity } from "@/components/session/IdentityProvider";
+import { OnboardingGate } from "@/components/session/OnboardingGate";
 import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
 import { type MealKey, type WeekDay } from "@/data/mockWeek";
 import {
@@ -415,6 +416,8 @@ function WeekPageContent() {
             ) : null}
           </div>
         </section>
+
+        <OnboardingGate />
 
         {weekNotice ? (
           <p

@@ -40,7 +40,8 @@ test("after login the default destination is the week, not Perfil (old behaviour
  assert.equal(nav.safeNextPath(null), "/week");
  assert.equal(nav.safeNextPath(""), "/week");
  assert.equal(nav.loginHrefFor("/week"), "/login?next=%2Fweek");
- assert.equal(nav.defaultAfterSignupPath, "/profile");
+ // D2: a new account without a destination starts the onboarding.
+ assert.equal(nav.defaultAfterSignupPath, "/onboarding");
 });
 
 test("the requested destination survives, with its week and hash", () => {

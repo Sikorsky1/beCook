@@ -98,3 +98,19 @@ test("weekly training days 0–7 (widened CHECK) and the other DB ranges are val
   assert.deepEqual(fieldsOf(profile({goals: ["other"], otherGoal: "x".repeat(151)})), ["otherGoal"]);
   assert.deepEqual(fieldsOf(profile({goals: ["fat_loss"], otherGoal: "x".repeat(151)})), []);
 });
+
+test("D2: body columns may be NULL both ways; confirmed_sections round-trips and drops unknown values", () => {
+  const empty = {sex: null, birthDate: null, heightCm: null, weightKg: null};
+  assert.deepEqual(fieldsOf(profile(empty)), []);
+  const stored = profileToRow(profile({...empty, confirmedSections: ["goals", "household"]}));
+  assert.deepEqual([stored.sex, stored.birth_date, stored.height_cm, stored.weight_kg], [null, null, null, null]);
+  assert.deepEqual(stored.confirmed_sections, ["household", "goals"]); // canonical order
+  const read = profileFromRow(row({sex: null, birth_date: null, height_cm: null, weight_kg: null,
+    confirmed_sections: ["allergies", "invented"]}));
+  assert.deepEqual([read.sex, read.birthDate, read.heightCm, read.weightKg], [null, null, null, null]);
+  assert.deepEqual(read.confirmedSections, ["allergies"]);
+  // A row read before the column existed (or without it) has no confirmations.
+  assert.deepEqual(profileFromRow(row()).confirmedSections, []);
+  assert.deepEqual(fieldsOf(profile({confirmedSections: ["nope"]})), ["confirmedSections"]);
+  assert.throws(() => profileFromRow(row({sex: "other"})), /profiles\.sex/);
+});

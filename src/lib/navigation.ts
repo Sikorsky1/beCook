@@ -1,6 +1,6 @@
 export const defaultAfterLoginPath = "/week";
-// A new account has no preferences yet: without a destination it starts in Perfil.
-export const defaultAfterSignupPath = "/profile";
+// A new account has no preferences yet: without a destination it starts the onboarding (D2).
+export const defaultAfterSignupPath = "/onboarding";
 
 // Account screens are never a destination after signing in: returning to them would loop.
 const authRoutePrefixes = ["/login", "/signup", "/forgot-password", "/reset-password", "/auth"];

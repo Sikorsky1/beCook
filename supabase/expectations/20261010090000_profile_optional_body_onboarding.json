@@ -1,0 +1,284 @@
+{
+  "migration": "20261010090000_profile_optional_body_onboarding",
+  "replaces": {
+    "columns": [
+      {
+        "table_name": "profiles",
+        "name": "sex"
+      },
+      {
+        "table_name": "profiles",
+        "name": "birth_date"
+      },
+      {
+        "table_name": "profiles",
+        "name": "height_cm"
+      },
+      {
+        "table_name": "profiles",
+        "name": "weight_kg"
+      }
+    ]
+  },
+  "supersedes": {
+    "schema": "profiles.sex, birth_date, height_cm and weight_kg lose NOT NULL (same type, no default, CHECKs unchanged). Everything else is new: profiles.confirmed_sections and onboarding_progress with advance_onboarding. No row is modified.",
+    "client": [
+      "The profile form required sex, birth date, height and weight although the menu generator reads none of them (now optional, NULL when not given).",
+      "Allergies [] could not tell an explicit «Ninguna» from a question never answered, and values pre-selected by the previous form looked like answers (now profiles.confirmed_sections; an empty list marks them as assumed)."
+    ],
+    "rollout": "The client of main keeps saving and reading profiles with this migration applied: it writes every body column and its upsert leaves confirmed_sections unchanged (scripts/profile-db-tests.cjs, D2 deployment scenario). Order: migration → code."
+  },
+  "columns": [
+    {
+      "table_name": "onboarding_progress",
+      "name": "user_id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "auth.uid()"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "name": "step",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "onboarding_progress",
+      "name": "completed_at",
+      "type": "timestamp with time zone",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "onboarding_progress",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "profiles",
+      "name": "sex",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "birth_date",
+      "type": "date",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "height_cm",
+      "type": "integer",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "weight_kg",
+      "type": "integer",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "profiles",
+      "name": "confirmed_sections",
+      "type": "text[]",
+      "not_null": true,
+      "default_expr": "'{}'::text[]"
+    }
+  ],
+  "tables": [
+    {
+      "relname": "onboarding_progress",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "profiles_confirmed_sections_chk",
+      "table_name": "profiles",
+      "definition": "CHECK ((confirmed_sections <@ ARRAY['household'::text, 'goals'::text, 'restrictions'::text, 'allergies'::text, 'training'::text, 'body'::text]))"
+    },
+    {
+      "conname": "onboarding_progress_step_chk",
+      "table_name": "onboarding_progress",
+      "definition": "CHECK ((step = ANY (ARRAY['about'::text, 'profile'::text, 'pantry'::text, 'done'::text])))"
+    },
+    {
+      "conname": "onboarding_progress_completed_chk",
+      "table_name": "onboarding_progress",
+      "definition": "CHECK (((step = 'done'::text) = (completed_at IS NOT NULL)))"
+    },
+    {
+      "conname": "onboarding_progress_pkey",
+      "table_name": "onboarding_progress",
+      "definition": "PRIMARY KEY (user_id)"
+    },
+    {
+      "conname": "onboarding_progress_user_id_fkey",
+      "table_name": "onboarding_progress",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "onboarding_progress",
+      "indexname": "onboarding_progress_pkey",
+      "indexdef": "CREATE UNIQUE INDEX onboarding_progress_pkey ON public.onboarding_progress USING btree (user_id)"
+    }
+  ],
+  "policies": [
+    {
+      "tablename": "onboarding_progress",
+      "policyname": "onboarding_progress_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "onboarding_progress",
+      "policyname": "onboarding_progress_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    },
+    {
+      "tablename": "onboarding_progress",
+      "policyname": "onboarding_progress_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    }
+  ],
+  "functions": [
+    {
+      "proname": "advance_onboarding",
+      "definition": "CREATE OR REPLACE FUNCTION public.advance_onboarding(p_step text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_steps constant text[] := ARRAY['about', 'profile', 'pantry', 'done'];\n  v_row public.onboarding_progress%ROWTYPE;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'advance_onboarding: authentication required';\n  END IF;\n  IF p_step IS NULL OR array_position(v_steps, p_step) IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'advance_onboarding: invalid step';\n  END IF;\n\n  INSERT INTO public.onboarding_progress AS o (user_id, step, completed_at)\n  VALUES (v_user, p_step, CASE WHEN p_step = 'done' THEN now() END)\n  ON CONFLICT (user_id) DO UPDATE\n    SET step = EXCLUDED.step, completed_at = EXCLUDED.completed_at, updated_at = now()\n    WHERE array_position(v_steps, EXCLUDED.step) > array_position(v_steps, o.step)\n  RETURNING * INTO v_row;\n\n  IF NOT FOUND THEN\n    SELECT * INTO v_row FROM public.onboarding_progress WHERE user_id = v_user;\n  END IF;\n\n  RETURN jsonb_build_object('step', v_row.step, 'completed_at', v_row.completed_at);\nEND;\n$function$\n"
+    }
+  ],
+  "grants": [
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "authenticated",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "authenticated",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "onboarding_progress",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    }
+  ],
+  "function_grants": [
+    {
+      "routine_name": "advance_onboarding",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "advance_onboarding",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    }
+  ]
+}
