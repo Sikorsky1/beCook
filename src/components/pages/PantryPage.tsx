@@ -2,7 +2,7 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
 import { ShoppingTabs } from "@/components/layout/ShoppingTabs";
@@ -15,6 +15,7 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { TextInput } from "@/components/ui/TextInput";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
+import { SyncStatus } from "@/components/session/SyncStatus";
 import {
   addPantryItem,
   deletePantryItem,
@@ -257,6 +258,13 @@ export default function PantryPage() {
   const [pantryItems, setPantryItems] = useState<PantryStorageItem[]>([]);
   const [syncState, setSyncState] = useState<SyncState>({});
   const [hasLoadedPantry, setHasLoadedPantry] = useState(false);
+  // B5: the account has not answered the first read yet · changes on their way · «Reintentar»
+  // (reads the pantry again, which first sends the changes pending on this device).
+  const [isCheckingAccount, setIsCheckingAccount] = useState(true);
+  const [savingChanges, setSavingChanges] = useState(0);
+  const [reloadCount, setReloadCount] = useState(0);
+  // Identity of the last read: reading again keeps the known state until the account answers.
+  const lastLoadRef = useRef<string | null>(null);
   const identity = useIdentity();
   const [draftItemName, setDraftItemName] = useState("");
   const [addingCategory, setAddingCategory] = useState<PantryCategory | null>(
@@ -274,16 +282,21 @@ export default function PantryPage() {
 
     let isCancelled = false;
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    const loadKey = `${dataIdentity.scope}:${identity.epoch}`;
     const loadTimer = window.setTimeout(() => {
-      setSyncState({});
+      const isSameLoad = lastLoadRef.current === loadKey;
+      lastLoadRef.current = loadKey;
+      setSyncState((current) => (isSameLoad ? { pending: current.pending, offline: current.offline } : {}));
       setPantryItems(readPantryView(dataIdentity));
       setHasLoadedPantry(true);
+      setIsCheckingAccount(true);
 
       void loadPantry(dataIdentity).then((result) => {
         if (isCancelled) {
           return;
         }
 
+        setIsCheckingAccount(false);
         // The device copy now holds the account pantry plus any change made meanwhile.
         setPantryItems(readPantryView(dataIdentity));
         setSyncState({
@@ -298,14 +311,16 @@ export default function PantryPage() {
       isCancelled = true;
       window.clearTimeout(loadTimer);
     };
-  }, [identity.status, identity.scope, identity.userId, identity.epoch]);
+  }, [identity.status, identity.scope, identity.userId, identity.epoch, reloadCount]);
 
   // B7: each change writes only that item. The device copy changes at once and is shown; the
   // list shown after the account answers is the device copy at that moment (later changes kept).
   const dataIdentity = { scope: identity.scope, userId: identity.userId };
   const showChange = (change: Promise<PantryChangeResult>) => {
     setPantryItems(readPantryView(dataIdentity));
+    setSavingChanges((count) => count + 1);
     void change.then((result) => {
+      setSavingChanges((count) => count - 1);
       setPantryItems(readPantryView(dataIdentity));
       if (result.status === "conflict") {
         setSyncState({ discardedLocalChanges: true });
@@ -424,6 +439,16 @@ export default function PantryPage() {
           </div>
         </StickyPageHeader>
 
+        {hasLoadedPantry ? (
+          <SyncStatus
+            signedIn={identity.userId !== null}
+            saving={savingChanges > 0}
+            checking={isCheckingAccount}
+            offline={syncState.offline}
+            pending={syncState.pending}
+            onRetry={() => setReloadCount((count) => count + 1)}
+          />
+        ) : null}
         {identity.userId ? <SyncNotice state={syncState} /> : null}
 
         <section className="transition-opacity duration-200 ease-out motion-reduce:transition-none">

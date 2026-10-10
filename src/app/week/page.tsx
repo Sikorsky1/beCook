@@ -7,6 +7,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { type RequestDishIdea, WeekDayCard } from "@/components/features/WeekDayCard";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
+import { SyncStatus } from "@/components/session/SyncStatus";
 import { type MealKey, type WeekDay } from "@/data/mockWeek";
 import {
   addIsoWeeks,
@@ -60,6 +61,12 @@ function WeekPageContent() {
   const [weekDays, setWeekDays] = useState<WeekDay[] | null>(null);
   const [isLoadingWeek, setIsLoadingWeek] = useState(true);
   const [syncState, setSyncState] = useState<SyncState>({});
+  // Dish edits on their way to the account, and «Reintentar» (reads the week again, which resends
+  // what is pending on this device; never the AI).
+  const [savingMeals, setSavingMeals] = useState(0);
+  const [reloadCount, setReloadCount] = useState(0);
+  // Week and identity of the last read: reading the same one again keeps its known state.
+  const lastLoadRef = useRef<string | null>(null);
   const identity = useIdentity();
   const isSignedIn = identity.userId !== null;
   const [daySelection, setDaySelection] = useState<DaySelection>(null);
@@ -160,7 +167,11 @@ function WeekPageContent() {
 
     async function loadSelectedWeek() {
       setIsLoadingWeek(true);
-      setSyncState({});
+      // «Reintentar» on the same week: what is pending stays visible until the account answers.
+      const loadKey = `${dataIdentity.scope}:${identity.epoch}:${getIsoWeekStorageId(weekToLoad)}`;
+      const isSameLoad = lastLoadRef.current === loadKey;
+      lastLoadRef.current = loadKey;
+      setSyncState((current) => (isSameLoad ? { pending: current.pending, offline: current.offline } : {}));
       writeSelectedWeek(dataIdentity, weekToLoad);
 
       // Fast paint from this identity's cache; signed-in users are then revalidated.
@@ -188,7 +199,7 @@ function WeekPageContent() {
       isCancelled = true;
     };
     // epoch: any sign-in, sign-out or user switch reloads with the new identity.
-  }, [selectedIsoWeek, identity.status, identity.scope, identity.userId, identity.epoch]);
+  }, [selectedIsoWeek, identity.status, identity.scope, identity.userId, identity.epoch, reloadCount]);
 
   useEffect(() => {
     if (identity.status !== "ready") {
@@ -282,8 +293,10 @@ function WeekPageContent() {
     setWeekDays(updatedWeekDays);
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
     const weekToSave = selectedIsoWeek;
+    setSavingMeals((count) => count + 1);
     // Only this meal is written, and only if the account week has not changed meanwhile.
     void saveWeekSlot(dataIdentity, weekToSave, updatedWeekDays, { day: dayName, meal: mealKey }).then(async (result) => {
+      setSavingMeals((count) => count - 1);
       if (result.status === "conflict") {
         // The account wins: show its week (read again if the conflict response could not include it).
         const remoteDays = result.remoteData ?? (await loadWeek(dataIdentity, weekToSave)).data;
@@ -425,6 +438,16 @@ function WeekPageContent() {
           </p>
         ) : null}
 
+        {weekDays || syncState.offline || syncState.pending ? (
+          <SyncStatus
+            signedIn={isSignedIn}
+            saving={savingMeals > 0}
+            checking={isLoadingWeek}
+            offline={syncState.offline}
+            pending={syncState.pending}
+            onRetry={() => setReloadCount((count) => count + 1)}
+          />
+        ) : null}
         {isSignedIn ? <SyncNotice state={syncState} /> : null}
 
         <section>

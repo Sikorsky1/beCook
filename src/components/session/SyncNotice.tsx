@@ -7,7 +7,8 @@ export type SyncState = {
   conflict?: boolean;
 };
 
-// Shown only to signed-in users; guests never see sync wording.
+// What happened to changes made on this device (conflicts). The save state itself (saved,
+// pending, account unreachable) is shown by SyncStatus. Signed-in users only.
 export function SyncNotice({ state, className = "mt-0" }: { state: SyncState; className?: string }) {
   const messages: string[] = [];
   if (state.conflict) {
@@ -15,12 +16,6 @@ export function SyncNotice({ state, className = "mt-0" }: { state: SyncState; cl
   }
   if (state.discardedLocalChanges) {
     messages.push("Había cambios en este dispositivo que no se guardaron porque tu cuenta tenía una versión más reciente.");
-  }
-  if (state.offline) {
-    messages.push("No se ha podido comprobar tu cuenta: se muestra la copia de este dispositivo.");
-  }
-  if (state.pending && !state.offline) {
-    messages.push("Hay cambios pendientes de guardar en tu cuenta; se reintentará al volver a cargar.");
   }
   if (messages.length === 0) return null;
 
