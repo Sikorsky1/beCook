@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-10 · Rama: `audit-opt` (= `main` tras PR #13, más B5 y D2; migración de D2 aplicada en preview y producción; PR a `main` en curso) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-10 · Rama: `audit-opt` (= `main` tras PR #14: B5 y D2 en producción) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -268,7 +268,7 @@ Paso 24 del roadmap (UX 02-04; Backend H5, fase 3). El paso 25 (onboarding) no e
 | Validación | B7, D4 y D2 probados en la Preview de `audit-opt` antes del PR |
 | Pendiente | Comprobar el despliegue de producción en Vercel (no revisado en esta sesión); migración de perfil de D2 (datos corporales opcionales, `confirmed_sections`) y paso 25; ficha de plato (C2) para D4; indicador de pendiente/guardado por artículo en la despensa (B5) |
 
-## Iteración B5 — Aplicar menú ≠ generar compra y sincronización visible ✅ (2026-10-10, integrada en `audit-opt`, probada en la Preview)
+## Iteración B5 — Aplicar menú ≠ generar compra y sincronización visible ✅ (2026-10-10, en producción el 2026-10-10)
 Pasos 11 y 15 del roadmap (Backend H9; UX 25). Rama `audit/b5-sync` (desde `audit-opt`), en paralelo con el agente de D2 (paso 25).
 
 | Elemento | Detalle |
@@ -284,7 +284,7 @@ Pasos 11 y 15 del roadmap (Backend H9; UX 25). Rama `audit/b5-sync` (desde `audi
 | Comprobaciones | lint, typecheck, test 235/235, build. **`test:db` no ejecutado** (base local del otro agente; sin cambios de esquema). Manual en `npm run dev` (:3000, Supabase local ya arrancado; comprobado que el bundle no contiene el ref de producción aunque `.env.local` del worktree apunte a él), Chrome: invitado → propuesta recuperada → «Menú guardado solo en este dispositivo» → semana con «Solo en este dispositivo»; `fixture-1`: respuesta de `apply_week` perdida (`fetch` parcheado) → «Reintentar guardado», semana `pending`, propuesta con su clave → recarga → propuesta recuperada → reintento → «Este menú ya estaba guardado en tu cuenta», versión 1 (una escritura), semana abierta con «Guardado en tu cuenta», compra lanzada aparte; editar un plato sin red → «Pendiente de sincronizar» + «Reintentar» (sin red sigue pendiente) → evento `online` → guardado (versión siguiente); Despensa sin red → pendiente → `online` → guardado (artículo devuelto a su estado); Compra sin clave de OpenAI → error con «Reintentar»; Perfil «Guardado en tu cuenta». 320 px sin desbordamiento; sin errores en consola |
 | Datos de prueba en la base local | `fixture-1`, semana 2026-W50: un menú de un día («Garbanzos con espinacas B5» / «Pisto con huevo B5 »), versión 4. Despensa sin cambio neto. Desaparecen con `db:reset` |
 | Observaciones | Un cambio que el servidor rechaza siempre (no por red) sigue como «Pendiente de sincronizar» y «Reintentar» vuelve a fallar: falta distinguir rechazo de error de red en los adaptadores (incluido `profiles.ts`, fuera de esta rama). Los pendientes de otras semanas solo se reenvían al abrir esa semana (no hay barrido global). Tras aplicar el menú, la compra se sigue preparando en segundo plano (comportamiento anterior, deduplicado por B6); si se prefiere generarla solo al abrir Compra, es quitar `prepareShopping`. La marca de compra en el navegador no se ha probado a mano (sin clave de OpenAI en local no hay lista); cubierta por tests |
-| Pendiente | ~~Al integrar: `test:db` completo, CI, Preview~~ hecho el 2026-10-10 (ver integración B5 + D2; probada en la Preview). Falta el merge a `main` |
+| Pendiente | ~~Al integrar: `test:db` completo, CI, Preview~~ hecho el 2026-10-10 (ver integración B5 + D2; probada en la Preview). Merge a `main` en PR #14 (`6f1b1bd`) |
 
 ### Qué probar (Sergio)
 1. Crear menú → «Usar este menú»: la semana se abre enseguida con «Guardado en tu cuenta»; abrir Compra justo después → espera la misma lista (sin segunda llamada).
@@ -293,7 +293,7 @@ Pasos 11 y 15 del roadmap (Backend H9; UX 25). Rama `audit/b5-sync` (desde `audi
 4. Invitado: las cuatro pantallas muestran «Solo en este dispositivo».
 5. Cerrar sesión con un marcado de compra pendiente → el Perfil avisa antes de borrar.
 
-## Iteración D2 (segunda mitad) — Pasos 24 (resto) y 25: perfil sin datos inventados y onboarding ✅ (2026-10-10; migración en preview y producción, probada en la Preview)
+## Iteración D2 (segunda mitad) — Pasos 24 (resto) y 25: perfil sin datos inventados y onboarding ✅ (2026-10-10, en producción el 2026-10-10)
 Pasos 24 y 25 del roadmap (UX 01-04, 19; Backend H2-H3, H5-H6). Rama `audit/d2-perfil` (desde `audit-opt`), sin push. Sustituye la fila «Pendiente» de «Iteración D2 (primera mitad)».
 
 | Elemento | Detalle |
@@ -313,7 +313,7 @@ Pasos 24 y 25 del roadmap (UX 01-04, 19; Backend H2-H3, H5-H6). Rama `audit/d2-p
 | Observaciones | Un perfil antiguo con restricciones `[]` sigue saliendo «Pendiente» (no «Asumido») porque no tiene respuesta. Crear menú no bloquea perfiles asumidos: avisa y los usa tal cual. El estilo «Saludable y equilibrado» de Crear menú sigue preseleccionado (pantalla de D3, no del perfil). El paso 1 del onboarding no guarda datos, solo crea la fila de progreso. Si `onboarding_progress` no responde, `/week` no redirige (se prefiere no bloquear la semana) |
 | Antes de remoto | 1) Aplicar la migración en becook-preview (SQL Editor o conector: DDL aditivo, **sin DELETE**) y registrarla en `supabase/hosted/applied-preview.json`. 2) Validar la Preview: alta nueva completa, retomar en otro navegador, perfil antiguo con «Confirmar». 3) Producción con OK explícito y backup, **justo antes** del merge del código (el código nuevo necesita la columna; el de `main` no lee perfiles con NULL). Recuento previo solo de agregados: `SELECT count(*) FROM public.profiles;` |
 | Migración remota | `20261010090000_profile_optional_body_onboarding` (sha256 `b30b6474…2753c`) aplicada el 2026-10-10 con el conector de Supabase: becook-preview `20261010193641`; becook `20261010194325`, tras backup completo en `~/Backups/becook/2026-10-10-ola3`. Registrada en `supabase/hosted/applied-preview.json` y `applied-production.json` |
-| Pendiente | ~~Migración en becook-preview y producción; prueba manual en la Preview; integración con B5~~ hecho el 2026-10-10. Falta el merge a `main` |
+| Pendiente | ~~Migración en becook-preview y producción; prueba manual en la Preview; integración con B5~~ hecho el 2026-10-10. Merge a `main` en PR #14 (`6f1b1bd`) |
 
 ### Qué probar (Sergio)
 1. Cuenta nueva: alta → onboarding. En el paso 2 no debe haber nada marcado; «Ninguna» en restricciones y alergias. Cerrar a medias y abrir en otro navegador/móvil con la misma cuenta → retoma en el mismo paso.
@@ -329,7 +329,15 @@ Pasos 24 y 25 del roadmap (UX 01-04, 19; Backend H2-H3, H5-H6). Rama `audit/d2-p
 | Estados de B5 en lo nuevo de D2 | Perfil: correcto tras el merge (guardado por sección pendiente → «Pendiente de sincronizar» + «Reintentar», que relee y reenvía; confirmación → «Guardado en tu cuenta»). Onboarding: la despensa exprés tenía avisos propios sin reintento; `852c7a1` le pone `SyncStatus` como en Despensa (comprobando, guardando, guardado, pendiente o error con «Reintentar»); se mantiene el aviso de conflicto. El paso 2 (perfil) sigue sin avanzar si la cuenta no confirma el guardado (regla de D2) y muestra su propio error |
 | Comprobaciones | Tras cada merge: lint, typecheck, test (235/235 tras B5; 247/247 tras D2 y tras `852c7a1`) y build. Con todo junto: `db:reset` + `db:seed` + `test:db` **386/386** (incluye los 13 de D2). Lint: el movimiento sin commit de `docs/audit-2026-09-15/` a `docs/Auditoría Sept 2026/` hace fallar `npm run lint` (7 errores `no-require-imports` en `reproducciones.cjs`; `eslint.config.mjs` exime la ruta antigua). Con esa carpeta excluida, lint limpio |
 | No probado | Prueba manual en navegador del conjunto (estados de B5 en Perfil y en la despensa exprés con red cortada; «Usar este menú» al terminar el onboarding). CI (sin push) |
-| Pendiente | Ajustar la ruta en `eslint.config.mjs` al hacer commit del movimiento de la auditoría. ~~Push, migración en preview y producción, pruebas en la Preview~~ hecho el 2026-10-10 (becook-preview `20261010193641`, becook `20261010194325`). Falta PR a `main` con CI en verde |
+| Pendiente | Ajustar la ruta en `eslint.config.mjs` al hacer commit del movimiento de la auditoría. ~~Push, migración en preview y producción, pruebas en la Preview~~ hecho el 2026-10-10 (becook-preview `20261010193641`, becook `20261010194325`). PR #14 con CI en verde, merge `6f1b1bd` |
+
+## B5 y D2 en producción ✅ (2026-10-10)
+| Elemento | Resultado |
+|---|---|
+| PR | [#14](https://github.com/Sikorsky1/beCook/pull/14) `audit-opt` → `main`, merge commit `6f1b1bd` (2026-10-10 19:54 UTC); checks en verde (application, database, Vercel) sin reintentos |
+| Migración | `profile_optional_body_onboarding` aplicada antes del merge con el conector de Supabase: becook-preview `20261010193641`, becook `20261010194325` (tras backup completo en `~/Backups/becook/2026-10-10-ola3`) |
+| Validación | B5 y D2 probados en la Preview de `audit-opt` antes del PR |
+| Pendiente | Comprobar el despliegue de producción en Vercel (no revisado en esta sesión). `audit-opt` = `main` por fast-forward antes de este commit de documentación |
 
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
@@ -344,11 +352,11 @@ Pasos 24 y 25 del roadmap (UX 01-04, 19; Backend H2-H3, H5-H6). Rama `audit/d2-p
 | 08 Contrato perfil ↔ BD | B2 | ✅ | En producción desde 2026-10-07 (PR #9): días 0–7, `goal` legacy derivado de `goals`, `disliked_foods` como texto; ver B2 |
 | 09 Calendario ISO | B3 | ✅ | En producción desde 2026-10-08 (PR #10): URL `?week=`, fechas por nombre de día, semana 53 rechazada; ver B3 |
 | 10 Escrituras de semana seguras | B4 | ✅ | En producción desde 2026-10-08 (PR #11): `apply_week`/`update_week_slot`, versión e idempotencia; ver B4 |
-| 11 Aplicar menú ≠ generar compra | B5 | ✅ | En `audit-opt` desde 2026-10-10, probado en la Preview; PR a `main` en curso: menú guardado sin esperar a la compra, propuesta recuperable; ver B5 |
+| 11 Aplicar menú ≠ generar compra | B5 | ✅ | En `audit-opt` desde 2026-10-10, en producción desde 2026-10-10 (PR #14): menú guardado sin esperar a la compra, propuesta recuperable; ver B5 |
 | 12 Compra ligada a su semana | B6 | ✅ | En producción desde 2026-10-09 (PR #12): lista vigente por semana, lectura remota primero, marcado por artículo; ver B6 |
 | 13 Despensa remota segura | B7 | ✅ | En producción desde 2026-10-09 (PR #13): escrituras por artículo con versión; migración `pantry_item_writes` en preview y producción; ver B7 |
 | 14 Firma de compra estable | B6 | ✅ | En producción desde 2026-10-09 (PR #12): firma canónica sin fechas ni versión; mismo menú → misma lista; ver B6 |
-| 15 Estados de sincronización visibles | B5 | ✅ | En `audit-opt` desde 2026-10-10, probado en la Preview; PR a `main` en curso: `SyncStatus` en Semana, Compra, Despensa, Perfil y onboarding; ver B5 e integración |
+| 15 Estados de sincronización visibles | B5 | ✅ | En `audit-opt` desde 2026-10-10, en producción desde 2026-10-10 (PR #14): `SyncStatus` en Semana, Compra, Despensa, Perfil y onboarding; ver B5 e integración |
 | 16 Contexto alimentario por semana | C1 | ⏳ | |
 | 17 Fichas de plato versionadas | C2 | ⏳ | |
 | 18 Validación de restricciones | C3 | ⏳ | |
@@ -357,8 +365,8 @@ Pasos 24 y 25 del roadmap (UX 01-04, 19; Backend H2-H3, H5-H6). Rama `audit/d2-p
 | 21 Reglas culinarias y sustitución | C5 | ✅ | En producción desde 2026-10-09 (PR #12): reglas de títulos, «Otra idea» con catálogo y luego IA (flujo `menu`); ver C5 |
 | 22 Importación y borradores | C6 | ⏳ | |
 | 23 Alta, login y recuperación | D1 | ✅ | En producción desde 2026-10-09 (PR #12): alta, login con `next`, recuperación; Redirect URLs configuradas, faltan plantillas, mínimo 8 y SMTP; ver D1 |
-| 24 Perfil simplificado | D2 | ✅ | Primera mitad en producción (PR #13); resto en `audit-opt` desde 2026-10-10: datos corporales opcionales y `confirmed_sections`. Migración `20261010090000` en preview y producción (2026-10-10); PR a `main` en curso; ver D2 (segunda mitad) |
-| 25 Onboarding y primer menú | D2 | ✅ | En `audit-opt` desde 2026-10-10: onboarding de 3 pasos con `onboarding_progress`; migración `20261010090000` en preview y producción (2026-10-10); PR a `main` en curso; ver D2 (segunda mitad) |
+| 24 Perfil simplificado | D2 | ✅ | Primera mitad en producción (PR #13); resto en `audit-opt` desde 2026-10-10: datos corporales opcionales y `confirmed_sections`. Migración `20261010090000` en preview y producción (2026-10-10); en producción desde 2026-10-10 (PR #14); ver D2 (segunda mitad) |
+| 25 Onboarding y primer menú | D2 | ✅ | En `audit-opt` desde 2026-10-10: onboarding de 3 pasos con `onboarding_progress`; migración `20261010090000` en preview y producción (2026-10-10); en producción desde 2026-10-10 (PR #14); ver D2 (segunda mitad) |
 | 26 Aplicar propuesta visible y segura | D3 | ⏳ | |
 | 27 Generación honesta | D3 | ⏳ | |
 | 28 «Otra idea» por plato | D3 | ⏳ | |
