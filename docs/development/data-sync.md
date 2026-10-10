@@ -1,4 +1,4 @@
-# beCook: identidad, datos locales y sincronización (B1, B4, B6, B7)
+# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7)
 
 Pasos 06 y 07 del roadmap (H3, H7), sin cambios de base de datos, y paso 10 (B4, H8):
 escrituras de semana transaccionales con versión e idempotencia.
@@ -35,7 +35,8 @@ sirve para pasar de invitado a sesión iniciada.
 
 ## Fuente de verdad y conflictos
 
-Invitado: solo datos locales, sin llamadas remotas ni textos de sincronización.
+Invitado: solo datos locales, sin llamadas remotas; desde B5 ve «Solo en este dispositivo» y
+ningún otro estado de sincronización.
 
 Usuario autenticado (`src/lib/data/sync.ts`, `src/lib/data/repositories.ts`):
 
@@ -206,6 +207,40 @@ encontrar las filas que tenía, relee la cuenta en lugar de recrearlas (escenari
 `scripts/pantry-db-tests.cjs`, con una copia congelada del cliente de ab2433b en
 `tests/fixtures/`).
 
+## Aplicar un menú y estados de guardado (B5)
+
+Pasos 11 y 15 del roadmap (H9). Sin cambios de base de datos.
+
+- **«Usar este menú»** (`src/lib/applyWeek.ts`, `applyMenuToWeek`): resultado del menú separado
+  del de la compra. Menú: `account` (la cuenta lo confirmó: «Menú guardado en tu cuenta.»),
+  `device` (invitado: «Menú guardado solo en este dispositivo…»), `pending` (la cuenta no
+  respondió: «Solo en este dispositivo…», el botón pasa a **«Reintentar guardado»**), `conflict`,
+  `unchecked` (no se pudo leer la semana; no se guarda nada) y `cancelled` (no reemplazar). La
+  semana se abre en cuanto el menú está guardado; la lista de la compra se prepara **aparte**
+  (`ensureShoppingList`, solo si el menú está en la cuenta) y su fallo nunca convierte el guardado
+  en error: Compra muestra su propio estado y «Reintentar».
+- **Propuesta recuperable** (`src/lib/menuProposal.ts`, entidad `menu-proposal:YYYY-Www` con
+  ámbito): el menú propuesto o importado se guarda en el dispositivo hasta que se aplica, con su
+  intento (clave de petición y respuesta a «reemplazar»). Recargar Crear menú o salir de la página
+  no lo pierde («Propuesta sin aplicar, recuperada de este dispositivo» y «Descartar propuesta»);
+  reintentar es la misma escritura (`duplicate` si ya había llegado) y nunca llama a la IA. No
+  cuenta como pendiente y se borra con el resto del ámbito al cerrar sesión.
+- **Estados visibles** (`src/lib/syncStatus.ts`, componente `SyncStatus`) en Semana, Compra,
+  Despensa y Perfil: «Solo en este dispositivo» (invitado), «Guardando…», «Comprobando tu
+  cuenta…», «Guardado en tu cuenta» (solo tras respuesta de la cuenta), «Pendiente de
+  sincronizar» y «Error: reintentar» (la cuenta no responde y se muestra la copia del
+  dispositivo). Los dos últimos llevan **«Reintentar»**, que vuelve a leer la entidad (y con ello
+  reenvía lo pendiente, sin IA); también se reintenta solo con el evento `online`. Al releer la
+  misma entidad se mantiene el último estado conocido hasta que responde la cuenta. `SyncNotice`
+  queda para conflictos y cambios descartados.
+- **Recuperación de pendientes** (`src/lib/data/sync.ts`): una lectura con una copia `pending` se
+  encola con los guardados de esa entidad (dos lecturas a la vez, o un guardado en curso, no la
+  envían dos veces). Si la cuenta ya tiene exactamente ese cambio (`sameData`; en la semana,
+  `sameWeekDays`: mismos platos por día, sin fechas), se da por guardado y no aparece «Había
+  cambios… que no se guardaron» (respuesta perdida).
+- **Compra pendiente**: una lista generada sin guardar en la cuenta o marcados no aceptados marcan
+  la caché `shopping` como `pending`, así que el aviso de cierre de sesión los tiene en cuenta.
+
 ## Datos anteriores a B1 (sin ámbito)
 
 Al arrancar, las claves `becook-profile`, `becook-pantry-base` y
@@ -246,3 +281,8 @@ Nunca se asignan a una cuenta automáticamente. Con sesión iniciada aparece
 - `scripts/pantry-db-tests.cjs` (en `test:db`): el defecto reproducido (fallo de red a mitad),
   dos dispositivos en paralelo (3 rondas), conflicto, respuesta perdida, despensa vacía,
   permisos (otro usuario, anon), validación y despliegue con el cliente anterior.
+- `tests/sync-recovery.test.cjs` (B5): menú sin esperar a la compra, compra fallida, cuenta sin
+  respuesta y «Reintentar guardado» con la misma clave, invitado, semana no comprobada y «no
+  reemplazar», propuesta por identidad y semana, respuesta perdida, pendiente superado en otro
+  dispositivo, dos lecturas a la vez, reintento sin conexión, compra pendiente al cerrar sesión y
+  estados visibles.

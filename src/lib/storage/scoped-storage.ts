@@ -3,7 +3,15 @@
 
 export type StorageScope = "guest" | `u_${string}`;
 
-export type ScopedEntity = "profile" | "pantry" | "week" | "selected-week" | "shopping" | "legacy-origin";
+export type ScopedEntity =
+  | "profile"
+  | "pantry"
+  | "week"
+  | "selected-week"
+  | "shopping"
+  | "legacy-origin"
+  // B5: a proposed menu not applied yet, per week (never pending: it is not account data).
+  | "menu-proposal";
 
 export const STORAGE_FORMAT_VERSION = 1;
 

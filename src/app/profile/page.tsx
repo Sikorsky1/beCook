@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useIdentity, useIdentityActions } from "@/components/session/IdentityProvider";
 import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
+import { SyncStatus } from "@/components/session/SyncStatus";
 import { Button, PrimaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { loadProfile, readCachedProfile, saveProfile } from "@/lib/data/repositories";
@@ -276,6 +277,8 @@ export default function ProfilePage() {
   const userEmail = identity.email;
   const [syncState, setSyncState] = useState<SyncState>({});
   const [isSigningOut, setIsSigningOut] = useState(false);
+  // B5: «Reintentar» reads the profile again, which resends a change pending on this device.
+  const [isRetryingSync, setIsRetryingSync] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const isSaving = Object.values(saveStates).some((state) => state?.status === "saving");
   const dislikedFoodsCharacters = useMemo(
@@ -385,6 +388,27 @@ export default function ProfilePage() {
     }
   };
 
+  // Only the save state changes; edits not saved yet stay in the form. If the account had a newer
+  // profile, the sections without such edits show it (as after a conflict).
+  const retrySync = async () => {
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    setIsRetryingSync(true);
+    const result = await loadProfile(dataIdentity);
+    setIsRetryingSync(false);
+    setSyncState({
+      offline: result.offline,
+      discardedLocalChanges: result.discardedLocalChanges,
+      pending: result.pending,
+    });
+
+    if (result.discardedLocalChanges) {
+      const remoteProfile = readStoredProfile(result.data);
+      const untouched = profileSections.filter((section) => statuses[section] !== "unsaved");
+      setSavedProfile(remoteProfile);
+      setDraft((current) => resetSections(current, remoteProfile, untouched));
+    }
+  };
+
   const handleCreate = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void save("all");
@@ -485,6 +509,16 @@ export default function ProfilePage() {
             </p>
           ) : null}
           {!hasLoadedProfile ? <p className="t-meta">Cargando perfil</p> : null}
+          {savedProfile || syncState.offline || syncState.pending ? (
+            <SyncStatus
+              signedIn={identity.userId !== null}
+              saving={isSaving || isRetryingSync}
+              checking={!hasLoadedProfile}
+              offline={syncState.offline}
+              pending={syncState.pending}
+              onRetry={() => void retrySync()}
+            />
+          ) : null}
           {/* The bottom bar goes away after the first save; its result stays visible here. */}
           {savedProfile ? <SectionFeedback state={saveStates.all} /> : null}
         </Card>

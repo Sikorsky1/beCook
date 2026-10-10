@@ -117,13 +117,17 @@ test("«Usar este menú»: one request key per attempt (same menu and week), a n
  assert.equal(resolveApplyWeekAttempt(first, menu, "2026-W42", key).requestKey, "key-3", "another week is another attempt");
 });
 
-test("«Usar este menú»: applied, duplicate, conflict and offline each give a clear message", () => {
- assert.deepEqual(applyWeekOutcome({status: "synced"}), {status: "success", message: applyWeekMessages.applied, attempt: "discard"});
- assert.deepEqual(applyWeekOutcome({status: "local"}), {status: "success", message: applyWeekMessages.applied, attempt: "discard"});
- assert.deepEqual(applyWeekOutcome({status: "synced", duplicate: true}), {status: "success", message: applyWeekMessages.duplicate, attempt: "discard"});
- assert.deepEqual(applyWeekOutcome({status: "conflict", remoteData: null}), {status: "error", message: applyWeekMessages.conflict, attempt: "discard"});
- assert.deepEqual(applyWeekOutcome({status: "pending"}), {status: "error", message: applyWeekMessages.pending, attempt: "keep"});
+test("«Usar este menú»: applied, duplicate, guest, conflict and offline each give a clear message (B5: menu result apart)", () => {
+ const success = (menu, message) => ({status: "success", menu, message, attempt: "discard", openWeek: true});
+ assert.deepEqual(applyWeekOutcome({status: "synced"}), success("account", applyWeekMessages.applied));
+ assert.deepEqual(applyWeekOutcome({status: "local"}), success("device", applyWeekMessages.device), "a guest is not told it is in an account");
+ assert.deepEqual(applyWeekOutcome({status: "synced", duplicate: true}), success("account", applyWeekMessages.duplicate));
+ assert.deepEqual(applyWeekOutcome({status: "conflict", remoteData: null}), {status: "error", menu: "conflict", message: applyWeekMessages.conflict, attempt: "discard", openWeek: false});
+ assert.deepEqual(applyWeekOutcome({status: "pending"}), {status: "error", menu: "pending", message: applyWeekMessages.pending, attempt: "keep", openWeek: false});
  assert.match(applyWeekMessages.conflict, /Otro dispositivo/);
+ assert.match(applyWeekMessages.applied, /en tu cuenta/);
+ assert.doesNotMatch(applyWeekMessages.device, /Guardado en tu cuenta/);
+ assert.match(applyWeekMessages.pending, /Solo en este dispositivo/);
 });
 
 test("saving a week sends the cached version to apply_week (no separate read first) and caches the new one", async () => {
