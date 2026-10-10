@@ -2,8 +2,12 @@ const {test} = require("node:test");
 const assert = require("node:assert/strict");
 const {
   applySection,
+  assumedMenuSections,
   buildNewProfile,
+  buildOnboardingProfile,
+  canSaveSection,
   draftFromProfile,
+  emptyBodyDraft,
   emptyProfileDraft,
   isSectionDirty,
   issuesBySection,
@@ -18,12 +22,15 @@ const {
 const {profileFromRow, profileToRow} = require("../src/lib/supabase/profiles.ts");
 
 // Step 24: no invented personal data, explicit «Ninguna», sections saved one at a time.
+const allConfirmed = ["household", "goals", "restrictions", "allergies", "training", "body"];
 const saved = (extra = {}) => ({
   id: "p1", sex: "female", birthDate: "1990-01-01", heightCm: 165, weightKg: 65, householdSize: 3,
   weeklyTrainingDays: 2, trainingTypes: ["running"], otherTrainingType: "", goals: ["fat_loss"], goal: "fat_loss",
   otherGoal: "", dietaryRestrictions: ["vegetarian"], allergies: ["nuts"], otherAllergies: "",
-  dislikedFoods: ["brócoli"], ...extra,
+  dislikedFoods: ["brócoli"], confirmedSections: allConfirmed, ...extra,
 });
+// A profile saved by the previous form: every value there, nothing confirmed.
+const legacy = (extra = {}) => saved({confirmedSections: [], ...extra});
 const answered = (extra = {}) => ({
   ...emptyProfileDraft(), householdSize: 2, goals: ["healthy_eating"], dietaryRestrictions: ["none"],
   noAllergies: true, sex: "male", birthDate: "1985-05-05", heightCm: "180", weightKg: "80", ...extra,
@@ -42,19 +49,42 @@ test("a new profile starts with nothing chosen and nothing personal filled in", 
   assert.equal(draft.heightCm, "");
   assert.equal(draft.weightKg, "");
   assert.deepEqual(draftFromProfile(null), draft);
-  // Only training (optional) counts as answered.
+  // Training and body data are optional and start empty.
   assert.deepEqual(profileSections.map(section => sectionStatus(draft, null, section)),
-    ["pending", "pending", "pending", "unsaved", "pending"]);
+    ["pending", "pending", "pending", "optional", "optional"]);
   assert.deepEqual(profileSections.filter(section => profileSectionInfo[section].required),
-    ["household", "goals", "restrictions", "body"]);
+    ["household", "goals", "restrictions"]);
 });
 
 test("an untouched new profile cannot be saved: every question is reported, nothing is assumed", () => {
   const result = buildNewProfile(emptyProfileDraft());
   assert.equal(result.ok, false);
-  assert.deepEqual(fields(result),
-    ["allergies", "birthDate", "dietaryRestrictions", "goals", "heightCm", "householdSize", "sex", "weightKg"]);
-  assert.deepEqual(Object.keys(issuesBySection(result.issues)).sort(), ["body", "goals", "household", "restrictions"]);
+  assert.deepEqual(fields(result), ["allergies", "dietaryRestrictions", "goals", "householdSize"]);
+  assert.deepEqual(Object.keys(issuesBySection(result.issues)).sort(), ["goals", "household", "restrictions"]);
+});
+
+test("body data is optional: a profile saves without it and stores NULL, never a default", () => {
+  const result = buildNewProfile(answered(emptyBodyDraft()));
+  assert.equal(result.ok, true);
+  const row = profileToRow(result.profile, {userId: "u1"});
+  assert.deepEqual([row.sex, row.birth_date, row.height_cm, row.weight_kg], [null, null, null, null]);
+  assert.deepEqual(row.confirmed_sections, ["household", "goals", "restrictions", "allergies"]);
+  const reloaded = profileFromRow({...row, id: "p1"});
+  assert.deepEqual([reloaded.sex, reloaded.birthDate, reloaded.heightCm, reloaded.weightKg], [null, null, null, null]);
+  const draft = draftFromProfile(reloaded);
+  assert.deepEqual([draft.sex, draft.birthDate, draft.heightCm, draft.weightKg], [null, "", "", ""]);
+  assert.equal(sectionStatus(draft, reloaded, "body"), "optional");
+  assert.equal(sectionStatus(draft, reloaded, "training"), "optional");
+  // Only a value that is given is checked; partial body data is fine.
+  assert.equal(buildNewProfile(answered({...emptyBodyDraft(), heightCm: "170"})).ok, true);
+  assert.deepEqual(fields(buildNewProfile(answered({...emptyBodyDraft(), weightKg: "300"}))), ["weightKg"]);
+  // Body data the user gave is confirmed; clearing it later saves NULL and keeps it confirmed.
+  const withBody = buildNewProfile(answered()).profile;
+  assert.ok(withBody.confirmedSections.includes("body"));
+  const cleared = applySection(withBody, {...draftFromProfile(withBody), ...emptyBodyDraft()}, "body");
+  assert.equal(cleared.ok, true);
+  assert.equal(profileToRow(cleared.profile).height_cm, null);
+  assert.ok(cleared.profile.confirmedSections.includes("body"));
 });
 
 test("«Ninguna» must be chosen explicitly for restrictions and allergies", () => {
@@ -92,6 +122,8 @@ test("the first save stores exactly what was answered and meets the B2 contract"
   assert.equal(row.other_goal, "más energía");
   assert.equal(row.disliked_foods, "setas, queso azul"); // text, as in B2
   assert.equal(row.weekly_training_days, 0);
+  // Training left at 0 days is not an answer; the body data given is.
+  assert.deepEqual(row.confirmed_sections, ["household", "goals", "restrictions", "allergies", "body"]);
   const reloaded = profileFromRow({...row, id: "p1"});
   assert.deepEqual(draftFromProfile(reloaded).goals, ["other"]);
   assert.equal(sectionStatus(draftFromProfile(reloaded), reloaded, "restrictions"), "saved");
@@ -116,10 +148,10 @@ test("a saved profile loads as it is, without filling gaps", () => {
   assert.equal(draft.noAllergies, false);
   assert.ok(profileSections.every(section => sectionStatus(draft, profile, section) === "saved"));
   // Restrictions saved empty by an older form are shown as pending, not as «Ninguna».
-  const oldProfile = saved({dietaryRestrictions: [], allergies: []});
+  const oldProfile = legacy({dietaryRestrictions: [], allergies: []});
   const oldDraft = draftFromProfile(oldProfile);
   assert.equal(sectionStatus(oldDraft, oldProfile, "restrictions"), "pending");
-  assert.equal(oldDraft.noAllergies, true); // schema has no "none" allergy (confirmed_sections pending)
+  assert.equal(oldDraft.noAllergies, true);
   // Legacy goal only.
   assert.deepEqual(draftFromProfile(saved({goals: [], goal: "maintenance"})).goals, ["healthy_eating"]);
 });
@@ -127,8 +159,15 @@ test("a saved profile loads as it is, without filling gaps", () => {
 test("old or broken device copies read as no profile instead of being completed", () => {
   assert.equal(readStoredProfile(null), null);
   assert.equal(readStoredProfile({householdSize: 2}), null);
-  assert.equal(readStoredProfile({...saved(), heightCm: undefined}), null);
+  assert.equal(readStoredProfile({...saved(), heightCm: "165"}), null);
+  assert.equal(readStoredProfile({...saved(), householdSize: undefined}), null);
   assert.equal(readStoredProfile({...saved(), weeklyTrainingDays: 9}), null);
+  // Body data may be missing (optional since D2); it reads as null, not as a default.
+  assert.equal(readStoredProfile({...saved(), heightCm: undefined, sex: null}).heightCm, null);
+  // A copy from before D2 has no confirmations: undefined, so saving it keeps the account's.
+  const oldCopy = readStoredProfile({...saved(), confirmedSections: undefined});
+  assert.equal(oldCopy.confirmedSections, undefined);
+  assert.equal("confirmed_sections" in profileToRow(oldCopy), false);
   assert.deepEqual(readStoredProfile(saved({goals: undefined, goal: "maintenance"})).goals, ["healthy_eating"]);
 });
 
@@ -175,4 +214,59 @@ test("every section explains how it affects the menu; body data says it is not u
   for (const section of profileSections) assert.ok(profileSectionInfo[section].usage.length > 10);
   assert.match(profileSectionInfo.body.usage, /No se usan/);
   assert.match(profileSectionInfo.restrictions.usage, /obligatorias/);
+});
+
+test("profiles of the previous form are «assumed» until each section is confirmed", () => {
+  const profile = legacy({dietaryRestrictions: ["none"], allergies: []});
+  const draft = draftFromProfile(profile);
+  assert.deepEqual(profileSections.map(section => sectionStatus(draft, profile, section)),
+    ["assumed", "assumed", "assumed", "assumed", "assumed"]);
+  assert.deepEqual(assumedMenuSections(profile), ["household", "goals", "restrictions"]);
+  assert.ok(canSaveSection("assumed"));
+  assert.ok(!canSaveSection("saved"));
+  // Confirming without changes keeps the values and records the confirmation.
+  const confirmed = applySection(profile, draft, "restrictions");
+  assert.equal(confirmed.ok, true);
+  assert.deepEqual(confirmed.profile.dietaryRestrictions, ["none"]);
+  assert.deepEqual(confirmed.profile.confirmedSections, ["restrictions", "allergies"]);
+  assert.equal(sectionStatus(draft, confirmed.profile, "restrictions"), "saved");
+  assert.equal(sectionStatus(draft, confirmed.profile, "goals"), "assumed");
+  assert.deepEqual(assumedMenuSections(confirmed.profile), ["household", "goals"]);
+  // A legacy profile with nothing in an optional section shows it as optional, not assumed.
+  const noTraining = legacy({weeklyTrainingDays: 0, trainingTypes: []});
+  assert.equal(sectionStatus(draftFromProfile(noTraining), noTraining, "training"), "optional");
+});
+
+test("«Ninguna» allergies is kept as an answer once confirmed, also after reloading", () => {
+  const result = buildNewProfile(answered({noAllergies: true}));
+  const row = profileToRow(result.profile, {userId: "u1"});
+  assert.deepEqual(row.allergies, []);
+  assert.ok(row.confirmed_sections.includes("allergies"));
+  const reloaded = profileFromRow({...row, id: "p1"});
+  const draft = draftFromProfile(reloaded);
+  assert.equal(draft.noAllergies, true);
+  assert.equal(sectionStatus(draft, reloaded, "restrictions"), "saved");
+  assert.deepEqual(assumedMenuSections(reloaded), []);
+});
+
+test("onboarding step 2 saves household, goals and restrictions without inventing the rest", () => {
+  assert.deepEqual(fields(buildOnboardingProfile(null, emptyProfileDraft())),
+    ["allergies", "dietaryRestrictions", "goals", "householdSize"]);
+  const draft = {...emptyProfileDraft(), householdSize: 3, goals: ["muscle_gain"], dietaryRestrictions: ["vegan"],
+    allergies: ["nuts"], dislikedFoodsText: "setas"};
+  const result = buildOnboardingProfile(null, draft);
+  assert.equal(result.ok, true);
+  const row = profileToRow(result.profile, {userId: "u1"});
+  assert.deepEqual([row.sex, row.birth_date, row.height_cm, row.weight_kg], [null, null, null, null]);
+  assert.equal(row.weekly_training_days, 0);
+  assert.deepEqual(row.training_types, []);
+  assert.equal(row.household_size, 3);
+  assert.deepEqual(row.confirmed_sections, ["household", "goals", "restrictions", "allergies"]);
+  // On top of a saved profile it changes those sections only and keeps the rest.
+  const again = buildOnboardingProfile(legacy(), {...draftFromProfile(legacy()), householdSize: 1});
+  assert.equal(again.ok, true);
+  assert.equal(again.profile.householdSize, 1);
+  assert.equal(again.profile.heightCm, 165);
+  assert.deepEqual(again.profile.trainingTypes, ["running"]);
+  assert.deepEqual(again.profile.confirmedSections, ["household", "goals", "restrictions", "allergies"]);
 });

@@ -1,4 +1,4 @@
-# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7)
+# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2)
 
 Pasos 06 y 07 del roadmap (H3, H7), sin cambios de base de datos, y paso 10 (B4, H8):
 escrituras de semana transaccionales con versión e idempotencia.
@@ -240,6 +240,23 @@ Pasos 11 y 15 del roadmap (H9). Sin cambios de base de datos.
   cambios… que no se guardaron» (respuesta perdida).
 - **Compra pendiente**: una lista generada sin guardar en la cuenta o marcados no aceptados marcan
   la caché `shopping` como `pending`, así que el aviso de cierre de sesión los tiene en cuenta.
+
+## Perfil y onboarding (D2)
+
+- **Datos corporales opcionales.** `sex`, `birth_date`, `height_cm` y `weight_kg` admiten NULL desde
+  `20261010090000_profile_optional_body_onboarding`; el formulario nunca los rellena y el generador no los usa.
+- **Secciones confirmadas.** `profiles.confirmed_sections` guarda lo que el usuario ha respondido o confirmado
+  (`household`, `goals`, `restrictions`, `allergies`, `training`, `body`). Guardar una sección la confirma.
+  Un perfil del formulario anterior empieza sin ninguna: sus valores se muestran como «Asumido» hasta pulsar
+  Confirmar, y Crear menú avisa de ello. Alergias `[]` con `allergies` confirmada es «Ninguna» explícita.
+- **Copias sin confirmaciones.** Una copia del dispositivo anterior a D2 no lleva `confirmedSections`; al
+  guardarla no se envía la columna y la cuenta conserva las suyas.
+- **Onboarding.** `public.onboarding_progress` (una fila por cuenta que lo empezó) y `advance_onboarding(step)`,
+  que solo avanza (`about` → `profile` → `pantry` → `done`). Un dispositivo atrasado no deshace lo guardado en
+  otro. Cuenta sin fila pero con perfil o semanas = cuenta anterior: no se le muestra. Sin fila ni datos = alta
+  nueva. El paso 2 solo avanza si el perfil quedó guardado en la cuenta (`synced`); la despensa exprés usa las
+  escrituras por artículo de B7. Al terminar se va a Crear menú (`?from=onboarding`); el menú se genera y se
+  confirma allí, con «Usar este menú».
 
 ## Datos anteriores a B1 (sin ámbito)
 

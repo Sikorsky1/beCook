@@ -42,14 +42,19 @@ export type Allergy =
 
 export type WeeklyTrainingDays = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
+// Sections the user answered or confirmed (profiles.confirmed_sections, D2). A profile saved by the
+// previous form has none: its values may be the ones that form pre-selected.
+export type ProfileConfirmation = "household" | "goals" | "restrictions" | "allergies" | "training" | "body";
+
 export type UserProfile = {
   id?: string;
   userId?: string;
   user_id?: string;
-  sex: Sex;
-  birthDate: string;
-  heightCm: number;
-  weightKg: number;
+  // Optional since 20261010090000: the menu generator reads none of them. null = not given.
+  sex: Sex | null;
+  birthDate: string | null;
+  heightCm: number | null;
+  weightKg: number | null;
   householdSize: number;
   weeklyTrainingDays: WeeklyTrainingDays;
   trainingTypes: TrainingType[];
@@ -61,6 +66,8 @@ export type UserProfile = {
   allergies: Allergy[];
   otherAllergies?: string;
   dislikedFoods: string[];
+  // Absent in copies saved before D2; then the account keeps what it has.
+  confirmedSections?: ProfileConfirmation[];
 };
 
 type SaveProfileToSupabaseOptions = {
@@ -86,10 +93,11 @@ export type ProfileRow = {
   other_allergies: string | null;
   // TEXT in the database: "pollo, brócoli" (see serializeDislikedFoods).
   disliked_foods: string | null;
+  confirmed_sections?: string[] | null;
 };
 
 export const PROFILE_COLUMNS =
-  "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,goals,other_goal,dietary_restrictions,allergies,other_allergies,disliked_foods";
+  "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,goals,other_goal,dietary_restrictions,allergies,other_allergies,disliked_foods,confirmed_sections";
 
 // Same ranges as the CHECK constraints on public.profiles; weekly_training_days 0–7 since
 // 20261007090000_profiles_training_days_0_7.
@@ -140,6 +148,15 @@ const goalValues = new Set<Goal>([
   "healthy_eating",
   "other",
 ]);
+export const profileConfirmationValues: ProfileConfirmation[] = [
+  "household",
+  "goals",
+  "restrictions",
+  "allergies",
+  "training",
+  "body",
+];
+const confirmationValues = new Set<ProfileConfirmation>(profileConfirmationValues);
 const legacyGoalValues = new Set<LegacyGoal>([...goalValues, "maintenance"]);
 const dietaryRestrictionValues = new Set<DietaryRestriction>([
   "none",
@@ -178,6 +195,23 @@ function parseRequiredNumber(value: number | null, columnName: string) {
   }
 
   throw new Error(`Unexpected empty value in profiles.${columnName}.`);
+}
+
+function parseOptionalString(value: string | null) {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function parseOptionalNumber(value: number | null) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+// Unknown values are ignored: a confirmation never invents an answer.
+export function normalizeConfirmations(values: unknown): ProfileConfirmation[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return profileConfirmationValues.filter((value) => values.includes(value));
 }
 
 function parseWeeklyTrainingDays(value: number | null): WeeklyTrainingDays {
@@ -354,19 +388,20 @@ export function validateProfileForStorage(profile: UserProfile): ProfileValidati
   const addIssue = (field: ProfileField, message: string) => issues.push({ field, message });
   const { heightCm, weightKg, householdSize, weeklyTrainingDays } = PROFILE_LIMITS;
 
-  if (!sexValues.has(profile.sex)) {
+  // Body data is optional: only a value that is given must be valid.
+  if (profile.sex != null && !sexValues.has(profile.sex)) {
     addIssue("sex", "Elige un sexo.");
   }
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(profile.birthDate ?? "")) {
-    addIssue("birthDate", "Indica tu fecha de nacimiento.");
+  if (profile.birthDate != null && !/^\d{4}-\d{2}-\d{2}$/.test(profile.birthDate)) {
+    addIssue("birthDate", "La fecha de nacimiento no es válida.");
   }
 
-  if (!isIntegerInRange(profile.heightCm, heightCm)) {
+  if (profile.heightCm != null && !isIntegerInRange(profile.heightCm, heightCm)) {
     addIssue("heightCm", `La altura debe ser un número entero entre ${heightCm.min} y ${heightCm.max} cm.`);
   }
 
-  if (!isIntegerInRange(profile.weightKg, weightKg)) {
+  if (profile.weightKg != null && !isIntegerInRange(profile.weightKg, weightKg)) {
     addIssue("weightKg", `El peso debe ser un número entero entre ${weightKg.min} y ${weightKg.max} kg.`);
   }
 
@@ -395,6 +430,10 @@ export function validateProfileForStorage(profile: UserProfile): ProfileValidati
 
   if (!hasOnlyAllowedValues(profile.allergies, allergyValues)) {
     addIssue("allergies", "Hay una alergia no válida.");
+  }
+
+  if (profile.confirmedSections !== undefined && !hasOnlyAllowedValues(profile.confirmedSections, confirmationValues)) {
+    addIssue("confirmedSections", "Hay una sección confirmada no válida.");
   }
 
   const otherGoalLength = profile.goals?.includes("other")
@@ -434,10 +473,10 @@ export function profileToRow(
 
   return {
     user_id: options.userId ?? null,
-    sex: profile.sex,
-    birth_date: profile.birthDate,
-    height_cm: profile.heightCm,
-    weight_kg: profile.weightKg,
+    sex: profile.sex ?? null,
+    birth_date: profile.birthDate || null,
+    height_cm: profile.heightCm ?? null,
+    weight_kg: profile.weightKg ?? null,
     household_size: profile.householdSize,
     weekly_training_days: profile.weeklyTrainingDays,
     training_types: profile.trainingTypes,
@@ -451,6 +490,10 @@ export function profileToRow(
     allergies: profile.allergies,
     other_allergies: optionalText(profile.otherAllergies),
     disliked_foods: serializeDislikedFoods(profile.dislikedFoods),
+    // Only sent when known: a copy saved before D2 must not clear the account's confirmations.
+    ...(profile.confirmedSections
+      ? { confirmed_sections: normalizeConfirmations(profile.confirmedSections) }
+      : {}),
   };
 }
 
@@ -463,10 +506,10 @@ export function profileFromRow(row: ProfileRow): UserProfile {
     id: row.id,
     userId: row.user_id ?? undefined,
     user_id: row.user_id ?? undefined,
-    sex: parseEnum(row.sex, sexValues, "sex"),
-    birthDate: parseRequiredString(row.birth_date, "birth_date"),
-    heightCm: parseRequiredNumber(row.height_cm, "height_cm"),
-    weightKg: parseRequiredNumber(row.weight_kg, "weight_kg"),
+    sex: row.sex === null || row.sex === undefined ? null : parseEnum(row.sex, sexValues, "sex"),
+    birthDate: parseOptionalString(row.birth_date),
+    heightCm: parseOptionalNumber(row.height_cm),
+    weightKg: parseOptionalNumber(row.weight_kg),
     householdSize: parseRequiredNumber(row.household_size, "household_size"),
     weeklyTrainingDays: parseWeeklyTrainingDays(row.weekly_training_days),
     trainingTypes: parseEnumArray(
@@ -490,6 +533,7 @@ export function profileFromRow(row: ProfileRow): UserProfile {
     otherAllergies: row.other_allergies ?? undefined,
     // Tolerates the JSON text the previous code stored; '[]' reads as [].
     dislikedFoods: parseDislikedFoods(row.disliked_foods),
+    confirmedSections: normalizeConfirmations(row.confirmed_sections),
   };
 }
 

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { AiLoginNotice } from "@/components/features/AiLoginNotice";
+import { ProfileReadinessNotice } from "@/components/features/ProfileReadinessNotice";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -49,6 +50,7 @@ import {
 } from "@/lib/menuProposal";
 import { loadPantry, readCachedPantry } from "@/lib/data/pantry";
 import { pantryItemsOrDefault } from "@/lib/pantryStorage";
+import { readStoredProfile } from "@/lib/profileForm";
 import { ensureShoppingList } from "@/lib/data/shopping";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
@@ -85,26 +87,9 @@ const elaborationOptions = [
 ] as const;
 const useWeekSuccessDelayMs = 900;
 
+// Body data is optional (D2): the same check as Perfil, so a profile without it is used.
 function isProfile(value: unknown): value is UserProfile {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const profile = value as Partial<UserProfile>;
-
-  return (
-    typeof profile.sex === "string" &&
-    typeof profile.birthDate === "string" &&
-    typeof profile.heightCm === "number" &&
-    typeof profile.weightKg === "number" &&
-    typeof profile.householdSize === "number" &&
-    typeof profile.weeklyTrainingDays === "number" &&
-    Array.isArray(profile.trainingTypes) &&
-    (Array.isArray(profile.goals) || typeof profile.goal === "string") &&
-    Array.isArray(profile.dietaryRestrictions) &&
-    Array.isArray(profile.allergies) &&
-    Array.isArray(profile.dislikedFoods)
-  );
+  return readStoredProfile(value) !== null;
 }
 
 function normalizePeopleCount(value: number) {
@@ -721,6 +706,7 @@ export default function CreateMenuPage() {
               {weekNotice}
             </p>
           ) : null}
+          <ProfileReadinessNotice profile={profile} fromOnboarding={searchParams.get("from") === "onboarding"} />
         </section>
 
         <div
