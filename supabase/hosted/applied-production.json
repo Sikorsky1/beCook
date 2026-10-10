@@ -102,6 +102,17 @@
       "sha256": "9abf6573e08c3164256e2becfaf9a03c46fd1305031c46c72c22045222286b85",
       "executedBy": "Sergio (SQL Editor)",
       "notes": "Aplicada por SQL Editor (el conector se bloquea con el DELETE de delete_pantry_items); registrada en supabase_migrations con esta versión."
+    },
+    {
+      "appliedAt": "2026-10-10",
+      "type": "migration",
+      "ledger": true,
+      "version": "20261010194325",
+      "name": "profile_optional_body_onboarding",
+      "source": "supabase/migrations/20261010090000_profile_optional_body_onboarding.sql",
+      "sha256": "b30b647482cf75cc7c4e44e7f75c700ab009129cd98a164e48a92f627232753c",
+      "executedBy": "Claude (conector Supabase)",
+      "backup": "Backup completo externo en ~/Backups/becook/2026-10-10-ola3."
     }
   ]
 }

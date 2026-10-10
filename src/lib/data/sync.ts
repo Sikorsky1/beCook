@@ -35,6 +35,9 @@ export type EntityRemote<T> = {
   push: (data: T, context: PushContext) => Promise<PushResult>;
   // The remote checks context.baseVersion in the same transaction as the write.
   checksVersion?: boolean;
+  // True when the account already holds exactly this data (e.g. a write whose answer was lost):
+  // a pending copy equal to the account is saved, not discarded.
+  sameData?: (local: T, remote: T) => boolean;
 };
 
 export type LoadResult<T> = {
@@ -53,11 +56,21 @@ export function readCached<T>({ scope, entity, week }: Target) {
 }
 
 export async function loadEntity<T>(target: Target, remote: EntityRemote<T> | null): Promise<LoadResult<T>> {
-  const cached = readEnvelope<T>(target.scope, target.entity, target.week);
-
   if (target.scope === "guest" || !remote) {
+    const cached = readEnvelope<T>(target.scope, target.entity, target.week);
     return { data: cached?.data ?? null, source: "local", offline: false, discardedLocalChanges: false, pending: false };
   }
+
+  // A pending copy is resent in the same queue as the saves of this entity: two loads at once
+  // (a page and its retry, two components) send it once, and never in the middle of a save.
+  if (readEnvelope<T>(target.scope, target.entity, target.week)?.pending) {
+    return enqueue(queueKey(target), () => revalidate(target, remote));
+  }
+  return revalidate(target, remote);
+}
+
+async function revalidate<T>(target: Target, remote: EntityRemote<T>): Promise<LoadResult<T>> {
+  const cached = readEnvelope<T>(target.scope, target.entity, target.week);
 
   let snapshot: RemoteSnapshot<T>;
   try {
@@ -96,6 +109,11 @@ export async function loadEntity<T>(target: Target, remote: EntityRemote<T> | nu
     } else {
       discardedLocalChanges = true;
     }
+    // The account already has exactly this change (its answer was lost, or it was sent twice):
+    // nothing on this device was lost.
+    if (discardedLocalChanges && snapshot.data !== null && remote.sameData?.(cached.data, snapshot.data)) {
+      discardedLocalChanges = false;
+    }
   }
 
   if (snapshot.data === null) {
@@ -122,6 +140,12 @@ const latestSeq = new Map<string, number>();
 
 function queueKey({ scope, entity, week }: Target) {
   return `${scope}|${entity}|${week ?? ""}`;
+}
+
+function enqueue<R>(key: string, task: () => Promise<R>): Promise<R> {
+  const next = (queues.get(key) ?? Promise.resolve()).then(task, task);
+  queues.set(key, next);
+  return next;
 }
 
 // `overwrite`: the user explicitly chose to replace the account copy (e.g. "replace this week?").
@@ -197,8 +221,5 @@ export async function saveEntity<T>(
     }
   };
 
-  const previous = queues.get(key) ?? Promise.resolve();
-  const next = previous.then(run, run);
-  queues.set(key, next);
-  return next;
+  return enqueue(key, run);
 }

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { AiLoginNotice } from "@/components/features/AiLoginNotice";
+import { ProfileReadinessNotice } from "@/components/features/ProfileReadinessNotice";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -13,10 +14,10 @@ import { StateMessage } from "@/components/ui/StateMessage";
 import { TextArea } from "@/components/ui/TextArea";
 import { isAiLoginRequiredError, postAi } from "@/lib/ai-client";
 import {
-  applyWeekMessages,
-  applyWeekOutcome,
+  applyMenuToWeek,
   resolveApplyWeekAttempt,
   type ApplyWeekAttempt,
+  type MenuSaveState,
 } from "@/lib/applyWeek";
 import { consumeCreateMenuDraft, saveCreateMenuDraft } from "@/lib/createMenuDraft";
 import { registerBeforeLoginSaver } from "@/lib/session/login-return";
@@ -38,13 +39,18 @@ import {
   newRequestKey,
   loadProfile,
   readCachedProfile,
-  readRemoteWeek,
   readSelectedWeek,
-  saveWeek,
   writeSelectedWeek,
 } from "@/lib/data/repositories";
+import {
+  attemptFromProposal,
+  clearMenuProposal,
+  readMenuProposal,
+  writeMenuProposal,
+} from "@/lib/menuProposal";
 import { loadPantry, readCachedPantry } from "@/lib/data/pantry";
 import { pantryItemsOrDefault } from "@/lib/pantryStorage";
+import { readStoredProfile } from "@/lib/profileForm";
 import { ensureShoppingList } from "@/lib/data/shopping";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
@@ -81,26 +87,9 @@ const elaborationOptions = [
 ] as const;
 const useWeekSuccessDelayMs = 900;
 
+// Body data is optional (D2): the same check as Perfil, so a profile without it is used.
 function isProfile(value: unknown): value is UserProfile {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const profile = value as Partial<UserProfile>;
-
-  return (
-    typeof profile.sex === "string" &&
-    typeof profile.birthDate === "string" &&
-    typeof profile.heightCm === "number" &&
-    typeof profile.weightKg === "number" &&
-    typeof profile.householdSize === "number" &&
-    typeof profile.weeklyTrainingDays === "number" &&
-    Array.isArray(profile.trainingTypes) &&
-    (Array.isArray(profile.goals) || typeof profile.goal === "string") &&
-    Array.isArray(profile.dietaryRestrictions) &&
-    Array.isArray(profile.allergies) &&
-    Array.isArray(profile.dislikedFoods)
-  );
+  return readStoredProfile(value) !== null;
 }
 
 function normalizePeopleCount(value: number) {
@@ -152,6 +141,11 @@ export default function CreateMenuPage() {
   const [activePantryItemNames, setActivePantryItemNames] = useState<string[]>([]);
   const [useWeekStatus, setUseWeekStatus] = useState<UseWeekStatus>("idle");
   const [useWeekMessage, setUseWeekMessage] = useState("");
+  // Where the menu is after the last «Usar este menú» (B5): a pending one is retried as is.
+  const [useWeekMenu, setUseWeekMenu] = useState<MenuSaveState | null>(null);
+  // The proposal recovered from this device (not applied before leaving), while it is shown.
+  const [restoredMenu, setRestoredMenu] = useState<ImportedMenuResponse | null>(null);
+  const importedMenuRef = useRef(importedMenu);
   const isApplyingWeekRef = useRef(false);
   const applyAttemptRef = useRef<ApplyWeekAttempt<ImportedMenuResponse> | null>(null);
   const navigationTimeoutRef = useRef<number | null>(null);
@@ -251,6 +245,85 @@ export default function CreateMenuPage() {
     },
     [],
   );
+
+  useEffect(() => {
+    // B5: a menu proposed or imported for this week and not applied yet comes back as it was,
+    // with its attempt, so applying it never needs another AI call.
+    if (identity.status !== "ready" || !targetIsoWeek) {
+      return;
+    }
+
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    const timer = window.setTimeout(() => {
+      const proposal = readMenuProposal(dataIdentity, targetIsoWeek);
+
+      // A menu already on screen (just created or imported) is never replaced.
+      if (!proposal || importedMenuRef.current) {
+        return;
+      }
+
+      applyAttemptRef.current = attemptFromProposal(
+        proposal,
+        proposal.menu,
+        getIsoWeekStorageId(targetIsoWeek),
+      );
+      importedMenuRef.current = proposal.menu;
+      setImportedMenu(proposal.menu);
+      setGenerationRequestId(proposal.generationRequestId);
+      setRestoredMenu(proposal.menu);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [identity.status, identity.scope, identity.userId, identity.epoch, targetIsoWeek]);
+
+  useEffect(() => {
+    importedMenuRef.current = importedMenu;
+  }, [importedMenu]);
+
+  useEffect(() => {
+    // Every new proposal is kept on this device until it is saved.
+    if (
+      identity.status !== "ready" ||
+      !targetIsoWeek ||
+      !importedMenu ||
+      useWeekStatus === "applying" ||
+      useWeekStatus === "success"
+    ) {
+      return;
+    }
+
+    const attempt = applyAttemptRef.current;
+    writeMenuProposal({ scope: identity.scope, userId: identity.userId }, targetIsoWeek, {
+      menu: importedMenu,
+      generationRequestId,
+      attempt:
+        attempt && attempt.menu === importedMenu
+          ? { requestKey: attempt.requestKey, overwrite: attempt.overwrite, baseVersion: attempt.baseVersion }
+          : null,
+    });
+  }, [
+    identity.status,
+    identity.scope,
+    identity.userId,
+    targetIsoWeek,
+    importedMenu,
+    generationRequestId,
+    useWeekStatus,
+  ]);
+
+  const discardProposal = () => {
+    if (targetIsoWeek) {
+      clearMenuProposal({ scope: identity.scope, userId: identity.userId }, targetIsoWeek);
+    }
+
+    applyAttemptRef.current = null;
+    setImportedMenu(null);
+    setGenerationRequestId(null);
+    setRestoredMenu(null);
+    setUseWeekStatus("idle");
+    setUseWeekMessage("");
+    setUseWeekMenu(null);
+  };
 
   const createMenuReturnPath = targetIsoWeek
     ? buildWeekHref("/create-menu", targetIsoWeek)
@@ -542,75 +615,60 @@ export default function CreateMenuPage() {
       newRequestKey,
     );
     applyAttemptRef.current = attempt;
-    const fail = (message: string) => {
-      isApplyingWeekRef.current = false;
-      setUseWeekStatus("error");
-      setUseWeekMessage(message);
+    // The proposal stays on this device until the menu is saved; a kept attempt is retried as is.
+    const keepProposal = (keepAttempt: boolean) => {
+      writeMenuProposal(dataIdentity, weekForUse, {
+        menu: importedMenu,
+        generationRequestId,
+        attempt: keepAttempt
+          ? { requestKey: attempt.requestKey, overwrite: attempt.overwrite, baseVersion: attempt.baseVersion }
+          : null,
+      });
     };
 
     try {
-      if (dataIdentity.userId && attempt.overwrite === null) {
-        // The account week as it is now: the save is checked against this version.
-        let current: Awaited<ReturnType<typeof readRemoteWeek>>;
-
-        try {
-          current = await readRemoteWeek(dataIdentity, weekForUse);
-        } catch {
-          fail(applyWeekMessages.unchecked);
-          return;
-        }
-
-        attempt.baseVersion = current.version;
-
-        if (current.data?.length) {
-          const shouldReplace = window.confirm(
-            "Ya hay menú para esta semana. ¿Quieres reemplazarlo?",
-          );
-
-          if (!shouldReplace) {
-            applyAttemptRef.current = null;
-            isApplyingWeekRef.current = false;
-            setUseWeekStatus("idle");
-            return;
-          }
-        }
-
-        attempt.overwrite = Boolean(current.data?.length);
-      }
-
-      writeSelectedWeek(dataIdentity, weekForUse);
-
-      // Overwrite only after «reemplazar»; otherwise the database refuses it if another device
-      // saved this week since it was read (conflict).
-      const result = await saveWeek(dataIdentity, weekForUse, importedWeekDays, {
+      const { outcome, shopping } = await applyMenuToWeek({
+        identity: dataIdentity,
+        isoWeek: weekForUse,
+        weekDays: importedWeekDays,
+        attempt,
         generationRequestId,
-        overwrite: attempt.overwrite === true,
-        requestKey: attempt.requestKey,
-        baseVersion: attempt.baseVersion,
+        confirmReplace: () =>
+          window.confirm("Ya hay menú para esta semana. ¿Quieres reemplazarlo?"),
+        prepareShopping: ensureShoppingList,
       });
-      const outcome = applyWeekOutcome(result);
 
       if (outcome.attempt === "discard") {
         applyAttemptRef.current = null;
       }
 
-      if (outcome.status === "error") {
-        fail(outcome.message);
+      setUseWeekMenu(outcome.menu);
+
+      if (!outcome.openWeek) {
+        isApplyingWeekRef.current = false;
+        keepProposal(outcome.attempt === "keep");
+        setUseWeekStatus(outcome.status === "idle" ? "idle" : "error");
+        setUseWeekMessage(outcome.message);
         return;
       }
 
-      // The week's list: kept if its dishes did not change, otherwise generated and saved (B6).
-      try {
-        await ensureShoppingList(dataIdentity, weekForUse, importedWeekDays);
-      } catch (error: unknown) {
-        console.warn(
-          "No se pudo generar automáticamente la lista de la compra:",
-          error instanceof Error ? error.message : error,
-        );
-      }
+      // The menu is saved: the week opens now. The list is prepared apart (B6 keeps it if the
+      // dishes did not change) and the Compra page shows its own state.
+      clearMenuProposal(dataIdentity, weekForUse);
+      setRestoredMenu(null);
+      writeSelectedWeek(dataIdentity, weekForUse);
+      void shopping.then((prepared) => {
+        if (prepared === "failed") {
+          console.warn("No se pudo preparar la lista de la compra; se intentará al abrir Compra.");
+        }
+      });
 
       setUseWeekStatus("success");
-      setUseWeekMessage(outcome.message);
+      setUseWeekMessage(
+        outcome.menu === "account"
+          ? `${outcome.message} La lista de la compra se prepara aparte.`
+          : outcome.message,
+      );
       navigationTimeoutRef.current = window.setTimeout(() => {
         router.push(weekHref);
       }, useWeekSuccessDelayMs);
@@ -619,7 +677,10 @@ export default function CreateMenuPage() {
         "No se pudo aplicar el menú semanal:",
         error instanceof Error ? error.message : error,
       );
-      fail("No hemos podido aplicar el menú. Inténtalo de nuevo.");
+      isApplyingWeekRef.current = false;
+      keepProposal(true);
+      setUseWeekStatus("error");
+      setUseWeekMessage("No hemos podido aplicar el menú. Inténtalo de nuevo.");
     }
   };
 
@@ -645,6 +706,7 @@ export default function CreateMenuPage() {
               {weekNotice}
             </p>
           ) : null}
+          <ProfileReadinessNotice profile={profile} fromOnboarding={searchParams.get("from") === "onboarding"} />
         </section>
 
         <div
@@ -927,6 +989,21 @@ export default function CreateMenuPage() {
             <h2 className="t-h2 text-[color:var(--color-foreground)]">
               Revisa tu semana
             </h2>
+            {restoredMenu === importedMenu ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2">
+                <p className="t-meta">
+                  Propuesta sin aplicar, recuperada de este dispositivo.
+                </p>
+                <button
+                  type="button"
+                  onClick={discardProposal}
+                  disabled={useWeekStatus === "applying"}
+                  className="min-h-9 rounded-full px-3 text-xs font-semibold text-[color:var(--color-muted-foreground)] underline underline-offset-2 hover:text-[color:var(--color-foreground)] disabled:opacity-50"
+                >
+                  Descartar propuesta
+                </button>
+              </div>
+            ) : null}
 
             <div className="flex flex-col gap-2.5">
               {importedWeekDays.map((day) => {
@@ -1014,8 +1091,10 @@ export default function CreateMenuPage() {
                 ) : useWeekStatus === "success" ? (
                   <>
                     <Check aria-hidden="true" className="h-4 w-4" />
-                    Menú aplicado
+                    {useWeekMenu === "device" ? "Menú guardado en este dispositivo" : "Menú guardado"}
                   </>
+                ) : useWeekStatus === "error" && useWeekMenu === "pending" ? (
+                  "Reintentar guardado"
                 ) : (
                   "Usar este menú"
                 )}

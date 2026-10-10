@@ -50,6 +50,18 @@ export function toWeekVersion(version: string | null): number | null {
   return /^\d+$/.test(version) ? Number(version) : -1;
 }
 
+// Same dishes on the same days (dates are presentation, never stored). Used to recognise a week
+// write that reached the account although its answer was lost.
+export function sameWeekDays(local: WeekDay[], remote: WeekDay[]) {
+  const canonical = (days: WeekDay[]) =>
+    JSON.stringify(
+      days
+        .map((day) => [day.day, day.lunch.trim(), day.dinner.trim()])
+        .sort((first, second) => first[0].localeCompare(second[0])),
+    );
+  return canonical(local) === canonical(remote);
+}
+
 export function weekWriteToPush(result: WeekWriteResult): PushResult {
   if (result.status === "conflict") throw new RemoteConflictError();
   return { version: String(result.version), duplicate: result.status === "duplicate" };
@@ -119,6 +131,7 @@ const supabaseRemotes: Remotes = {
       fetch,
       // apply_week / update_week_slot compare the version in the same transaction as the write.
       checksVersion: true,
+      sameData: sameWeekDays,
       async push(weekDays, { baseVersion, overwrite }) {
         const { applyWeekInSupabase, updateWeekSlotInSupabase } = await import("@/lib/supabase/weeks");
         const expectedVersion = toWeekVersion(baseVersion);
@@ -296,8 +309,11 @@ export function readShoppingCache(identity: DataIdentity, isoWeek: IsoWeek) {
   return readScoped<ShoppingCache>(identity.scope, "shopping", weekKey(isoWeek));
 }
 
+// Pending (B5): a list not saved in the account yet, or marks it has not accepted. Counted by the
+// sign-out warning like any other change not saved.
 export function writeShoppingCache(identity: DataIdentity, isoWeek: IsoWeek, cache: ShoppingCache) {
-  writeScoped(identity.scope, "shopping", cache, { week: weekKey(isoWeek) });
+  const pending = cache.listId === null || Object.keys(cache.pendingChecks ?? {}).length > 0;
+  writeScoped(identity.scope, "shopping", cache, { week: weekKey(isoWeek), pending });
 }
 
 export function clearShoppingCache(identity: DataIdentity, isoWeek: IsoWeek) {

@@ -1,13 +1,16 @@
 // Profile form (roadmap step 24): sections saved one at a time, nothing pre-selected for a new
-// profile and no personal data filled in on the user's behalf. Storage rules stay in
-// src/lib/supabase/profiles.ts (validateProfileForStorage, profileToRow).
+// profile and no personal data filled in on the user's behalf. Each saved section is recorded in
+// confirmedSections; values never confirmed (saved by the previous form) are shown as assumed.
+// Storage rules stay in src/lib/supabase/profiles.ts (validateProfileForStorage, profileToRow).
 import {
   legacyGoalFromGoals,
+  normalizeConfirmations,
   normalizeDislikedFoods,
   validateProfileForStorage,
   type Allergy,
   type DietaryRestriction,
   type Goal,
+  type ProfileConfirmation,
   type ProfileField,
   type ProfileValidationIssue,
   type Sex,
@@ -48,8 +51,8 @@ export const profileSectionInfo: Record<
   },
   body: {
     title: "Datos corporales",
-    usage: "No se usan para crear el menú. Por ahora tu perfil no se puede guardar sin ellos.",
-    required: true,
+    usage: "Opcionales. No se usan para crear el menú.",
+    required: false,
   },
 };
 
@@ -60,6 +63,41 @@ const sectionFields: Record<ProfileSection, ProfileField[]> = {
   training: ["weeklyTrainingDays", "trainingTypes", "otherTrainingType"],
   body: ["sex", "birthDate", "heightCm", "weightKg"],
 };
+
+// What saving a section confirms in profiles.confirmed_sections.
+export const sectionConfirmations: Record<ProfileSection, ProfileConfirmation[]> = {
+  household: ["household"],
+  goals: ["goals"],
+  restrictions: ["restrictions", "allergies"],
+  training: ["training"],
+  body: ["body"],
+};
+
+// The sections a menu needs; Crear menú and the onboarding check these.
+export const menuSections: ProfileSection[] = ["household", "goals", "restrictions"];
+
+export function isSectionConfirmed(profile: UserProfile | null, section: ProfileSection) {
+  const confirmed = profile?.confirmedSections ?? [];
+
+  return sectionConfirmations[section].every((value) => confirmed.includes(value));
+}
+
+// Required sections whose saved values the user never confirmed (a profile of the previous form).
+export function assumedMenuSections(profile: UserProfile | null): ProfileSection[] {
+  return profile ? menuSections.filter((section) => !isSectionConfirmed(profile, section)) : [];
+}
+
+function withConfirmations(profile: UserProfile, sections: ProfileSection[]): UserProfile {
+  const confirmed = new Set(profile.confirmedSections ?? []);
+
+  for (const section of sections) {
+    for (const value of sectionConfirmations[section]) {
+      confirmed.add(value);
+    }
+  }
+
+  return { ...profile, confirmedSections: normalizeConfirmations([...confirmed]) };
+}
 
 export function sectionOfField(field: ProfileField): ProfileSection | null {
   return profileSections.find((section) => sectionFields[section].includes(field)) ?? null;
@@ -127,11 +165,13 @@ export function readStoredProfile(value: unknown): UserProfile | null {
   }
 
   const profile = value as Partial<UserProfile>;
+  const isOptional = (field: unknown, type: "string" | "number") =>
+    field === null || field === undefined || typeof field === type;
   const isComplete =
-    typeof profile.sex === "string" &&
-    typeof profile.birthDate === "string" &&
-    typeof profile.heightCm === "number" &&
-    typeof profile.weightKg === "number" &&
+    isOptional(profile.sex, "string") &&
+    isOptional(profile.birthDate, "string") &&
+    isOptional(profile.heightCm, "number") &&
+    isOptional(profile.weightKg, "number") &&
     typeof profile.householdSize === "number" &&
     typeof profile.weeklyTrainingDays === "number" &&
     Number.isInteger(profile.weeklyTrainingDays) &&
@@ -149,7 +189,19 @@ export function readStoredProfile(value: unknown): UserProfile | null {
 
   const goals = storedGoals(profile as UserProfile);
 
-  return { ...(profile as UserProfile), goals, goal: legacyGoalFromGoals(goals) };
+  return {
+    ...(profile as UserProfile),
+    sex: profile.sex ?? null,
+    birthDate: profile.birthDate || null,
+    heightCm: profile.heightCm ?? null,
+    weightKg: profile.weightKg ?? null,
+    goals,
+    goal: legacyGoalFromGoals(goals),
+    // A copy saved before D2 has no confirmations: the account keeps its own when saving.
+    confirmedSections: Array.isArray(profile.confirmedSections)
+      ? normalizeConfirmations(profile.confirmedSections)
+      : undefined,
+  };
 }
 
 export function draftFromProfile(profile: UserProfile | null): ProfileDraft {
@@ -165,22 +217,27 @@ export function draftFromProfile(profile: UserProfile | null): ProfileDraft {
     otherGoal: goals.includes("other") ? profile.otherGoal ?? "" : "",
     dietaryRestrictions: [...profile.dietaryRestrictions],
     allergies: [...profile.allergies],
-    // The schema has no "none" allergy: a saved empty list is the answer that was saved.
-    // Telling it apart from "never answered" needs confirmed_sections (pending migration).
+    // The schema has no "none" allergy: an empty list is «Ninguna». It is an answer when the
+    // allergies are confirmed; in a profile of the previous form it is shown as assumed.
     noAllergies: profile.allergies.length === 0,
     otherAllergies: profile.allergies.includes("other") ? profile.otherAllergies ?? "" : "",
     dislikedFoodsText: profile.dislikedFoods.join(", "),
     weeklyTrainingDays: profile.weeklyTrainingDays,
     trainingTypes: [...profile.trainingTypes],
     otherTrainingType: profile.trainingTypes.includes("other") ? profile.otherTrainingType ?? "" : "",
-    sex: profile.sex,
-    birthDate: profile.birthDate,
-    heightCm: String(profile.heightCm),
-    weightKg: String(profile.weightKg),
+    sex: profile.sex ?? null,
+    birthDate: profile.birthDate ?? "",
+    heightCm: profile.heightCm == null ? "" : String(profile.heightCm),
+    weightKg: profile.weightKg == null ? "" : String(profile.weightKg),
   };
 }
 
 // "175", " 175 cm" → 175. Anything else becomes NaN and fails the range check with its message.
+// An empty field is null (not given).
+export function parseOptionalWholeNumber(value: string): number | null {
+  return value.trim() ? parseWholeNumber(value) : null;
+}
+
 export function parseWholeNumber(value: string): number {
   const text = value.trim().replace(/\s*(cm|kg)$/i, "");
 
@@ -231,12 +288,23 @@ function sectionValues(draft: ProfileDraft, section: ProfileSection): SectionVal
       };
     case "body":
       return {
-        sex: draft.sex as Sex,
-        birthDate: draft.birthDate,
-        heightCm: parseWholeNumber(draft.heightCm),
-        weightKg: parseWholeNumber(draft.weightKg),
+        sex: draft.sex,
+        birthDate: draft.birthDate || null,
+        heightCm: parseOptionalWholeNumber(draft.heightCm),
+        weightKg: parseOptionalWholeNumber(draft.weightKg),
       };
   }
+}
+
+// Whether an optional section holds anything (training other than "0 days, no type"; any body data).
+function hasOptionalValues(draft: ProfileDraft, section: "training" | "body") {
+  return section === "training"
+    ? draft.weeklyTrainingDays > 0 || draft.trainingTypes.length > 0
+    : Boolean(draft.sex || draft.birthDate || draft.heightCm.trim() || draft.weightKg.trim());
+}
+
+export function emptyBodyDraft(): Pick<ProfileDraft, "sex" | "birthDate" | "heightCm" | "weightKg"> {
+  return { sex: null, birthDate: "", heightCm: "", weightKg: "" };
 }
 
 // Questions the user still has to answer in a section (before any range check).
@@ -265,24 +333,6 @@ export function unansweredIssues(draft: ProfileDraft, section: ProfileSection): 
     }
   }
 
-  if (section === "body") {
-    if (!draft.sex) {
-      issues.push({ field: "sex", message: "Elige un sexo." });
-    }
-
-    if (!draft.birthDate) {
-      issues.push({ field: "birthDate", message: "Indica tu fecha de nacimiento." });
-    }
-
-    if (!draft.heightCm.trim()) {
-      issues.push({ field: "heightCm", message: "Indica tu altura." });
-    }
-
-    if (!draft.weightKg.trim()) {
-      issues.push({ field: "weightKg", message: "Indica tu peso." });
-    }
-  }
-
   return issues;
 }
 
@@ -303,7 +353,9 @@ export function isSectionDirty(draft: ProfileDraft, saved: UserProfile | null, s
   return !sameValue(sectionValues(draft, section), sectionValues(draftFromProfile(saved), section));
 }
 
-export type SectionStatus = "pending" | "unsaved" | "saved";
+// pending: a required question without answer · unsaved: edited · saved: saved and confirmed ·
+// assumed: saved by the previous form and never confirmed · optional: optional and left empty.
+export type SectionStatus = "pending" | "unsaved" | "saved" | "assumed" | "optional";
 
 export function sectionStatus(
   draft: ProfileDraft,
@@ -314,7 +366,27 @@ export function sectionStatus(
     return "pending";
   }
 
-  return isSectionDirty(draft, saved, section) ? "unsaved" : "saved";
+  const isOptionalSection = section === "training" || section === "body";
+  const isEmptyOptional = isOptionalSection && !hasOptionalValues(draft, section);
+
+  if (!saved) {
+    return isEmptyOptional ? "optional" : "unsaved";
+  }
+
+  if (isSectionDirty(draft, saved, section)) {
+    return "unsaved";
+  }
+
+  if (isSectionConfirmed(saved, section)) {
+    return isEmptyOptional ? "optional" : "saved";
+  }
+
+  return isEmptyOptional ? "optional" : "assumed";
+}
+
+// Saving is offered for edits and to confirm assumed values (nothing changes but the confirmation).
+export function canSaveSection(status: SectionStatus) {
+  return status === "unsaved" || status === "assumed";
 }
 
 export type ProfileBuildResult =
@@ -333,17 +405,25 @@ function checkProfile(profile: UserProfile, sections: ProfileSection[], draft: P
   return issues.length > 0 ? { ok: false, issues } : { ok: true, profile };
 }
 
-// First save: every required section must be answered. Training may stay as it is (0 days).
+// Sections answered in a first save: the required ones, plus optional ones the user filled in.
+function answeredSections(draft: ProfileDraft, sections: ProfileSection[]) {
+  return sections.filter(
+    (section) => (section !== "training" && section !== "body") || hasOptionalValues(draft, section),
+  );
+}
+
+// First save: every required section must be answered. Training may stay empty (0 days) and
+// body data may be left out; neither is then confirmed.
 export function buildNewProfile(draft: ProfileDraft): ProfileBuildResult {
   const profile = profileSections.reduce(
     (current, section) => ({ ...current, ...sectionValues(draft, section) }),
-    {} as UserProfile,
+    { confirmedSections: [] } as unknown as UserProfile,
   );
 
-  return checkProfile(profile, profileSections, draft);
+  return checkProfile(withConfirmations(profile, answeredSections(draft, profileSections)), profileSections, draft);
 }
 
-// Later saves: only this section changes; unsaved edits in other sections are not sent.
+// Later saves: only this section changes (and is confirmed); unsaved edits elsewhere are not sent.
 export function applySection(
   saved: UserProfile,
   draft: ProfileDraft,
@@ -351,7 +431,26 @@ export function applySection(
 ): ProfileBuildResult {
   const profile: UserProfile = { ...saved, ...sectionValues(draft, section) };
 
-  return checkProfile(profile, [section], draft);
+  return checkProfile(withConfirmations(profile, [section]), [section], draft);
+}
+
+// Onboarding step 2: household, goals and restrictions, on top of the saved profile if there is
+// one. Without one, training stays empty and body data is not asked for.
+export function buildOnboardingProfile(
+  saved: UserProfile | null,
+  draft: ProfileDraft,
+): ProfileBuildResult {
+  const base: UserProfile = saved ?? {
+    ...sectionValues(emptyProfileDraft(), "training"),
+    ...sectionValues(emptyProfileDraft(), "body"),
+    confirmedSections: [],
+  } as UserProfile;
+  const profile = menuSections.reduce(
+    (current, section) => ({ ...current, ...sectionValues(draft, section) }),
+    base,
+  );
+
+  return checkProfile(withConfirmations(profile, menuSections), menuSections, draft);
 }
 
 // After a save or a conflict: the given sections take the saved values, the rest keep their edits.
@@ -383,7 +482,7 @@ export function issuesBySection(issues: ProfileValidationIssue[]) {
   const grouped: Partial<Record<ProfileSection, ProfileValidationIssue[]>> = {};
 
   for (const issue of issues) {
-    const section = sectionOfField(issue.field) ?? "body";
+    const section = sectionOfField(issue.field) ?? "household";
     grouped[section] = [...(grouped[section] ?? []), issue];
   }
 
