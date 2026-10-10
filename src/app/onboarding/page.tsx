@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { GoalsField, HouseholdField, RestrictionsFields } from "@/components/features/ProfileFields";
 import { useIdentity } from "@/components/session/IdentityProvider";
+import { SyncStatus } from "@/components/session/SyncStatus";
 import { Button, PrimaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { StateMessage } from "@/components/ui/StateMessage";
@@ -129,6 +130,12 @@ export default function OnboardingPage() {
   const [draft, setDraft] = useState<ProfileDraft>(emptyProfileDraft);
   const [pantry, setPantry] = useState<PantryStorageItem[]>([]);
   const [pantryNotice, setPantryNotice] = useState<string | null>(null);
+  // B5 save state of the express pantry, as in Despensa. «Reintentar» reads the pantry again,
+  // which first sends the changes pending on this device.
+  const [pantrySync, setPantrySync] = useState<{ offline?: boolean; pending?: boolean }>({});
+  const [isCheckingPantry, setIsCheckingPantry] = useState(true);
+  const [savingPantry, setSavingPantry] = useState(0);
+  const [pantryReload, setPantryReload] = useState(0);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<StepError>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -201,12 +208,12 @@ export default function OnboardingPage() {
     const current = { scope: identity.scope, userId: identity.userId };
     const timer = window.setTimeout(() => {
       setPantry(readPantryView(current));
+      setIsCheckingPantry(true);
       void loadPantry(current).then((result) => {
         if (isCancelled) return;
         setPantry(readPantryView(current));
-        if (result.offline) {
-          setPantryNotice("No se ha podido comprobar tu despensa: se muestra la de este dispositivo.");
-        }
+        setPantrySync({ offline: result.offline, pending: result.pending });
+        setIsCheckingPantry(false);
       });
     }, 0);
 
@@ -214,7 +221,7 @@ export default function OnboardingPage() {
       isCancelled = true;
       window.clearTimeout(timer);
     };
-  }, [step, identity.scope, identity.userId]);
+  }, [step, identity.scope, identity.userId, pantryReload]);
 
   // Moves the account forward (finishing goes to Crear menú).
   const goTo = async (next: ActiveOnboardingStep | "done") => {
@@ -274,14 +281,15 @@ export default function OnboardingPage() {
     const key = pantryItemKey({ name, category });
     const current = pantry.find((item) => pantryItemKey(item) === key);
     setPantryNotice(null);
+    setSavingPantry((count) => count + 1);
     const result = current
       ? await setPantryItemActive(dataIdentity, category, current.name, !current.active)
       : await addPantryItem(dataIdentity, category, name);
+    setSavingPantry((count) => count - 1);
     setPantry(result.items);
+    setPantrySync(result.status === "pending" ? { pending: true } : {});
 
-    if (result.status === "pending") {
-      setPantryNotice("Sin conexión con tu cuenta: los cambios quedan en este dispositivo y se guardarán después.");
-    } else if (result.status === "conflict") {
+    if (result.status === "conflict") {
       setPantryNotice("Tu despensa había cambiado en otro dispositivo: se muestra como está en tu cuenta.");
     }
   };
@@ -469,6 +477,14 @@ export default function OnboardingPage() {
               );
             })}
           </div>
+          <SyncStatus
+            signedIn={identity.userId !== null}
+            saving={savingPantry > 0}
+            checking={isCheckingPantry}
+            offline={pantrySync.offline}
+            pending={pantrySync.pending}
+            onRetry={() => setPantryReload((count) => count + 1)}
+          />
           {pantryNotice ? <p role="status" className="t-meta text-[color:var(--color-accent)]">{pantryNotice}</p> : null}
           <ErrorText error={error} />
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
