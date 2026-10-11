@@ -190,7 +190,12 @@ export default function CreateMenuPage() {
     resolve: (confirmed: boolean) => void;
   } | null>(null);
   // «Deshacer» after a replacement: the replaced menu and the key of the write that restores it.
-  const [undo, setUndo] = useState<{ previous: WeekDay[]; requestKey: string; busy: boolean } | null>(null);
+  const [undo, setUndo] = useState<{
+    previous: WeekDay[];
+    requestKey: string;
+    generationRequestId: string | null;
+    busy: boolean;
+  } | null>(null);
   const undoTimeoutRef = useRef<number | null>(null);
   const releaseShoppingRef = useRef<((prepare: boolean) => void) | null>(null);
   const importedMenuRef = useRef(importedMenu);
@@ -860,7 +865,7 @@ export default function CreateMenuPage() {
     });
 
     try {
-      const { outcome, shopping, replaced } = await applyMenuToWeek({
+      const { outcome, shopping, replaced, replacedGenerationRequestId } = await applyMenuToWeek({
         identity: dataIdentity,
         isoWeek: weekForUse,
         weekDays: importedWeekDays,
@@ -903,7 +908,12 @@ export default function CreateMenuPage() {
         // A menu was replaced: for a short time it can be restored. Until then the current
         // shopping list is left as it is, so undoing keeps it and its marks.
         releaseShoppingRef.current = release;
-        setUndo({ previous: replaced, requestKey: newRequestKey(), busy: false });
+        setUndo({
+          previous: replaced,
+          requestKey: newRequestKey(),
+          generationRequestId: replacedGenerationRequestId,
+          busy: false,
+        });
         setUseWeekMessage(`${outcome.message} Puedes deshacerlo durante unos segundos.`);
         undoTimeoutRef.current = window.setTimeout(() => openWeek(weekForUse), undoWindowMs);
         return;
@@ -959,7 +969,12 @@ export default function CreateMenuPage() {
 
     if (result.status === "conflict") {
       // The week changed elsewhere: nothing was undone and the list follows the account's week.
+      // «Usar este menú» works again as a new attempt (it asks before replacing that week).
       releaseShopping(false);
+      isApplyingWeekRef.current = false;
+      applyAttemptRef.current = null;
+      setUseWeekStatus("error");
+      setUseWeekMenu("conflict");
       setUseWeekMessage(result.message);
       return;
     }
