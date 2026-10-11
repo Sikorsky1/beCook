@@ -181,7 +181,8 @@ function ShoppingItemsForCategory({
         {group.items.map((item) => {
           const isChecked = checkedItems.includes(item.id);
           const line = classifyShoppingLine(item, isChecked, pantry);
-          const forDishes = describeOrigins(item.origins, dishes);
+          // A bought item no dish needs any more is not «for» anything now.
+          const forDishes = item.removed ? [] : describeOrigins(item.origins, dishes);
 
           return (
             <li key={item.id}>
@@ -628,17 +629,19 @@ export default function ShoppingListPage() {
       group.items.filter((item) => !item.removed && checkedItems.includes(item.id)).length,
     0,
   );
+  // Same rule per category, so the pills add up to the total above.
   const categoryProgress = shoppingList.map((group) => {
-    const checkedItemsInCategory = group.items.filter((item) =>
+    const neededItems = group.items.filter((item) => !item.removed);
+    const checkedItemsInCategory = neededItems.filter((item) =>
       checkedItems.includes(item.id),
     ).length;
 
     return {
       category: group.category,
       checked: checkedItemsInCategory,
-      total: group.items.length,
+      total: neededItems.length,
       isCompleted:
-        group.items.length > 0 && checkedItemsInCategory === group.items.length,
+        neededItems.length > 0 && checkedItemsInCategory === neededItems.length,
     };
   });
   const selectedGroup =
