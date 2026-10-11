@@ -48,7 +48,7 @@ test("shopping policy: a slow 5xx is not retried", async () => {
  assert.deepEqual({calls, result}, {calls: 1, result: "failed"});
 });
 
-test("shopping route sends reasoning effort low and the menu/import routes are unchanged", async () => {
+test("shopping route sends reasoning effort low; import (C6) sends low effort and a token cap", async () => {
  const bodies = [];
  const fakes = installFakeBackends((url, init) => {
   bodies.push({url, body: JSON.parse(init.body)});
@@ -61,10 +61,12 @@ test("shopping route sends reasoning effort low and the menu/import routes are u
   const shopping = require("../src/app/api/generate-shopping-list/route.ts");
   const importMenu = require("../src/app/api/import-menu/route.ts");
   assert.equal((await shopping.POST(aiRequest("generate-shopping-list", {week: [{day: "Lunes", date: "6 oct", lunch: "Lentejas", dinner: "LIBRE"}]}))).status, 200);
-  await importMenu.POST(aiRequest("import-menu", {text: "Lunes\tLentejas\tLIBRE"}));
+  // C6: an unambiguous paste never reaches OpenAI, so this one is prose.
+  await importMenu.POST(aiRequest("import-menu", {text: "El lunes comemos lentejas"}));
   assert.deepEqual(bodies[0].body.reasoning, {effort: "low"});
   assert.equal(bodies[1].body.reasoning, undefined);
-  assert.equal(bodies[1].body.reasoning_effort, undefined);
+  assert.equal(bodies[1].body.reasoning_effort, "low");
+  assert.equal(bodies[1].body.max_completion_tokens, 2000);
   assert.ok(shopping.maxDuration >= (shoppingQuickFailureMs + shoppingTimeoutMs) / 1000 + 10, "maxDuration covers the worst case");
  } finally {
   console.info = info; console.log = log;
