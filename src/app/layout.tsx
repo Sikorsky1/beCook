@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
@@ -29,6 +29,15 @@ export const metadata: Metadata = {
     address: false,
     email: false,
   },
+};
+
+// viewport-fit=cover makes iOS Safari report the real env(safe-area-inset-*) values used by the
+// page shell, the bottom navigation and the proposal bar (0 otherwise). Zoom stays allowed.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#fff6ed",
 };
 
 export default function RootLayout({

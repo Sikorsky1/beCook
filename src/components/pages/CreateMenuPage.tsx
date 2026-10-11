@@ -73,11 +73,18 @@ import { ensureShoppingList } from "@/lib/data/shopping";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
 import type { UserProfile } from "@/lib/supabase/profiles";
+import { nextTabIndex, tabIds } from "@/lib/rovingTabs";
 import { pageContentClass, pageShellClass } from "@/lib/ui";
 
 const freeTextPromptMaxLength = 300;
 
 type CreateMenuMode = "import" | "generate";
+
+const createMenuModes: { value: CreateMenuMode; label: string }[] = [
+  { value: "generate", label: "Crear menú con beCook" },
+  { value: "import", label: "Tengo un menú" },
+];
+
 type UseWeekStatus = "idle" | "applying" | "success" | "error";
 
 const menuStyleOptions = [
@@ -147,6 +154,7 @@ export default function CreateMenuPage() {
   const [weekNotice, setWeekNotice] = useState<string | null>(null);
   const [hasMounted, setHasMounted] = useState(false);
   const [mode, setMode] = useState<CreateMenuMode>("generate");
+  const modeTabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [menuText, setMenuText] = useState("");
   const [importedMenu, setImportedMenu] = useState<ImportedMenuResponse | null>(
     null,
@@ -1034,6 +1042,11 @@ export default function CreateMenuPage() {
     );
   };
 
+  const selectMode = (nextMode: CreateMenuMode) => {
+    setMode(nextMode);
+    setErrorMessage("");
+  };
+
   return (
     <main className={pageShellClass}>
       <div className={`${pageContentClass} gap-5 sm:gap-6`}>
@@ -1064,42 +1077,50 @@ export default function CreateMenuPage() {
           role="tablist"
           aria-label="Modo de creación de menú"
         >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "generate"}
-            onClick={() => {
-              setMode("generate");
-              setErrorMessage("");
-            }}
-            className={`min-h-11 rounded-[var(--radius-input)] px-3 text-sm font-semibold transition-colors ${
-              mode === "generate"
-                ? "bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
-                : "text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-surface-muted)]"
-            }`}
-          >
-            Crear menú con beCook
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "import"}
-            onClick={() => {
-              setMode("import");
-              setErrorMessage("");
-            }}
-            className={`min-h-11 rounded-[var(--radius-input)] px-3 text-sm font-semibold transition-colors ${
-              mode === "import"
-                ? "bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
-                : "text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-surface-muted)]"
-            }`}
-          >
-            Tengo un menú
-          </button>
+          {createMenuModes.map((option, index) => {
+            const isSelected = mode === option.value;
+            const ids = tabIds("create-menu", option.value);
+
+            return (
+              <button
+                key={option.value}
+                ref={(element) => {
+                  modeTabRefs.current[index] = element;
+                }}
+                type="button"
+                role="tab"
+                id={ids.tab}
+                aria-selected={isSelected}
+                // Only the selected panel is rendered, so only its tab points to it.
+                aria-controls={isSelected ? ids.panel : undefined}
+                tabIndex={isSelected ? 0 : -1}
+                onClick={() => selectMode(option.value)}
+                onKeyDown={(event) => {
+                  const next = nextTabIndex(event.key, index, createMenuModes.length);
+                  if (next === null) return;
+                  event.preventDefault();
+                  selectMode(createMenuModes[next].value);
+                  modeTabRefs.current[next]?.focus();
+                }}
+                className={`min-h-11 rounded-[var(--radius-input)] px-3 text-sm font-semibold transition-colors ${
+                  isSelected
+                    ? "bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
+                    : "text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-surface-muted)]"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
         </div>
 
         {mode === "import" ? (
-          <Card className="p-3.5 sm:p-5">
+          <Card
+            role="tabpanel"
+            id={tabIds("create-menu", "import").panel}
+            aria-labelledby={tabIds("create-menu", "import").tab}
+            className="p-3.5 sm:p-5"
+          >
             <div className="relative">
               <IconButton
                 onClick={() => setMenuText("")}
@@ -1115,13 +1136,13 @@ export default function CreateMenuPage() {
                   value={menuText}
                   onChange={(event) => setMenuText(event.target.value)}
                   placeholder={`Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\tPollo con arroz\tTortilla francesa`}
-                  className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg"
+                  className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg md:text-lg"
                 />
               ) : (
                 <TextArea
                   defaultValue=""
                   placeholder={`Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\tPollo con arroz\tTortilla francesa`}
-                  className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg"
+                  className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg md:text-lg"
                 />
               )}
             </div>
@@ -1152,7 +1173,12 @@ export default function CreateMenuPage() {
             )}
           </Card>
         ) : (
-          <Card className="space-y-4 p-3.5 sm:p-5">
+          <Card
+            role="tabpanel"
+            id={tabIds("create-menu", "generate").panel}
+            aria-labelledby={tabIds("create-menu", "generate").tab}
+            className="space-y-4 p-3.5 sm:p-5"
+          >
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
               <span className="t-body-strong text-[color:var(--color-foreground)]">
                 Número de personas
@@ -1193,7 +1219,7 @@ export default function CreateMenuPage() {
                   return (
                     <label
                       key={option.id}
-                      className={`inline-flex min-h-10 cursor-pointer items-center justify-center rounded-full border px-3 py-1.5 text-center text-[0.78rem] font-semibold leading-tight transition-colors ${
+                      className={`inline-flex min-h-11 cursor-pointer items-center justify-center rounded-full border px-3.5 py-2 text-center text-sm font-semibold leading-tight transition-colors has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-[color:var(--color-accent)] ${
                         isSelected
                           ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
                           : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
@@ -1226,7 +1252,7 @@ export default function CreateMenuPage() {
               <legend className="t-body-strong text-[color:var(--color-foreground)]">
                 Nivel de elaboración deseado
               </legend>
-              <div className="grid grid-cols-3 gap-1.5 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1.5">
+              <div className="grid grid-cols-3 gap-1 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1 sm:gap-1.5 sm:p-1.5">
                 {elaborationOptions.map((option) => {
                   const isSelected = elaborationLevel === option.value;
 
@@ -1237,9 +1263,9 @@ export default function CreateMenuPage() {
                       disabled={isLoading}
                       onClick={() => setElaborationLevel(option.value)}
                       aria-pressed={isSelected}
-                      className={`flex min-h-10 items-center justify-center rounded-[var(--radius-input)] px-2 text-[0.78rem] font-semibold transition-colors ${
+                      className={`flex min-h-11 min-w-0 items-center justify-center rounded-[var(--radius-input)] px-1 text-[0.8125rem] font-semibold transition-colors sm:px-2 sm:text-sm ${
                         isSelected
-                          ? "bg-[color:var(--color-accent)] text-white"
+                          ? "bg-[color:var(--color-accent-strong)] text-white"
                           : "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-accent-soft)] hover:text-[color:var(--color-foreground)]"
                       } disabled:cursor-not-allowed disabled:opacity-60`}
                     >
@@ -1263,7 +1289,7 @@ export default function CreateMenuPage() {
                   )
                 }
                 placeholder="Ejemplo: cenas ligeras, comidas fáciles de tupper, algo mediterráneo y sin mucho pescado."
-                className="min-h-28 resize-y bg-[color:var(--color-surface)] text-sm"
+                className="min-h-28 resize-y bg-[color:var(--color-surface)]"
               />
               <span className="t-meta block text-right">
                 {freeTextPrompt.length}/{freeTextPromptMaxLength}
@@ -1367,7 +1393,6 @@ export default function CreateMenuPage() {
                 </p>
                 {needsLogin || isLoading ? null : (
                   <TertiaryButton
-                    size="sm"
                     onClick={mode === "generate" ? handleGenerateMenu : handleProcessMenu}
                     className="mt-2 w-full sm:w-auto"
                   >
@@ -1393,7 +1418,7 @@ export default function CreateMenuPage() {
                   type="button"
                   onClick={discardProposal}
                   disabled={useWeekStatus === "applying"}
-                  className="min-h-9 rounded-full px-3 text-xs font-semibold text-[color:var(--color-muted-foreground)] underline underline-offset-2 hover:text-[color:var(--color-foreground)] disabled:opacity-50"
+                  className="min-h-11 rounded-full px-3 text-sm font-semibold text-[color:var(--color-muted-foreground)] underline underline-offset-2 hover:text-[color:var(--color-foreground)] disabled:opacity-50"
                 >
                   Descartar propuesta
                 </button>

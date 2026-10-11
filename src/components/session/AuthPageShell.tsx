@@ -40,7 +40,7 @@ export function AuthPageShell({ title, lede, children, guestHref }: AuthPageShel
     <main className={pageShellClass}>
       <div className="mx-auto flex w-full max-w-md flex-col gap-5 sm:gap-6">
         <section>
-          <p className="ui-eyebrow text-[0.78rem]">Tu cuenta beCook</p>
+          <p className="t-eyebrow">Tu cuenta beCook</p>
           <h1 className="mt-2 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
             {title}
           </h1>
@@ -61,7 +61,7 @@ export function AuthPageShell({ title, lede, children, guestHref }: AuthPageShel
             >
               Seguir sin iniciar sesión
             </Link>
-            <p className="text-xs leading-5 text-[color:var(--color-muted-foreground)]">
+            <p className="t-meta leading-5">
               Sin cuenta, beCook funciona igual, pero lo que hagas se queda solo en este dispositivo.
             </p>
           </div>
@@ -97,7 +97,7 @@ export function FieldLabel({ children, htmlFor }: { children: ReactNode; htmlFor
   return (
     <label
       htmlFor={htmlFor}
-      className="block text-[0.78rem] font-semibold text-[color:var(--color-foreground)]"
+      className="block text-sm font-semibold text-[color:var(--color-foreground)]"
     >
       {children}
     </label>

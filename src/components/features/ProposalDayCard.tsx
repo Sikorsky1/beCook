@@ -46,7 +46,7 @@ export function ProposalDayCard({ day, isToday, locked, onRequestIdea, onReplace
           <span className="ml-1.5 text-[0.85rem] font-normal text-[color:var(--color-muted-foreground)]">· {day.date}</span>
         </h3>
         {isToday ? (
-          <span className="ml-auto shrink-0 rounded-full bg-[color:var(--color-accent-soft)] px-2.5 py-[3px] text-[0.64rem] font-bold uppercase tracking-[0.1em] text-[color:var(--color-accent)]">
+          <span className="ml-auto shrink-0 rounded-full bg-[color:var(--color-accent-soft)] px-2.5 py-1 text-xs font-bold uppercase tracking-[0.1em] text-[color:var(--color-foreground)]">
             Hoy
           </span>
         ) : null}
@@ -166,7 +166,7 @@ function ProposalMeal({
 
   return (
     <div className={`min-w-0 px-3.5 py-3 ${bordered ? "border-r border-[color:var(--color-border)]" : ""}`}>
-      <p className="mb-2 text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-muted-foreground)]">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-muted-foreground)]">
         {label}
       </p>
       <div
@@ -188,7 +188,7 @@ function ProposalMeal({
                 type="button"
                 onClick={restoreOriginal}
                 disabled={locked || idea.loading}
-                className="font-semibold underline underline-offset-2 disabled:opacity-50"
+                className="-my-3 inline-flex items-center py-3 font-semibold underline underline-offset-2 disabled:opacity-50"
               >
                 Volver al plato anterior
               </button>
@@ -207,19 +207,28 @@ function ProposalMeal({
                     <LoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
                     Pidiendo una idea…
                   </span>
-                  <button type="button" onClick={cancelAi} className="t-meta font-semibold underline underline-offset-2">
+                  <button
+                    type="button"
+                    onClick={cancelAi}
+                    aria-label={`Cancelar la idea con IA para la ${mealName}`}
+                    className="t-meta inline-flex min-h-11 items-center px-1 font-semibold underline underline-offset-2"
+                  >
                     Cancelar
                   </button>
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <SecondaryButton size="sm" onClick={() => void requestIdea("ai")} disabled={locked} className="w-full">
+                  <SecondaryButton
+                    onClick={() => void requestIdea("ai")}
+                    disabled={locked}
+                    className="w-full whitespace-normal px-3 leading-tight"
+                  >
                     Pedir idea a la IA
                   </SecondaryButton>
                   <button
                     type="button"
                     onClick={() => setIdea({ ...idea, offerAi: false, message: null })}
-                    className="t-meta min-h-9 w-full font-semibold underline underline-offset-2"
+                    className="t-meta min-h-11 w-full font-semibold underline underline-offset-2"
                   >
                     Mantener este plato
                   </button>
@@ -229,7 +238,7 @@ function ProposalMeal({
           ) : null}
 
           {idea.message ? (
-            <p className="text-xs leading-5 text-[color:var(--color-danger)]" role="alert">
+            <p className="text-sm leading-5 text-[color:var(--color-danger)]" role="alert">
               {idea.message}
             </p>
           ) : null}
@@ -249,9 +258,9 @@ function ProposalMeal({
               onClick={() => void requestIdea("catalog")}
               disabled={locked || idea.loading}
               aria-label={`Otra idea para la ${mealName}`}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-1 text-xs font-semibold text-[color:var(--color-secondary-hover)] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-1 text-sm font-semibold text-[color:var(--color-secondary-hover)] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
+              <RefreshCw aria-hidden="true" className="h-4 w-4" />
               Otra idea
             </button>
           )}

@@ -94,6 +94,7 @@ function CategoryPill({
       isSelected={isSelected}
       label={category}
       meta={`${checked}/${total}`}
+      aria-label={`${category}: ${checked} de ${total} comprados`}
       onClick={onSelect}
     />
   );
@@ -120,7 +121,7 @@ function CategorySelector({
   return (
     <div
       className={`grid ${gridColumnsClass} gap-2`}
-      role="tablist"
+      role="group"
       aria-label="Categorías de compra"
     >
       {categories.map((categoryProgress) => (
@@ -162,7 +163,7 @@ function ShoppingItemsForCategory({
                 label={capitalizeIngredientName(item.name)}
                 meta={
                   isAvailableInPantry ? (
-                    <span className="mt-1.5 inline-flex w-fit rounded-full bg-[color:var(--color-success-soft)] px-2.5 py-1 text-xs font-semibold text-[color:var(--color-muted-foreground)]">
+                    <span className="mt-1.5 inline-flex w-fit rounded-full bg-[color:var(--color-success-soft)] px-2.5 py-1 text-sm font-semibold text-[color:var(--color-success-hover)]">
                       En despensa
                     </span>
                   ) : null

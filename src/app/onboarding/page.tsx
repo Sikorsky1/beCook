@@ -77,7 +77,7 @@ function StepProgress({ step }: { step: ActiveOnboardingStep }) {
 
 function ErrorText({ error }: { error: StepError }) {
   return error ? (
-    <p role="alert" className="text-[0.78rem] font-semibold text-[color:var(--color-danger)]">
+    <p role="alert" className="text-sm font-semibold text-[color:var(--color-danger)]">
       {error.message}
     </p>
   ) : null;
@@ -317,7 +317,7 @@ export default function OnboardingPage() {
         title="No se ha podido cargar tu cuenta"
         variant="error"
         action={
-          <Button type="button" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+          <Button type="button" onClick={() => setReloadKey((key) => key + 1)}>
             Reintentar
           </Button>
         }
@@ -336,7 +336,7 @@ export default function OnboardingPage() {
         <div className="flex flex-col gap-2 sm:flex-row">
           <Link
             href={authHref("/signup", onboardingPath)}
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[color:var(--color-accent)] px-4 text-sm font-semibold text-white"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--color-accent-strong-hover)]"
           >
             Crear cuenta
           </Link>
@@ -370,7 +370,7 @@ export default function OnboardingPage() {
         <div className="flex flex-col gap-2 sm:flex-row">
           <Link
             href="/create-menu"
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[color:var(--color-accent)] px-4 text-sm font-semibold text-white"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--color-accent-strong-hover)]"
           >
             Crear menú
           </Link>
@@ -465,13 +465,13 @@ export default function OnboardingPage() {
                   type="button"
                   aria-pressed={checked}
                   onClick={() => void togglePantryItem(item.name, item.category)}
-                  className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[0.78rem] font-semibold ${
+                  className={`inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-semibold ${
                     checked
                       ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-foreground)]"
                       : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)]"
                   }`}
                 >
-                  {checked ? <Check aria-hidden="true" className="h-3.5 w-3.5" /> : null}
+                  {checked ? <Check aria-hidden="true" className="h-4 w-4" /> : null}
                   {item.name}
                 </button>
               );
@@ -485,7 +485,7 @@ export default function OnboardingPage() {
             pending={pantrySync.pending}
             onRetry={() => setPantryReload((count) => count + 1)}
           />
-          {pantryNotice ? <p role="status" className="t-meta text-[color:var(--color-accent)]">{pantryNotice}</p> : null}
+          {pantryNotice ? <p role="status" className="t-meta text-[color:var(--color-danger)]">{pantryNotice}</p> : null}
           <ErrorText error={error} />
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
             <Button type="button" variant="soft" onClick={() => setStep("profile")} className="rounded-full">

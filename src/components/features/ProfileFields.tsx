@@ -60,10 +60,10 @@ export function FieldLabel({ children, id }: { children: ReactNode; id?: string 
 }
 
 export const compactInputClass =
-  "w-full rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5 text-[0.78rem] font-medium text-[color:var(--color-foreground)] outline-none transition-colors placeholder:text-[color:var(--color-muted-foreground)] focus:border-[color:var(--color-accent)]";
+  "w-full rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5 text-base font-medium text-[color:var(--color-foreground)] transition-colors placeholder:text-[color:var(--color-muted-foreground)] focus:border-[color:var(--color-accent)]";
 
 const chipBaseClass =
-  "inline-flex min-h-10 cursor-pointer items-center justify-center rounded-full border px-3 py-1.5 text-center text-[0.78rem] font-semibold leading-tight transition-colors focus-within:shadow-[0_0_0_3px_rgba(224,112,60,0.2)]";
+  "inline-flex min-h-11 cursor-pointer items-center justify-center rounded-full border px-3.5 py-2 text-center text-sm font-semibold leading-tight transition-colors has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-[color:var(--color-accent)]";
 
 export function ChoiceChips<T extends string | number>({
   legend,
@@ -90,7 +90,7 @@ export function ChoiceChips<T extends string | number>({
           return (
             <label
               key={String(option.value)}
-              className={`${chipBaseClass} ${type === "radio" ? "min-w-10" : ""} ${
+              className={`${chipBaseClass} ${type === "radio" ? "min-w-11" : ""} ${
                 checked
                   ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-foreground)]"
                   : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
@@ -153,9 +153,9 @@ export function GoalsField({ draft, onChange }: FieldsProps) {
             maxLength={otherGoalMaxLength}
             placeholder="Ejemplo: mejorar digestiones, organizar comidas familiares o cuidar energía diaria."
             onChange={(event) => onChange({ otherGoal: event.target.value.slice(0, otherGoalMaxLength) })}
-            className={`${compactInputClass} min-h-20 resize-y leading-5 placeholder:text-xs placeholder:italic placeholder:text-[color:var(--color-muted-foreground)]`}
+            className={`${compactInputClass} min-h-24 resize-y leading-6 placeholder:italic placeholder:text-[color:var(--color-muted-foreground)]`}
           />
-          <span className="block text-right text-[0.68rem] font-semibold text-[color:var(--color-muted-foreground)]">
+          <span className="t-meta block text-right font-semibold">
             {draft.otherGoal.length}/{otherGoalMaxLength}
           </span>
         </label>
@@ -230,11 +230,11 @@ export function RestrictionsFields({ draft, onChange }: FieldsProps) {
           aria-describedby="disliked-foods-count"
           placeholder="Ejemplo: brócoli, setas"
           onChange={(event) => onChange({ dislikedFoodsText: event.target.value })}
-          className={`${compactInputClass} min-h-20 resize-y leading-5 placeholder:text-xs placeholder:italic placeholder:text-[color:var(--color-muted-foreground)]`}
+          className={`${compactInputClass} min-h-24 resize-y leading-6 placeholder:italic placeholder:text-[color:var(--color-muted-foreground)]`}
         />
         <span
           id="disliked-foods-count"
-          className={`block text-right text-[0.68rem] font-semibold ${
+          className={`t-meta block text-right font-semibold ${
             dislikedFoodsTooLong
               ? "text-[color:var(--color-danger)]"
               : "text-[color:var(--color-muted-foreground)]"

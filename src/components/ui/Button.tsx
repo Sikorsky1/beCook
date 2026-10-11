@@ -12,14 +12,14 @@ type ButtonProps = Omit<ComponentProps<typeof ShadcnButton>, "variant" | "size">
 };
 
 const buttonSizeClasses: Record<ButtonSize, string> = {
-  sm: "min-h-10 px-4 text-sm",
+  sm: "min-h-11 px-4 text-sm",
   md: "min-h-11 px-5 text-sm",
   lg: "min-h-12 px-6 text-sm",
 };
 
 const buttonVariantClasses: Record<ButtonVariant, string> = {
   primary:
-    "border-[color:var(--color-accent)] bg-[color:var(--color-accent)] text-white hover:border-[color:var(--color-accent-hover)] hover:bg-[color:var(--color-accent-hover)] hover:shadow-[0_12px_28px_rgba(224,112,60,0.18)]",
+    "border-[color:var(--color-accent-strong)] bg-[color:var(--color-accent-strong)] text-white hover:border-[color:var(--color-accent-strong-hover)] hover:bg-[color:var(--color-accent-strong-hover)] hover:shadow-[0_12px_28px_rgba(224,112,60,0.18)]",
   secondary:
     "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-secondary-hover)] hover:bg-[#e7efd9] hover:shadow-[0_12px_28px_rgba(107,127,74,0.12)]",
   soft:
@@ -40,7 +40,7 @@ export function Button({
     <ShadcnButton
       type={type}
       className={[
-        "inline-flex touch-manipulation items-center justify-center gap-2 rounded-[var(--radius-control)] border font-semibold shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-200 ease-out hover:-translate-y-0.5 focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.18),0_8px_22px_rgba(46,42,38,0.04)] active:translate-y-0 active:scale-[0.98] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:grayscale-[0.15] disabled:active:scale-100 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100",
+        "inline-flex h-auto touch-manipulation items-center justify-center gap-2 whitespace-normal rounded-[var(--radius-control)] border text-center font-semibold shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-200 ease-out hover:-translate-y-0.5 focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.18),0_8px_22px_rgba(46,42,38,0.04)] active:translate-y-0 active:scale-[0.98] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:grayscale-[0.15] disabled:active:scale-100 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100",
         buttonSizeClasses[size],
         buttonVariantClasses[variant],
         className,
