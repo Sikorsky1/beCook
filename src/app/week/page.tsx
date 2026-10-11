@@ -405,7 +405,7 @@ function WeekPageContent() {
               {weekDays && selectedIsoWeek ? (
                 <Link
                   href={buildWeekHref("/create-menu", selectedIsoWeek)}
-                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-accent-hover)] bg-[color:var(--color-accent-hover)] px-4 text-sm font-semibold text-white shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-[background-color,box-shadow] hover:shadow-[0_12px_28px_rgba(224,112,60,0.24)] hover:brightness-95"
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-accent-strong)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-colors hover:border-[color:var(--color-accent-strong-hover)] hover:bg-[color:var(--color-accent-strong-hover)]"
                 >
                   Editar menú
                 </Link>
@@ -433,13 +433,13 @@ function WeekPageContent() {
                       aria-pressed={cell.hasMenu ? cell.isSelected : undefined}
                       className={`flex min-h-11 flex-col items-center justify-center rounded-xl border-2 transition-colors disabled:cursor-default disabled:opacity-45 ${
                         cell.isToday
-                          ? "bg-[color:var(--color-accent-hover)] text-white"
+                          ? "bg-[color:var(--color-accent-strong)] text-white"
                           : "bg-[color:var(--color-surface)] text-[color:var(--color-foreground)]"
                       } ${
                         cell.isSelected
                           ? "border-[color:var(--color-foreground)]"
                           : cell.isToday
-                            ? "border-[color:var(--color-accent-hover)]"
+                            ? "border-[color:var(--color-accent-strong)]"
                             : "border-[color:var(--color-border)] hover:border-[color:var(--color-border-strong)]"
                       }`}
                     >

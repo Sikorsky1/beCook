@@ -218,7 +218,11 @@ function ProposalMeal({
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <SecondaryButton onClick={() => void requestIdea("ai")} disabled={locked} className="w-full">
+                  <SecondaryButton
+                    onClick={() => void requestIdea("ai")}
+                    disabled={locked}
+                    className="w-full whitespace-normal px-3 leading-tight"
+                  >
                     Pedir idea a la IA
                   </SecondaryButton>
                   <button

@@ -1063,7 +1063,8 @@ export default function CreateMenuPage() {
                 role="tab"
                 id={ids.tab}
                 aria-selected={isSelected}
-                aria-controls={ids.panel}
+                // Only the selected panel is rendered, so only its tab points to it.
+                aria-controls={isSelected ? ids.panel : undefined}
                 tabIndex={isSelected ? 0 : -1}
                 onClick={() => selectMode(option.value)}
                 onKeyDown={(event) => {
@@ -1107,13 +1108,13 @@ export default function CreateMenuPage() {
                   value={menuText}
                   onChange={(event) => setMenuText(event.target.value)}
                   placeholder={`Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\tPollo con arroz\tTortilla francesa`}
-                  className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg"
+                  className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg md:text-lg"
                 />
               ) : (
                 <TextArea
                   defaultValue=""
                   placeholder={`Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\tPollo con arroz\tTortilla francesa`}
-                  className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg"
+                  className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg md:text-lg"
                 />
               )}
             </div>
@@ -1236,7 +1237,7 @@ export default function CreateMenuPage() {
                       aria-pressed={isSelected}
                       className={`flex min-h-11 min-w-0 items-center justify-center rounded-[var(--radius-input)] px-1 text-[0.8125rem] font-semibold transition-colors sm:px-2 sm:text-sm ${
                         isSelected
-                          ? "bg-[color:var(--color-accent-hover)] text-white"
+                          ? "bg-[color:var(--color-accent-strong)] text-white"
                           : "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-accent-soft)] hover:text-[color:var(--color-foreground)]"
                       } disabled:cursor-not-allowed disabled:opacity-60`}
                     >

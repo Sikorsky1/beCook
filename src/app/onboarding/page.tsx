@@ -336,7 +336,7 @@ export default function OnboardingPage() {
         <div className="flex flex-col gap-2 sm:flex-row">
           <Link
             href={authHref("/signup", onboardingPath)}
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[color:var(--color-accent)] px-4 text-sm font-semibold text-white"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--color-accent-strong-hover)]"
           >
             Crear cuenta
           </Link>
@@ -370,7 +370,7 @@ export default function OnboardingPage() {
         <div className="flex flex-col gap-2 sm:flex-row">
           <Link
             href="/create-menu"
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[color:var(--color-accent)] px-4 text-sm font-semibold text-white"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--color-accent-strong-hover)]"
           >
             Crear menú
           </Link>
