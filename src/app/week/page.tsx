@@ -534,7 +534,7 @@ function WeekPageContent() {
                     />
                   ) : (
                     <p className="rounded-[var(--radius-card)] border-2 border-dashed border-[color:var(--color-accent)] bg-[color:var(--color-surface)] px-4 py-3 text-sm leading-6 text-[color:var(--color-muted-foreground)]">
-                      <span className="mr-1.5 rounded-full bg-[color:var(--color-accent)] px-2.5 py-1 text-xs font-semibold text-white">
+                      <span className="mr-1.5 rounded-full bg-[color:var(--color-accent-strong)] px-2.5 py-1 text-xs font-semibold text-white">
                         Hoy
                       </span>
                       No hay comidas planificadas para hoy en este menú.
@@ -579,7 +579,7 @@ function WeekPageContent() {
               {!isLoadingWeek && selectedIsoWeek ? (
                 <Link
                   href={buildWeekHref("/create-menu", selectedIsoWeek)}
-                  className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-accent)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-card)]"
+                  className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-accent-strong-hover)]"
                 >
                   Crear menú
                 </Link>

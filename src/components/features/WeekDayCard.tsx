@@ -278,7 +278,7 @@ export function WeekDayCard({
         className="rounded-[var(--radius-card)] border-2 border-[color:var(--color-accent)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-card)] sm:p-5"
       >
         <div className="flex items-baseline gap-2">
-          <span className="t-meta rounded-full bg-[color:var(--color-accent)] px-2.5 py-1 font-semibold leading-none text-white">
+          <span className="t-meta rounded-full bg-[color:var(--color-accent-strong)] px-2.5 py-1 font-semibold leading-none text-white">
             Hoy
           </span>
           <h2 id={headingId} className="t-h2 text-[color:var(--color-foreground)]">
