@@ -97,7 +97,8 @@ test("week mapping: planned meals keep their card link, free meals never have on
  const rows = weekToApplyWeekDays(weekDaysToSupabaseWeek(days));
  assert.equal(rows[0].lunch_recipe_version_id, V1);
  assert.equal(rows[0].dinner_recipe_version_id, null);
- assert.equal(rows[1].lunch_recipe_version_id, null, "the new client states that the slot has no card");
+ assert.equal("lunch_recipe_version_id" in rows[1], false, "a planned meal without a link sends no key: the account keeps its card");
+ assert.equal(rows[1].dinner_recipe_version_id, undefined);
  // A caller that knows nothing about cards sends no key: apply_week keeps the slot link.
  const legacy = weekToApplyWeekDays({days: [{dayName: "Lunes", lunch: {status: "planned", dishName: "Pisto"}, dinner: {status: "free", dishName: ""}}]});
  assert.equal("lunch_recipe_version_id" in legacy[0], false);
@@ -210,6 +211,19 @@ test("dish card view: a card is shown only for its dish; history says «only the
  assert.equal(reviewed.catalog.reviewedVersionId, V2, "«Usar receta del catálogo», without AI");
  const unreadable = await flow.loadDishCardView({day: "Lunes", date: "", lunch: "Pisto", dinner: "LIBRE", lunchRecipe: {versionId: V2}}, "lunch");
  assert.deepEqual(unreadable, {kind: "title_only", catalog: null, unreadableLink: true});
+});
+
+test("the card just obtained is shown only for exactly that meal, dish and link («Pollo» is not «Pollo al limón»)", () => {
+ const pollo = cardFor("Pollo", V1);
+ const slot = {day: "Lunes", meal: "lunch"};
+ const shown = {key: flow.dishCardSlotKey(slot, "Pollo"), card: pollo};
+ const viewCard = cardFor("Pollo al limón", V2);
+ assert.equal(flow.cardToShow(shown, flow.dishCardSlotKey(slot, "Pollo"), "Pollo", null, null), pollo, "before the week is read again");
+ assert.equal(flow.cardToShow(shown, flow.dishCardSlotKey(slot, "Pollo"), "Pollo", V1, null), pollo);
+ assert.equal(flow.cardToShow(shown, flow.dishCardSlotKey(slot, "Pollo al limón"), "Pollo al limón", V2, viewCard), viewCard);
+ assert.equal(flow.cardToShow(shown, flow.dishCardSlotKey(slot, "Pollo al limón"), "Pollo al limón", null, null), null);
+ assert.equal(flow.cardToShow(shown, flow.dishCardSlotKey(slot, "Pollo"), "Pollo", V2, null), null, "the slot points to another version");
+ assert.equal(flow.cardToShow(shown, flow.dishCardSlotKey({day: "Martes", meal: "lunch"}, "Pollo"), "Pollo", null, null), null, "another day");
 });
 
 test("estimated card: guests never call the API; an unknown week version is not guessed", async () => {

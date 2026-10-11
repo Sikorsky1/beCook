@@ -296,11 +296,14 @@ Pasos 11 y 15 del roadmap (H9). Sin cambios de base de datos.
   cliente, `WeekDay.lunchRecipe` / `dinnerRecipe` = `{versionId}`; ausente = sin ficha.
 - **Escrituras.** Sin permisos directos sobre las tablas de recetas. `apply_week` (misma firma)
   acepta las claves opcionales de vínculo por día: ausentes → conserva el vínculo; `null` → lo
-  quita. `update_week_slot_recipe` enlaza una sola comida con la versión de semana esperada
+  quita. El cliente envía el vínculo solo si el día lo trae, `null` solo para comidas libres y
+  nada para una comida planificada sin vínculo (nunca borra una ficha de la cuenta por una copia
+  antigua). `update_week_slot_recipe` enlaza una sola comida con la versión de semana esperada
   (`applied | duplicate | conflict`, como `update_week_slot`, que no cambia).
   `save_inferred_recipe` guarda una ficha estimada como receta propia (siempre `inferred`,
   dueño `auth.uid()`), reutiliza la receta del mismo título y crea versión nueva solo si cambia el
-  contenido.
+  contenido (máx. 300 recetas por usuario y 5 versiones por receta; el modelo lo fija la ruta y
+  nunca se muestra).
 - **Integridad en cualquier camino de escritura** (trigger `week_days_recipe_links`, también para el
   cliente anterior): comida libre → sin ficha; cambia el título (otra `title_key`) sin cambiar el
   vínculo → se quita; el vínculo debe ser del catálogo o del dueño de la semana (23503); un vínculo

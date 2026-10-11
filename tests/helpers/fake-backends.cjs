@@ -58,7 +58,7 @@ function installFakeBackends(openai) {
    return Response.json(state.weekContext ?? {week: true, frozen: null, current: state.foodContext, restrictionsChanged: false, householdChanged: false});
   }
   if (url.startsWith(`${supabaseUrl}/rest/v1/rpc/save_inferred_recipe`) || url.startsWith(`${supabaseUrl}/rest/v1/rpc/update_week_slot_recipe`)
-   || url.startsWith(`${supabaseUrl}/rest/v1/weeks`) || url.startsWith(`${supabaseUrl}/rest/v1/recipe_versions`)) {
+   || url.startsWith(`${supabaseUrl}/rest/v1/weeks`) || url.startsWith(`${supabaseUrl}/rest/v1/recipe_versions`) || url.startsWith(`${supabaseUrl}/rest/v1/recipes?`)) {
    return dishCardRest(state, url, init, headers, input);
   }
   if (url.startsWith(`${supabaseUrl}/rest/v1/rpc/`)) {
@@ -85,6 +85,7 @@ async function dishCardRest(state, url, init, headers, input) {
   ? (rows.length ? Response.json(rows[0]) : Response.json({code: "PGRST116", message: "no rows"}, {status: 406}))
   : Response.json(rows);
  if (name === "weeks") return answer(state.dishWeek ? [state.dishWeek] : []);
+ if (name === "recipes") return answer([...new Set(state.ownCards.map(row => row.recipes.id))].map(id => ({id})));
  if (name === "recipe_versions") {
   const id = new URL(url).searchParams.get("id");
   if (id) return answer(state.savedCards[id.replace(/^eq\./, "")] ? [state.savedCards[id.replace(/^eq\./, "")]] : []);

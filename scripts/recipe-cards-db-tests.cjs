@@ -88,6 +88,27 @@ async function runRecipeCardTests({ check, sql, id, api, createClient, supabase,
       assert.notEqual(stored[0].hash, stored[1].hash);
     });
 
+    // 2b. The route's lookup of an own card by title, through the real PostgREST; limits and labels.
+    const ownLookup = await recipes.getOwnRecipeCardByTitleFromSupabase(supabase, userA, "LENTEJAS  estofadas");
+    const bLookup = await recipes.getOwnRecipeCardByTitleFromSupabase(userB, userBId, "Lentejas estofadas");
+    const bAsA = await recipes.getOwnRecipeCardByTitleFromSupabase(userB, userA, "Lentejas estofadas");
+    const noCard = await recipes.getOwnRecipeCardByTitleFromSupabase(supabase, userA, "Pollo al limón");
+    const extra = [];
+    for (let n = 3; n <= 6; n++) {
+      extra.push(await supabase.rpc("save_inferred_recipe", { p_title: "Lentejas estofadas", p_card: { ...card(["Paso " + n + "."]), model: n === 3 ? "<b>no es un modelo</b>" : "gpt-test" }, p_request_key: "c2c2c2c2-0000-4000-8000-00000000009" + n }));
+    }
+    const badModel = sql("SELECT inferred_model IS NULL FROM public.recipe_versions WHERE request_key='c2c2c2c2-0000-4000-8000-000000000093';").trim();
+    check("C2 own card by title via PostgREST: latest version of the caller's recipe only; 5 versions per recipe; odd model labels ignored", () => {
+      assert.equal(ownLookup?.versionId, changed.versionId);
+      assert.equal(ownLookup.version, 2);
+      assert.equal(bLookup, null);
+      assert.equal(bAsA, null, "RLS: B never reads A's card even asking for it");
+      assert.equal(noCard, null);
+      assert.deepEqual(extra.slice(0, 3).map((r) => r.data?.version), [3, 4, 5]);
+      assert.equal(extra[3].error?.code, "54000");
+      assert.equal(badModel, "t");
+    });
+
     // 3. Permissions: other users and guests read nothing of A; nobody writes the tables directly.
     const bRead = await userB.from("recipe_versions").select("id").eq("id", first.versionId);
     const anonRead = await anon.from("recipe_versions").select("id").eq("id", first.versionId);
