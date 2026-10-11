@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-12 · Rama: `audit/ola6` (= `audit-opt` + C3 + C4, local sin push; `audit-opt` = `main` tras PR #16) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-12 · Rama: `audit-opt` (= `main` tras PR #17: C3 y C4 en producción) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -496,7 +496,7 @@ Paso 33 del roadmap. Rama `audit/a11y` desde `audit-opt` (02aa5b8), en paralelo 
 | Despliegue be-cook | `dpl_4rua8BAPVUcbXYtww9Xb3F9rquJZ` READY en `www.becook.xyz` y `becook.xyz` (anterior para rollback: `dpl_5obRzbZ6ExPacZGXwkdUxK6c4FKn`). Páginas principales 200 · `/` 307 · `POST` de las 5 rutas de IA sin sesión 401 |
 | Pendiente | Ficha estimada por IA real con sesión (Sergio); revisión del borrador `catalog-v1.json` por la nutricionista; VoiceOver y Safari en iPhone físico (paso 36). `audit-opt` = `main` por fast-forward antes de este commit |
 
-## Iteración C3 — Restricciones contra ingredientes estructurados ✅ local (2026-10-12)
+## Iteración C3 — Restricciones contra ingredientes estructurados ✅ (2026-10-11, en producción el 2026-10-12)
 Paso 18 del roadmap. Rama `audit/c3-restricciones` desde `audit-opt` (6121e34), en paralelo con C4 (pasos 19–20). Sin migraciones ni cambios de BD. Plan de la ola 6, sección C3.
 
 | Elemento | Detalle |
@@ -521,7 +521,7 @@ Paso 18 del roadmap. Rama `audit/c3-restricciones` desde `audit-opt` (6121e34), 
 - Conectar `ReviewedCardLookup` cuando el catálogo tenga fichas revisadas (hoy ninguna; `nextCatalogIdea` es síncrona y la lectura por lotes es asíncrona: no es trivial). Tampoco en `/api/substitute-dish`.
 - Aviso al escribir un plato a mano en el editor (`WeekDayCard`): hoy se ve al abrir la ficha.
 
-## Iteración C4 — Compra desde las fichas y cambio de plato sin perder lo comprado ✅ local (2026-10-12)
+## Iteración C4 — Compra desde las fichas y cambio de plato sin perder lo comprado ✅ (2026-10-11, en producción el 2026-10-12)
 Pasos 19 y 20 del roadmap. Rama `audit/c4-compra` desde `audit-opt` (6121e34), en paralelo con C3 (paso 18). Única iteración de la ola 6 con migración.
 
 | Elemento | Detalle |
@@ -560,6 +560,15 @@ Revisión final; migración en becook-preview y producción (ver «Antes de remo
 | Observaciones | Sin clave de OpenAI, Compra muestra el texto del servidor «Falta configurar OPENAI_API_KEY en el servidor.» (solo pasa en local). El nombre accesible de las casillas de Compra sale como «on» en el árbol de accesibilidad del navegador integrado (la casilla va dentro de su `label`; pendiente de comprobar con VoiceOver). Datos de prueba eliminados con `db:reset` + `db:seed` |
 | Pendiente | Migración `20261013090000_shopping_item_origins` en becook-preview (conector, sin `BEGIN`/`COMMIT` ni `SET LOCAL`; registrar en `applied-preview.json`) y validación en la Preview con OpenAI real (medir el desglose); producción con OK, backup completo y copia `backup_AAAAMMDD` **antes** del merge a `main`. CI tras el push |
 
+## C3 y C4 en producción ✅ (2026-10-12)
+| Elemento | Resultado |
+|---|---|
+| PR | [#17](https://github.com/Sikorsky1/beCook/pull/17) `audit-opt` → `main`, merge commit `f810818` (2026-10-12); checks en verde (application, database, Vercel) |
+| Migración | `shopping_item_origins` aplicada antes del merge con el conector de Supabase (una parte, sin `BEGIN`/`COMMIT`): becook-preview `20261011223501`; becook `20261011223838`, tras backup completo en `~/Backups/becook/2026-10-12-ola6`. Aditiva: 70 listas, 2217 artículos y 85 marcados antes y después. Cuerpos de `save_shopping_list` y `reconcile_shopping_list` idénticos a los de local (md5 sin comentarios) |
+| Validación | Revisión de código de C3 y C4 con sus cambios aplicados; recorrido en navegador en local (compatibilidad en la ficha, compra mixta escalada, cambio de plato con comprados conservados, fallo de IA); Preview sin sesión (rutas de IA 401) |
+| Despliegue be-cook | `dpl_GdXzGVQ4Th2uLJPmweME8kxTeBNQ` READY en `www.becook.xyz` y `becook.xyz` (anterior para rollback: `dpl_4rua8BAPVUcbXYtww9Xb3F9rquJZ`). Páginas principales 200 · `/` 307 · `POST` de las 5 rutas de IA sin sesión 401 |
+| Pendiente | Compra real con IA y desglose de una semana entera sin fichas (latencia) con sesión (Sergio); `ReviewedCardLookup` sin conectar; nombre accesible «on» en las casillas de Compra (paso 34/35). `audit-opt` = `main` por fast-forward antes de este commit |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
@@ -580,9 +589,9 @@ Revisión final; migración en becook-preview y producción (ver «Antes de remo
 | 15 Estados de sincronización visibles | B5 | ✅ | En `audit-opt` desde 2026-10-10, en producción desde 2026-10-10 (PR #14): `SyncStatus` en Semana, Compra, Despensa, Perfil y onboarding; ver B5 e integración |
 | 16 Contexto alimentario por semana | C1 | ✅ | En producción 2026-10-11 (PR #15): perfil leído en servidor, contexto congelado por semana; ver C1 |
 | 17 Fichas de plato versionadas | C2 | ✅ | En producción 2026-10-11 (PR #16): ficha de plato en Semana, `/api/dish-card`, catálogo sin fichas revisadas (borrador pendiente de revisión); ver C2 |
-| 18 Validación de restricciones | C3 | 🟡 | Integrado en `audit/ola6` (local, 2026-10-12): léxico, `checkDish`, compatibilidad en la ficha y bloqueo en propuestas automáticas; ver C3 e integración |
-| 19 Compra desde recetas y despensa | C4 | 🟡 | Integrado en `audit/ola6` (local, 2026-10-12): compra mixta desde fichas escaladas + IA desglosada; migración `shopping_item_origins` solo en local; ver C4 e integración |
-| 20 Reconciliar cambios de plato | C4 | 🟡 | Integrado en `audit/ola6` (local, 2026-10-12): reconciliación en el sitio conservando lo comprado; ver C4 e integración |
+| 18 Validación de restricciones | C3 | ✅ | En producción 2026-10-12 (PR #17); ver C3/C4 |
+| 19 Compra desde recetas y despensa | C4 | ✅ | En producción 2026-10-12 (PR #17); ver C3/C4 |
+| 20 Reconciliar cambios de plato | C4 | ✅ | En producción 2026-10-12 (PR #17); ver C3/C4 |
 | 21 Reglas culinarias y sustitución | C5 | ✅ | En producción desde 2026-10-09 (PR #12): reglas de títulos, «Otra idea» con catálogo y luego IA (flujo `menu`); ver C5 |
 | 22 Importación y borradores | C6 | ⏳ | |
 | 23 Alta, login y recuperación | D1 | ✅ | En producción desde 2026-10-09 (PR #12): alta, login con `next`, recuperación. Auth completado el 2026-10-11 en preview y producción: SMTP Resend, plantillas en español, mínimo 8, confirmación de email activada. Solo queda la protección de contraseñas filtradas; ver D1 |
