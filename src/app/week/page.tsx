@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
+import { DishCard } from "@/components/features/DishCard";
 import { type RequestDishIdea, WeekDayCard } from "@/components/features/WeekDayCard";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { OnboardingGate } from "@/components/session/OnboardingGate";
@@ -81,6 +82,9 @@ function WeekPageContent() {
   // C1: the food context this week was planned with, compared with the profile now.
   const [foodContextEntry, setFoodContextEntry] = useState<{ key: string; status: WeekFoodContextStatus | null } | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
+  // C2: the dish card open (one meal), and «Cambiar plato» handed to that day's editor.
+  const [dishCardSlot, setDishCardSlot] = useState<{ day: string; meal: MealKey } | null>(null);
+  const [dishEditRequest, setDishEditRequest] = useState<{ day: string; meal: MealKey; key: number } | null>(null);
 
   const isCurrentWeek =
     selectedIsoWeek && today ? isSameIsoWeek(selectedIsoWeek, today.week) : false;
@@ -388,16 +392,16 @@ function WeekPageContent() {
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
               {isCurrentWeek ? (
-                <span className="text-xs font-semibold text-[color:var(--color-muted-foreground)]">
+                <span className="text-sm font-semibold text-[color:var(--color-muted-foreground)]">
                   Semana actual
                 </span>
               ) : selectedIsoWeek && today ? (
                 <button
                   type="button"
                   onClick={() => goToWeek(today.week)}
-                  className="min-h-11 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-xs font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)]"
+                  className="min-h-11 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)]"
                 >
-                  ↩ Volver a hoy
+                  <span aria-hidden="true">↩</span> Volver a hoy
                 </button>
               ) : (
                 <span />
@@ -405,7 +409,7 @@ function WeekPageContent() {
               {weekDays && selectedIsoWeek ? (
                 <Link
                   href={buildWeekHref("/create-menu", selectedIsoWeek)}
-                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-accent)] bg-[color:var(--color-accent)] px-4 text-sm font-semibold text-white shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-colors hover:border-[color:var(--color-accent-hover)] hover:bg-[color:var(--color-accent-hover)]"
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-accent-strong)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-colors hover:border-[color:var(--color-accent-strong-hover)] hover:bg-[color:var(--color-accent-strong-hover)]"
                 >
                   Editar menú
                 </Link>
@@ -414,7 +418,7 @@ function WeekPageContent() {
 
             {selectedIsoWeek && weekDayNumbers ? (
               <div
-                className="mt-2.5 grid grid-cols-7 gap-1.5"
+                className="mt-2.5 grid grid-cols-7 gap-1 sm:gap-1.5"
                 role="group"
                 aria-label="Ir a un día de la semana"
               >
@@ -433,20 +437,20 @@ function WeekPageContent() {
                       aria-pressed={cell.hasMenu ? cell.isSelected : undefined}
                       className={`flex min-h-11 flex-col items-center justify-center rounded-xl border-2 transition-colors disabled:cursor-default disabled:opacity-45 ${
                         cell.isToday
-                          ? "bg-[color:var(--color-accent)] text-white"
+                          ? "bg-[color:var(--color-accent-strong)] text-white"
                           : "bg-[color:var(--color-surface)] text-[color:var(--color-foreground)]"
                       } ${
                         cell.isSelected
                           ? "border-[color:var(--color-foreground)]"
                           : cell.isToday
-                            ? "border-[color:var(--color-accent)]"
+                            ? "border-[color:var(--color-accent-strong)]"
                             : "border-[color:var(--color-border)] hover:border-[color:var(--color-border-strong)]"
                       }`}
                     >
-                      <span className="text-[0.82rem] font-bold leading-none">
+                      <span className="text-sm font-bold leading-none">
                         {day.initial}
                       </span>
-                      <span className="mt-0.5 text-[0.62rem] font-semibold leading-none opacity-75">
+                      <span className="mt-1 text-xs font-semibold leading-none">
                         {dayNumber}
                       </span>
                     </button>
@@ -501,6 +505,17 @@ function WeekPageContent() {
         ) : null}
 
         <section>
+          <DishCard
+            slot={dishCardSlot}
+            weekDays={weekDays}
+            identity={{ scope: identity.scope, userId: identity.userId }}
+            isoWeek={selectedIsoWeek}
+            weekServings={foodContextEntry?.key === foodContextKey ? (foodContextEntry.status?.frozen?.servings ?? null) : null}
+            loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
+            onClose={() => setDishCardSlot(null)}
+            onChangeDish={(slot) => setDishEditRequest({ ...slot, key: Date.now() })}
+            onWeekChanged={(days) => setWeekDays(days?.length && selectedIsoWeek ? withWeekDates(days, selectedIsoWeek) : null)}
+          />
           {weekDays && layout ? (
             <div className="flex flex-col gap-4">
               {layout.todayPosition !== null ? (
@@ -512,11 +527,14 @@ function WeekPageContent() {
                       variant="today"
                       onMealChange={handleMealChange}
                       onRequestIdea={handleRequestIdea}
+                      onOpenDish={(dayName, meal) => setDishCardSlot({ day: dayName, meal })}
+                      editRequest={dishEditRequest?.day === layout.todayDay.day ? dishEditRequest : null}
+                      onEditRequestHandled={() => setDishEditRequest(null)}
                       loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
                     />
                   ) : (
                     <p className="rounded-[var(--radius-card)] border-2 border-dashed border-[color:var(--color-accent)] bg-[color:var(--color-surface)] px-4 py-3 text-sm leading-6 text-[color:var(--color-muted-foreground)]">
-                      <span className="mr-1.5 rounded-full bg-[color:var(--color-accent)] px-2.5 py-1 text-xs font-semibold text-white">
+                      <span className="mr-1.5 rounded-full bg-[color:var(--color-accent-strong)] px-2.5 py-1 text-xs font-semibold text-white">
                         Hoy
                       </span>
                       No hay comidas planificadas para hoy en este menú.
@@ -541,6 +559,9 @@ function WeekPageContent() {
                         variant="compact"
                         onMealChange={handleMealChange}
                         onRequestIdea={handleRequestIdea}
+                        onOpenDish={(dayName, meal) => setDishCardSlot({ day: dayName, meal })}
+                        editRequest={dishEditRequest?.day === day.day ? dishEditRequest : null}
+                        onEditRequestHandled={() => setDishEditRequest(null)}
                         loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
                       />
                     </div>
@@ -558,7 +579,7 @@ function WeekPageContent() {
               {!isLoadingWeek && selectedIsoWeek ? (
                 <Link
                   href={buildWeekHref("/create-menu", selectedIsoWeek)}
-                  className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-accent)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-card)]"
+                  className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-accent-strong-hover)]"
                 >
                   Crear menú
                 </Link>

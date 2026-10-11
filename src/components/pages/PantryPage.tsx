@@ -100,6 +100,7 @@ function PantryCategoryPill({
       isSelected={isSelected}
       label={category}
       meta={`${active}/${total}`}
+      aria-label={`${category}: ${active} de ${total} activos`}
       onClick={onSelect}
     />
   );
@@ -126,7 +127,7 @@ function PantryCategorySelector({
   return (
     <div
       className={`grid ${gridColumnsClass} gap-2`}
-      role="tablist"
+      role="group"
       aria-label="Categorías de despensa"
     >
       {categories.map((categoryProgress) => (

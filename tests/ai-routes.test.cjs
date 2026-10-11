@@ -17,13 +17,17 @@ const routes = {
  // Vegan saved profile (C1: read on the server) whose compatible catalogue recipes are already in the week: needs the AI.
  "substitute-dish": {profile: {dietaryRestrictions: ["vegan"]}, valid: {day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: ["Lentejas estofadas", "Espaguetis con brócoli", "Escalibada", "Espárragos, berenjena, calabacín y zanahoria plancha"]}, invalidShape: {day: "Lunes", meal: "brunch"}, maxBytes: 16 * 1024},
  "generate-shopping-list": {valid: {week: [{day: "Lunes", date: "5 oct", lunch: "Lentejas", dinner: "LIBRE"}]}, invalidShape: {week: [{day: "Lunes", date: "5 oct", lunch: {dish: "x"}, dinner: "LIBRE"}]}, maxBytes: 16 * 1024},
+ // C2: one dish of the caller's week (the synthetic week has «Lentejas estofadas» on Monday lunch, version 3).
+ "dish-card": {valid: {isoWeek: "2026-W41", day: "Lunes", meal: "lunch", dish: "Lentejas estofadas", expectedVersion: 3, requestKey: "50000000-0000-4000-8000-000000000001"}, invalidShape: {isoWeek: "2026-W41", day: "Lunes", meal: "brunch", dish: "Lentejas estofadas", expectedVersion: 3, requestKey: "50000000-0000-4000-8000-000000000001"}, maxBytes: 4 * 1024},
 };
+const dishCard = {baseServings: 2, totalMinutes: 50, ingredients: [{name: "lentejas", quantity: 200, unit: "g", category: "despensa", optional: false}], steps: ["Cocer las lentejas con las verduras."], possibleAllergens: []};
 
 let fakes;
 
 function openAIResponder(url, init) {
  if (url.endsWith("/responses")) {
-  return Response.json({id: "resp_test", object: "response", status: "completed", model: "gpt-5.6-sol", output: [{type: "message", id: "msg_test", role: "assistant", status: "completed", content: [{type: "output_text", text: JSON.stringify(shoppingList), annotations: []}]}], usage: {input_tokens: 10, output_tokens: 10, total_tokens: 20}});
+  const content = JSON.parse(init.body).text?.format?.name === "dish_card" ? dishCard : shoppingList;
+  return Response.json({id: "resp_test", object: "response", status: "completed", model: "gpt-5.6-sol", output: [{type: "message", id: "msg_test", role: "assistant", status: "completed", content: [{type: "output_text", text: JSON.stringify(content), annotations: []}]}], usage: {input_tokens: 10, output_tokens: 10, total_tokens: 20}});
  }
  const schema = JSON.parse(init.body).response_format?.json_schema?.name;
  const content = schema === "imported_menu" ? importedMenu : schema === "dish_substitution" ? {dish: "Garbanzos con espinacas y comino"} : selection;

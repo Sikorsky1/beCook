@@ -1,0 +1,742 @@
+{
+  "migration": "20261012090000_recipe_cards",
+  "replaces": {
+    "functions": [
+      {
+        "proname": "apply_week"
+      }
+    ]
+  },
+  "supersedes": {
+    "schema": "apply_week is redefined with the same signature and behaviour (CREATE OR REPLACE): it also reads the optional lunch_recipe_version_id / dinner_recipe_version_id of each day (an absent key keeps the slot link). Everything else is additive: tables recipes and recipe_versions, two nullable columns, FKs, CHECKs and a trigger on week_days, new functions. update_week_slot is not modified. No existing row is modified (links start NULL).",
+    "client": [
+      "Week slots held only a dish title; the week page opened the title editor when a dish was tapped. Now each slot may point to an immutable card version (week_days.*_recipe_version_id) and tapping a dish opens its card.",
+      "No way to get ingredients, servings, time or steps of a dish. Now cards come from the catalogue (reviewed versions, none yet) or are estimated by AI on demand for one dish (/api/dish-card, saved with save_inferred_recipe and linked with update_week_slot_recipe), always labelled as not reviewed."
+    ],
+    "rollout": "The previous client keeps applying weeks and editing dishes with this migration applied: apply_week without the new keys keeps links, and a title change through update_week_slot or a direct week_days write clears the stale link (scripts/recipe-cards-db-tests.cjs, rollout scenario). Order: migration -> code (the new client reads the new columns; it falls back to the old columns if they are missing)."
+  },
+  "columns": [
+    {
+      "table_name": "recipe_versions",
+      "name": "id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "gen_random_uuid()"
+    },
+    {
+      "table_name": "recipe_versions",
+      "name": "recipe_id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipe_versions",
+      "name": "version",
+      "type": "integer",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipe_versions",
+      "name": "base_servings",
+      "type": "smallint",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipe_versions",
+      "name": "total_minutes",
+      "type": "smallint",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipe_versions",
+      "name": "ingredients",
+      "type": "jsonb",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipe_versions",
+      "name": "steps",
+      "type": "jsonb",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipe_versions",
+      "name": "possible_allergens",
+      "type": "text[]",
+      "not_null": true,
+      "default_expr": "'{}'::text[]"
+    },
+    {
+      "table_name": "recipe_versions",
+      "name": "review_status",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipe_versions",
+      "name": "inferred_model",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipe_versions",
+      "name": "content_hash",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipe_versions",
+      "name": "request_key",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipe_versions",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "recipes",
+      "name": "id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "gen_random_uuid()"
+    },
+    {
+      "table_name": "recipes",
+      "name": "owner_user_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipes",
+      "name": "catalog_key",
+      "type": "text",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipes",
+      "name": "title",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipes",
+      "name": "title_key",
+      "type": "text",
+      "not_null": false,
+      "default_expr": "recipe_title_key(title)"
+    },
+    {
+      "table_name": "recipes",
+      "name": "origin",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "recipes",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    },
+    {
+      "table_name": "week_days",
+      "name": "lunch_recipe_version_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_days",
+      "name": "dinner_recipe_version_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    }
+  ],
+  "tables": [
+    {
+      "relname": "recipes",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "relname": "recipe_versions",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "recipe_versions_content_hash_check",
+      "table_name": "recipe_versions",
+      "definition": "CHECK ((char_length(content_hash) <= 80))"
+    },
+    {
+      "conname": "recipe_versions_model_chk",
+      "table_name": "recipe_versions",
+      "definition": "CHECK (((review_status = 'inferred'::text) OR (inferred_model IS NULL)))"
+    },
+    {
+      "conname": "recipes_title_check",
+      "table_name": "recipes",
+      "definition": "CHECK (((char_length(btrim(title)) >= 1) AND (char_length(btrim(title)) <= 200)))"
+    },
+    {
+      "conname": "recipes_origin_check",
+      "table_name": "recipes",
+      "definition": "CHECK ((origin = ANY (ARRAY['catalog'::text, 'ai'::text, 'user'::text])))"
+    },
+    {
+      "conname": "recipes_catalog_owner_chk",
+      "table_name": "recipes",
+      "definition": "CHECK (((origin = 'catalog'::text) = (owner_user_id IS NULL)))"
+    },
+    {
+      "conname": "recipes_catalog_key_chk",
+      "table_name": "recipes",
+      "definition": "CHECK ((((origin = 'catalog'::text) = (catalog_key IS NOT NULL)) AND ((catalog_key IS NULL) OR ((char_length(catalog_key) >= 1) AND (char_length(catalog_key) <= 40)))))"
+    },
+    {
+      "conname": "recipes_pkey",
+      "table_name": "recipes",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "recipes_catalog_key_key",
+      "table_name": "recipes",
+      "definition": "UNIQUE (catalog_key)"
+    },
+    {
+      "conname": "recipes_owner_title_key",
+      "table_name": "recipes",
+      "definition": "UNIQUE NULLS NOT DISTINCT (owner_user_id, title_key)"
+    },
+    {
+      "conname": "recipes_owner_user_id_fkey",
+      "table_name": "recipes",
+      "definition": "FOREIGN KEY (owner_user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "recipe_versions_pkey",
+      "table_name": "recipe_versions",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "recipe_versions_recipe_id_version_key",
+      "table_name": "recipe_versions",
+      "definition": "UNIQUE (recipe_id, version)"
+    },
+    {
+      "conname": "recipe_versions_recipe_id_fkey",
+      "table_name": "recipe_versions",
+      "definition": "FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "recipe_versions_version_check",
+      "table_name": "recipe_versions",
+      "definition": "CHECK (((version >= 1) AND (version <= 1000)))"
+    },
+    {
+      "conname": "recipe_versions_base_servings_check",
+      "table_name": "recipe_versions",
+      "definition": "CHECK (((base_servings >= 1) AND (base_servings <= 12)))"
+    },
+    {
+      "conname": "recipe_versions_total_minutes_check",
+      "table_name": "recipe_versions",
+      "definition": "CHECK (((total_minutes >= 1) AND (total_minutes <= 720)))"
+    },
+    {
+      "conname": "recipe_versions_ingredients_check",
+      "table_name": "recipe_versions",
+      "definition": "CHECK ((recipe_ingredients_issue(ingredients) IS NULL))"
+    },
+    {
+      "conname": "recipe_versions_steps_check",
+      "table_name": "recipe_versions",
+      "definition": "CHECK ((recipe_steps_issue(steps) IS NULL))"
+    },
+    {
+      "conname": "recipe_versions_possible_allergens_check",
+      "table_name": "recipe_versions",
+      "definition": "CHECK (((possible_allergens <@ recipe_allergen_keys()) AND (array_position(possible_allergens, NULL::text) IS NULL)))"
+    },
+    {
+      "conname": "recipe_versions_review_status_check",
+      "table_name": "recipe_versions",
+      "definition": "CHECK ((review_status = ANY (ARRAY['reviewed'::text, 'inferred'::text])))"
+    },
+    {
+      "conname": "recipe_versions_inferred_model_check",
+      "table_name": "recipe_versions",
+      "definition": "CHECK (((char_length(inferred_model) >= 1) AND (char_length(inferred_model) <= 80)))"
+    },
+    {
+      "conname": "week_days_lunch_recipe_version_id_fkey",
+      "table_name": "week_days",
+      "definition": "FOREIGN KEY (lunch_recipe_version_id) REFERENCES recipe_versions(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "week_days_dinner_recipe_version_id_fkey",
+      "table_name": "week_days",
+      "definition": "FOREIGN KEY (dinner_recipe_version_id) REFERENCES recipe_versions(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "week_days_lunch_recipe_planned_chk",
+      "table_name": "week_days",
+      "definition": "CHECK (((lunch_status = 'planned'::text) OR (lunch_recipe_version_id IS NULL)))"
+    },
+    {
+      "conname": "week_days_dinner_recipe_planned_chk",
+      "table_name": "week_days",
+      "definition": "CHECK (((dinner_status = 'planned'::text) OR (dinner_recipe_version_id IS NULL)))"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "recipes",
+      "indexname": "recipes_pkey",
+      "indexdef": "CREATE UNIQUE INDEX recipes_pkey ON public.recipes USING btree (id)"
+    },
+    {
+      "tablename": "recipes",
+      "indexname": "recipes_catalog_key_key",
+      "indexdef": "CREATE UNIQUE INDEX recipes_catalog_key_key ON public.recipes USING btree (catalog_key)"
+    },
+    {
+      "tablename": "recipes",
+      "indexname": "recipes_owner_title_key",
+      "indexdef": "CREATE UNIQUE INDEX recipes_owner_title_key ON public.recipes USING btree (owner_user_id, title_key) NULLS NOT DISTINCT"
+    },
+    {
+      "tablename": "recipe_versions",
+      "indexname": "recipe_versions_pkey",
+      "indexdef": "CREATE UNIQUE INDEX recipe_versions_pkey ON public.recipe_versions USING btree (id)"
+    },
+    {
+      "tablename": "recipe_versions",
+      "indexname": "recipe_versions_recipe_id_version_key",
+      "indexdef": "CREATE UNIQUE INDEX recipe_versions_recipe_id_version_key ON public.recipe_versions USING btree (recipe_id, version)"
+    },
+    {
+      "tablename": "recipe_versions",
+      "indexname": "recipe_versions_request_key_idx",
+      "indexdef": "CREATE UNIQUE INDEX recipe_versions_request_key_idx ON public.recipe_versions USING btree (request_key) WHERE (request_key IS NOT NULL)"
+    },
+    {
+      "tablename": "recipes",
+      "indexname": "recipes_owner_user_id_idx",
+      "indexdef": "CREATE INDEX recipes_owner_user_id_idx ON public.recipes USING btree (owner_user_id)"
+    },
+    {
+      "tablename": "week_days",
+      "indexname": "week_days_lunch_recipe_version_id_idx",
+      "indexdef": "CREATE INDEX week_days_lunch_recipe_version_id_idx ON public.week_days USING btree (lunch_recipe_version_id) WHERE (lunch_recipe_version_id IS NOT NULL)"
+    },
+    {
+      "tablename": "week_days",
+      "indexname": "week_days_dinner_recipe_version_id_idx",
+      "indexdef": "CREATE INDEX week_days_dinner_recipe_version_id_idx ON public.week_days USING btree (dinner_recipe_version_id) WHERE (dinner_recipe_version_id IS NOT NULL)"
+    }
+  ],
+  "policies": [
+    {
+      "tablename": "recipes",
+      "policyname": "recipes_select_catalog",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(owner_user_id IS NULL)",
+      "with_check": null
+    },
+    {
+      "tablename": "recipes",
+      "policyname": "recipes_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(owner_user_id = ( SELECT auth.uid() AS uid))",
+      "with_check": null
+    },
+    {
+      "tablename": "recipe_versions",
+      "policyname": "recipe_versions_select_catalog",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM recipes r\n  WHERE ((r.id = recipe_versions.recipe_id) AND (r.owner_user_id IS NULL))))",
+      "with_check": null
+    },
+    {
+      "tablename": "recipe_versions",
+      "policyname": "recipe_versions_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM recipes r\n  WHERE ((r.id = recipe_versions.recipe_id) AND (r.owner_user_id = ( SELECT auth.uid() AS uid)))))",
+      "with_check": null
+    }
+  ],
+  "functions": [
+    {
+      "proname": "recipe_steps_issue",
+      "definition": "CREATE OR REPLACE FUNCTION public.recipe_steps_issue(p_steps jsonb)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE PARALLEL SAFE\n SET search_path TO ''\nAS $function$\n  SELECT CASE\n    WHEN jsonb_typeof(p_steps) IS DISTINCT FROM 'array' THEN 'steps_not_array'\n    WHEN jsonb_array_length(p_steps) NOT BETWEEN 1 AND 20 THEN 'steps_count'\n    WHEN EXISTS (\n      SELECT 1 FROM jsonb_array_elements(p_steps) AS s(step)\n      WHERE jsonb_typeof(s.step) IS DISTINCT FROM 'string'\n        OR char_length(btrim(s.step #>> '{}')) NOT BETWEEN 1 AND 400\n    ) THEN 'step_invalid'\n    ELSE NULL\n  END;\n$function$\n"
+    },
+    {
+      "proname": "recipe_content_hash",
+      "definition": "CREATE OR REPLACE FUNCTION public.recipe_content_hash(p_base_servings integer, p_total_minutes integer, p_ingredients jsonb, p_steps jsonb, p_allergens text[])\n RETURNS text\n LANGUAGE sql\n IMMUTABLE PARALLEL SAFE\n SET search_path TO ''\nAS $function$\n  SELECT 'rc1:' || md5(jsonb_build_object(\n    'baseServings', p_base_servings,\n    'totalMinutes', p_total_minutes,\n    'ingredients', p_ingredients,\n    'steps', p_steps,\n    'possibleAllergens', coalesce((SELECT jsonb_agg(DISTINCT a ORDER BY a) FROM unnest(p_allergens) AS a), '[]'::jsonb)\n  )::text);\n$function$\n"
+    },
+    {
+      "proname": "update_week_slot_recipe",
+      "definition": "CREATE OR REPLACE FUNCTION public.update_week_slot_recipe(p_iso_year integer, p_iso_week integer, p_position integer, p_meal text, p_recipe_version_id uuid, p_expected_version bigint, p_request_key uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_week public.weeks%ROWTYPE;\n  v_day public.week_days%ROWTYPE;\n  v_title_key text;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'update_week_slot_recipe: authentication required';\n  END IF;\n  IF p_request_key IS NULL OR p_expected_version IS NULL OR p_position NOT BETWEEN 0 AND 6\n     OR p_meal NOT IN ('lunch', 'dinner') THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'update_week_slot_recipe: invalid slot';\n  END IF;\n\n  SELECT * INTO v_week FROM public.weeks\n  WHERE user_id = v_user AND iso_year = p_iso_year AND iso_week = p_iso_week\n  FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'conflict', 'week_id', NULL, 'version', NULL, 'updated_at', NULL);\n  END IF;\n  IF p_request_key = ANY (v_week.request_keys) THEN\n    RETURN jsonb_build_object('status', 'duplicate', 'week_id', v_week.id,\n      'version', v_week.version, 'updated_at', v_week.updated_at);\n  END IF;\n  SELECT * INTO v_day FROM public.week_days WHERE week_id = v_week.id AND position = p_position;\n  IF v_week.version <> p_expected_version OR NOT FOUND\n     OR (CASE WHEN p_meal = 'lunch' THEN v_day.lunch_status ELSE v_day.dinner_status END) <> 'planned' THEN\n    RETURN jsonb_build_object('status', 'conflict', 'week_id', v_week.id,\n      'version', v_week.version, 'updated_at', v_week.updated_at);\n  END IF;\n\n  IF p_recipe_version_id IS NOT NULL THEN\n    SELECT r.title_key INTO v_title_key\n    FROM public.recipe_versions AS v JOIN public.recipes AS r ON r.id = v.recipe_id\n    WHERE v.id = p_recipe_version_id;\n    IF NOT FOUND THEN\n      RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'update_week_slot_recipe: recipe version not found';\n    END IF;\n    IF v_title_key <> public.recipe_title_key(CASE WHEN p_meal = 'lunch' THEN v_day.lunch_dish_name ELSE v_day.dinner_dish_name END) THEN\n      RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'update_week_slot_recipe: the card is for another dish';\n    END IF;\n  END IF;\n\n  UPDATE public.week_days\n  SET lunch_recipe_version_id = CASE WHEN p_meal = 'lunch' THEN p_recipe_version_id ELSE lunch_recipe_version_id END,\n      dinner_recipe_version_id = CASE WHEN p_meal = 'dinner' THEN p_recipe_version_id ELSE dinner_recipe_version_id END\n  WHERE id = v_day.id;\n\n  UPDATE public.weeks\n  SET request_keys = (ARRAY[p_request_key] || request_keys)[1:20]\n  WHERE id = v_week.id\n  RETURNING * INTO v_week;\n\n  RETURN jsonb_build_object('status', 'applied', 'week_id', v_week.id,\n    'version', v_week.version, 'updated_at', v_week.updated_at);\nEND;\n$function$\n"
+    },
+    {
+      "proname": "save_inferred_recipe",
+      "definition": "CREATE OR REPLACE FUNCTION public.save_inferred_recipe(p_title text, p_card jsonb, p_request_key uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_title text := btrim(regexp_replace(coalesce(p_title, ''), '\\s+', ' ', 'g'));\n  v_recipe public.recipes%ROWTYPE;\n  v_existing record;\n  v_latest public.recipe_versions%ROWTYPE;\n  v_ingredients jsonb;\n  v_steps jsonb;\n  v_allergens text[];\n  v_servings integer;\n  v_minutes integer;\n  v_model text;\n  v_hash text;\n  v_version public.recipe_versions%ROWTYPE;\n  v_status text;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'save_inferred_recipe: authentication required';\n  END IF;\n  IF p_request_key IS NULL OR char_length(v_title) NOT BETWEEN 3 AND 200 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_inferred_recipe: invalid title or request key';\n  END IF;\n\n  SELECT v.id, v.version, v.recipe_id, r.owner_user_id INTO v_existing\n  FROM public.recipe_versions AS v JOIN public.recipes AS r ON r.id = v.recipe_id\n  WHERE v.request_key = p_request_key;\n  IF FOUND THEN\n    IF v_existing.owner_user_id IS DISTINCT FROM v_user THEN\n      RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_inferred_recipe: request key already used';\n    END IF;\n    RETURN jsonb_build_object('status', 'duplicate', 'recipe_id', v_existing.recipe_id,\n      'version_id', v_existing.id, 'version', v_existing.version);\n  END IF;\n\n  IF jsonb_typeof(p_card) IS DISTINCT FROM 'object'\n     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_card) AS k\n                WHERE k NOT IN ('baseServings', 'totalMinutes', 'ingredients', 'steps', 'possibleAllergens', 'model'))\n     OR jsonb_typeof(p_card -> 'baseServings') IS DISTINCT FROM 'number'\n     OR jsonb_typeof(p_card -> 'totalMinutes') NOT IN ('number', 'null')\n     OR jsonb_typeof(p_card -> 'possibleAllergens') IS DISTINCT FROM 'array'\n     OR jsonb_typeof(coalesce(p_card -> 'model', 'null'::jsonb)) NOT IN ('string', 'null')\n     OR public.recipe_ingredients_issue(p_card -> 'ingredients') IS NOT NULL\n     OR public.recipe_steps_issue(p_card -> 'steps') IS NOT NULL\n     OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_card -> 'possibleAllergens') AS a(item)\n                WHERE jsonb_typeof(a.item) IS DISTINCT FROM 'string'\n                   OR NOT ((a.item #>> '{}') = ANY (public.recipe_allergen_keys()))) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_inferred_recipe: invalid card';\n  END IF;\n  IF (p_card ->> 'baseServings') !~ '^[0-9]+$' OR (p_card ->> 'baseServings')::integer NOT BETWEEN 1 AND 12\n     OR (jsonb_typeof(p_card -> 'totalMinutes') = 'number'\n         AND ((p_card ->> 'totalMinutes') !~ '^[0-9]+$' OR (p_card ->> 'totalMinutes')::integer NOT BETWEEN 1 AND 720)) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_inferred_recipe: invalid servings or time';\n  END IF;\n\n  -- Canonical content: trimmed texts, allergens sorted without duplicates.\n  v_servings := (p_card ->> 'baseServings')::integer;\n  v_minutes := CASE WHEN jsonb_typeof(p_card -> 'totalMinutes') = 'number' THEN (p_card ->> 'totalMinutes')::integer END;\n  -- The model is only a label for audits (set by /api/dish-card from the OpenAI answer); it is never\n  -- shown to users. Anything that does not look like a model name is ignored (NULL).\n  v_model := btrim(coalesce(p_card ->> 'model', ''));\n  IF v_model !~ '^[A-Za-z0-9._:-]{1,80}$' THEN\n    v_model := NULL;\n  END IF;\n  SELECT jsonb_agg(jsonb_build_object(\n      'name', btrim(i.item ->> 'name'),\n      'quantity', i.item -> 'quantity',\n      'unit', CASE WHEN jsonb_typeof(i.item -> 'unit') = 'string' THEN to_jsonb(btrim(i.item ->> 'unit')) ELSE 'null'::jsonb END,\n      'category', i.item -> 'category',\n      'optional', i.item -> 'optional') ORDER BY i.n)\n    INTO v_ingredients\n  FROM jsonb_array_elements(p_card -> 'ingredients') WITH ORDINALITY AS i(item, n);\n  SELECT jsonb_agg(to_jsonb(btrim(s.step #>> '{}')) ORDER BY s.n) INTO v_steps\n  FROM jsonb_array_elements(p_card -> 'steps') WITH ORDINALITY AS s(step, n);\n  SELECT coalesce(array_agg(DISTINCT a ORDER BY a), '{}') INTO v_allergens\n  FROM jsonb_array_elements_text(p_card -> 'possibleAllergens') AS a;\n  v_hash := public.recipe_content_hash(v_servings, v_minutes, v_ingredients, v_steps, v_allergens);\n\n  -- Saves of one user run one at a time (the recipe count below cannot be raced past the limit).\n  PERFORM pg_advisory_xact_lock(hashtextextended('save_inferred_recipe:' || v_user::text, 0));\n\n  -- One recipe per title of this user.\n  INSERT INTO public.recipes (owner_user_id, title, origin)\n  VALUES (v_user, v_title, 'ai')\n  ON CONFLICT ON CONSTRAINT recipes_owner_title_key DO NOTHING\n  RETURNING * INTO v_recipe;\n  IF FOUND THEN\n    v_status := 'created';\n    IF (SELECT count(*) FROM public.recipes WHERE owner_user_id = v_user) > 300 THEN\n      RAISE EXCEPTION USING ERRCODE = '54000', MESSAGE = 'save_inferred_recipe: too many recipes';\n    END IF;\n  ELSE\n    SELECT * INTO v_recipe FROM public.recipes\n    WHERE owner_user_id = v_user AND title_key = public.recipe_title_key(v_title)\n    FOR UPDATE;\n    SELECT * INTO v_latest FROM public.recipe_versions\n    WHERE recipe_id = v_recipe.id ORDER BY version DESC LIMIT 1;\n    IF FOUND AND v_latest.content_hash = v_hash THEN\n      RETURN jsonb_build_object('status', 'existing', 'recipe_id', v_recipe.id,\n        'version_id', v_latest.id, 'version', v_latest.version);\n    END IF;\n    v_status := CASE WHEN FOUND THEN 'new_version' ELSE 'created' END;\n    IF coalesce(v_latest.version, 0) >= 5 THEN\n      RAISE EXCEPTION USING ERRCODE = '54000', MESSAGE = 'save_inferred_recipe: too many versions of this recipe';\n    END IF;\n  END IF;\n\n  INSERT INTO public.recipe_versions (recipe_id, version, base_servings, total_minutes, ingredients, steps,\n    possible_allergens, review_status, inferred_model, content_hash, request_key)\n  VALUES (v_recipe.id, coalesce(v_latest.version, 0) + 1, v_servings, v_minutes, v_ingredients, v_steps,\n    v_allergens, 'inferred', v_model, v_hash, p_request_key)\n  RETURNING * INTO v_version;\n\n  RETURN jsonb_build_object('status', v_status, 'recipe_id', v_recipe.id,\n    'version_id', v_version.id, 'version', v_version.version);\nEND;\n$function$\n"
+    },
+    {
+      "proname": "apply_week",
+      "definition": "CREATE OR REPLACE FUNCTION public.apply_week(p_iso_year integer, p_iso_week integer, p_days jsonb, p_request_key uuid, p_expected_version bigint DEFAULT NULL::bigint, p_overwrite boolean DEFAULT false, p_generation_request_id uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_names constant text[] := ARRAY['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];\n  v_week public.weeks%ROWTYPE;\n  v_positions integer[];\n  v_count integer;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'apply_week: authentication required';\n  END IF;\n  IF p_request_key IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'apply_week: request key required';\n  END IF;\n  IF p_iso_year IS NULL OR p_iso_week IS NULL OR p_iso_year NOT BETWEEN 2000 AND 2100\n     OR p_iso_week < 1 OR p_iso_week > extract(week FROM make_date(p_iso_year, 12, 28)) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'apply_week: invalid ISO week';\n  END IF;\n  IF jsonb_typeof(p_days) IS DISTINCT FROM 'array' OR jsonb_array_length(p_days) NOT BETWEEN 1 AND 7 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'apply_week: 1 to 7 days required';\n  END IF;\n\n  SELECT count(*), array_agg(DISTINCT d.position) INTO v_count, v_positions\n  FROM jsonb_array_elements(p_days) AS e(day)\n  CROSS JOIN LATERAL jsonb_to_record(e.day) AS d(position integer, day_name text, lunch_status text,\n    lunch_dish_name text, dinner_status text, dinner_dish_name text)\n  WHERE d.position BETWEEN 0 AND 6\n    AND d.day_name = v_names[d.position + 1]\n    AND d.lunch_status IN ('planned', 'free') AND d.dinner_status IN ('planned', 'free')\n    AND char_length(coalesce(d.lunch_dish_name, '')) <= 200\n    AND char_length(coalesce(d.dinner_dish_name, '')) <= 200\n    AND coalesce(jsonb_typeof(e.day -> 'lunch_recipe_version_id'), 'null') IN ('string', 'null')\n    AND coalesce(jsonb_typeof(e.day -> 'dinner_recipe_version_id'), 'null') IN ('string', 'null');\n  IF v_count <> jsonb_array_length(p_days) OR cardinality(v_positions) <> v_count THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'apply_week: invalid or repeated day';\n  END IF;\n\n  -- Create the week if missing; a concurrent creator waits here and then sees the committed row.\n  INSERT INTO public.weeks (user_id, iso_year, iso_week, title, generation_request_id, request_keys)\n  VALUES (v_user, p_iso_year, p_iso_week, '', p_generation_request_id, ARRAY[p_request_key])\n  ON CONFLICT (user_id, iso_year, iso_week)\n    WHERE user_id IS NOT NULL AND iso_year IS NOT NULL AND iso_week IS NOT NULL\n    DO NOTHING\n  RETURNING * INTO v_week;\n\n  IF NOT FOUND THEN\n    SELECT * INTO v_week FROM public.weeks\n    WHERE user_id = v_user AND iso_year = p_iso_year AND iso_week = p_iso_week\n    FOR UPDATE;\n    IF NOT FOUND THEN\n      RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'apply_week: week not accessible';\n    END IF;\n    IF p_request_key = ANY (v_week.request_keys) THEN\n      RETURN jsonb_build_object('status', 'duplicate', 'week_id', v_week.id,\n        'version', v_week.version, 'updated_at', v_week.updated_at);\n    END IF;\n    IF NOT p_overwrite AND v_week.version IS DISTINCT FROM p_expected_version THEN\n      RETURN jsonb_build_object('status', 'conflict', 'week_id', v_week.id,\n        'version', v_week.version, 'updated_at', v_week.updated_at);\n    END IF;\n    -- title is kept: the app never shows or sets it, and replacing the days must not lose it.\n    UPDATE public.weeks\n    SET generation_request_id = coalesce(p_generation_request_id, generation_request_id),\n        request_keys = (ARRAY[p_request_key] || request_keys)[1:20]\n    WHERE id = v_week.id\n    RETURNING * INTO v_week;\n  END IF;\n\n  INSERT INTO public.week_days (week_id, day_name, position, lunch_status, lunch_dish_name,\n    dinner_status, dinner_dish_name)\n  SELECT v_week.id, d.day_name, d.position, d.lunch_status,\n    CASE WHEN d.lunch_status = 'free' THEN '' ELSE coalesce(d.lunch_dish_name, '') END,\n    d.dinner_status,\n    CASE WHEN d.dinner_status = 'free' THEN '' ELSE coalesce(d.dinner_dish_name, '') END\n  FROM jsonb_to_recordset(p_days) AS d(position integer, day_name text, lunch_status text,\n    lunch_dish_name text, dinner_status text, dinner_dish_name text)\n  ON CONFLICT (week_id, position) DO UPDATE\n  SET day_name = EXCLUDED.day_name,\n      lunch_status = EXCLUDED.lunch_status, lunch_dish_name = EXCLUDED.lunch_dish_name,\n      dinner_status = EXCLUDED.dinner_status, dinner_dish_name = EXCLUDED.dinner_dish_name;\n\n  -- Recipe links sent by the client (C2). A day without the key keeps its link; the trigger\n  -- week_days_recipe_links has already cleared it above if that day's title changed.\n  UPDATE public.week_days AS w\n  SET lunch_recipe_version_id = CASE WHEN e.day ? 'lunch_recipe_version_id'\n        THEN (e.day ->> 'lunch_recipe_version_id')::uuid ELSE w.lunch_recipe_version_id END,\n      dinner_recipe_version_id = CASE WHEN e.day ? 'dinner_recipe_version_id'\n        THEN (e.day ->> 'dinner_recipe_version_id')::uuid ELSE w.dinner_recipe_version_id END\n  FROM jsonb_array_elements(p_days) AS e(day)\n  WHERE w.week_id = v_week.id AND w.position = (e.day ->> 'position')::integer\n    AND (e.day ? 'lunch_recipe_version_id' OR e.day ? 'dinner_recipe_version_id');\n\n  DELETE FROM public.week_days WHERE week_id = v_week.id AND position <> ALL (v_positions);\n\n  IF p_generation_request_id IS NOT NULL THEN\n    UPDATE public.menu_generation_requests\n    SET status = 'applied', created_week_id = v_week.id\n    WHERE id = p_generation_request_id AND user_id = v_user;\n    IF NOT FOUND THEN\n      RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'apply_week: generation request not found';\n    END IF;\n  END IF;\n\n  RETURN jsonb_build_object('status', 'applied', 'week_id', v_week.id,\n    'version', v_week.version, 'updated_at', v_week.updated_at);\nEND;\n$function$\n"
+    },
+    {
+      "proname": "recipe_versions_guard",
+      "definition": "CREATE OR REPLACE FUNCTION public.recipe_versions_guard()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_owner uuid;\nBEGIN\n  IF TG_OP = 'INSERT' THEN\n    SELECT owner_user_id INTO v_owner FROM public.recipes WHERE id = NEW.recipe_id;\n    IF FOUND AND (v_owner IS NULL) <> (NEW.review_status = 'reviewed') THEN\n      RAISE EXCEPTION USING ERRCODE = '23514',\n        MESSAGE = 'recipe_versions: only catalogue recipes have reviewed versions, and only reviewed ones';\n    END IF;\n    NEW.content_hash := public.recipe_content_hash(NEW.base_servings, NEW.total_minutes, NEW.ingredients,\n      NEW.steps, NEW.possible_allergens);\n    RETURN NEW;\n  END IF;\n  IF TG_OP = 'DELETE' AND pg_trigger_depth() > 1 THEN\n    RETURN OLD;\n  END IF;\n  RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'recipe_versions: versions are immutable';\nEND;\n$function$\n"
+    },
+    {
+      "proname": "recipes_immutable",
+      "definition": "CREATE OR REPLACE FUNCTION public.recipes_immutable()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nBEGIN\n  RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'recipes: identity is immutable';\nEND;\n$function$\n"
+    },
+    {
+      "proname": "week_days_recipe_links",
+      "definition": "CREATE OR REPLACE FUNCTION public.week_days_recipe_links()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_week_owner uuid;\n  v_recipe_owner uuid;\n  v_recipe_title_key text;\n  v_meal text;\n  v_link uuid;\n  v_dish text;\nBEGIN\n  IF NEW.lunch_status = 'free' THEN NEW.lunch_recipe_version_id := NULL; END IF;\n  IF NEW.dinner_status = 'free' THEN NEW.dinner_recipe_version_id := NULL; END IF;\n\n  IF TG_OP = 'UPDATE' THEN\n    IF public.recipe_title_key(NEW.lunch_dish_name) IS DISTINCT FROM public.recipe_title_key(OLD.lunch_dish_name)\n       AND NEW.lunch_recipe_version_id IS NOT DISTINCT FROM OLD.lunch_recipe_version_id THEN\n      NEW.lunch_recipe_version_id := NULL;\n    END IF;\n    IF public.recipe_title_key(NEW.dinner_dish_name) IS DISTINCT FROM public.recipe_title_key(OLD.dinner_dish_name)\n       AND NEW.dinner_recipe_version_id IS NOT DISTINCT FROM OLD.dinner_recipe_version_id THEN\n      NEW.dinner_recipe_version_id := NULL;\n    END IF;\n    IF NEW.lunch_recipe_version_id IS NOT DISTINCT FROM OLD.lunch_recipe_version_id\n       AND NEW.dinner_recipe_version_id IS NOT DISTINCT FROM OLD.dinner_recipe_version_id\n       AND NEW.week_id IS NOT DISTINCT FROM OLD.week_id THEN\n      RETURN NEW;\n    END IF;\n  END IF;\n\n  IF NEW.lunch_recipe_version_id IS NULL AND NEW.dinner_recipe_version_id IS NULL THEN\n    RETURN NEW;\n  END IF;\n\n  SELECT user_id INTO v_week_owner FROM public.weeks WHERE id = NEW.week_id;\n\n  FOREACH v_meal IN ARRAY ARRAY['lunch', 'dinner'] LOOP\n    v_link := CASE WHEN v_meal = 'lunch' THEN NEW.lunch_recipe_version_id ELSE NEW.dinner_recipe_version_id END;\n    v_dish := CASE WHEN v_meal = 'lunch' THEN NEW.lunch_dish_name ELSE NEW.dinner_dish_name END;\n    CONTINUE WHEN v_link IS NULL;\n    SELECT r.owner_user_id, r.title_key INTO v_recipe_owner, v_recipe_title_key\n    FROM public.recipe_versions AS v JOIN public.recipes AS r ON r.id = v.recipe_id\n    WHERE v.id = v_link;\n    CONTINUE WHEN NOT FOUND; -- the foreign key reports a missing version (23503)\n    IF v_recipe_owner IS NOT NULL AND v_recipe_owner IS DISTINCT FROM v_week_owner THEN\n      RAISE EXCEPTION USING ERRCODE = '23503',\n        MESSAGE = 'week_days: a recipe card must be from the catalogue or of the week owner';\n    END IF;\n    IF v_recipe_title_key <> public.recipe_title_key(v_dish) THEN\n      IF v_meal = 'lunch' THEN NEW.lunch_recipe_version_id := NULL; ELSE NEW.dinner_recipe_version_id := NULL; END IF;\n    END IF;\n  END LOOP;\n  RETURN NEW;\nEND;\n$function$\n"
+    },
+    {
+      "proname": "recipe_title_key",
+      "definition": "CREATE OR REPLACE FUNCTION public.recipe_title_key(p_title text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE PARALLEL SAFE\n SET search_path TO ''\nAS $function$\n  SELECT lower(btrim(regexp_replace(coalesce(p_title, ''), '\\s+', ' ', 'g')));\n$function$\n"
+    },
+    {
+      "proname": "recipe_allergen_keys",
+      "definition": "CREATE OR REPLACE FUNCTION public.recipe_allergen_keys()\n RETURNS text[]\n LANGUAGE sql\n IMMUTABLE PARALLEL SAFE\n SET search_path TO ''\nAS $function$\n  SELECT ARRAY['gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk', 'nuts', 'celery',\n    'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs']::text[];\n$function$\n"
+    },
+    {
+      "proname": "recipe_ingredients_issue",
+      "definition": "CREATE OR REPLACE FUNCTION public.recipe_ingredients_issue(p_ingredients jsonb)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE PARALLEL SAFE\n SET search_path TO ''\nAS $function$\n  SELECT CASE\n    WHEN jsonb_typeof(p_ingredients) IS DISTINCT FROM 'array' THEN 'ingredients_not_array'\n    WHEN jsonb_array_length(p_ingredients) NOT BETWEEN 1 AND 40 THEN 'ingredients_count'\n    WHEN octet_length(p_ingredients::text) > 12000 THEN 'ingredients_size'\n    WHEN EXISTS (\n      SELECT 1 FROM jsonb_array_elements(p_ingredients) AS i(item)\n      WHERE jsonb_typeof(i.item) IS DISTINCT FROM 'object'\n        OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(i.item) AS k)\n           IS DISTINCT FROM ARRAY['category', 'name', 'optional', 'quantity', 'unit']\n        OR jsonb_typeof(i.item -> 'name') IS DISTINCT FROM 'string'\n        OR char_length(btrim(i.item ->> 'name')) NOT BETWEEN 1 AND 80\n        OR jsonb_typeof(i.item -> 'quantity') NOT IN ('number', 'null')\n        OR (jsonb_typeof(i.item -> 'quantity') = 'number'\n            AND ((i.item ->> 'quantity')::numeric <= 0 OR (i.item ->> 'quantity')::numeric > 100000))\n        OR jsonb_typeof(i.item -> 'unit') NOT IN ('string', 'null')\n        OR (jsonb_typeof(i.item -> 'unit') = 'string' AND char_length(btrim(i.item ->> 'unit')) NOT BETWEEN 1 AND 20)\n        OR (i.item ->> 'category') IS NULL\n        OR (i.item ->> 'category') NOT IN ('frutería', 'carnicería', 'pescadería', 'lácteos', 'despensa', 'congelados', 'otros')\n        OR jsonb_typeof(i.item -> 'optional') IS DISTINCT FROM 'boolean'\n    ) THEN 'ingredient_invalid'\n    ELSE NULL\n  END;\n$function$\n"
+    }
+  ],
+  "triggers": [
+    {
+      "table_name": "week_days",
+      "definition": "CREATE TRIGGER week_days_recipe_links BEFORE INSERT OR UPDATE ON public.week_days FOR EACH ROW EXECUTE FUNCTION week_days_recipe_links()"
+    },
+    {
+      "table_name": "recipes",
+      "definition": "CREATE TRIGGER recipes_immutable BEFORE UPDATE ON public.recipes FOR EACH ROW EXECUTE FUNCTION recipes_immutable()"
+    },
+    {
+      "table_name": "recipe_versions",
+      "definition": "CREATE TRIGGER recipe_versions_guard BEFORE INSERT OR DELETE OR UPDATE ON public.recipe_versions FOR EACH ROW EXECUTE FUNCTION recipe_versions_guard()"
+    }
+  ],
+  "grants": [
+    {
+      "table_name": "recipes",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "anon",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "anon",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "recipes",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "recipe_versions",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    }
+  ],
+  "function_grants": [
+    {
+      "routine_name": "recipe_steps_issue",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_content_hash",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "update_week_slot_recipe",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "save_inferred_recipe",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_title_key",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_allergen_keys",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_ingredients_issue",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_steps_issue",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_content_hash",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_title_key",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_allergen_keys",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_ingredients_issue",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_steps_issue",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_content_hash",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "update_week_slot_recipe",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "save_inferred_recipe",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_versions_guard",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipes_immutable",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "week_days_recipe_links",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_title_key",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_allergen_keys",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "recipe_ingredients_issue",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    }
+  ]
+}

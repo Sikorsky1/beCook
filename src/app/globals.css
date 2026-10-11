@@ -10,6 +10,9 @@
   --border-strong: #d9b879;
   --accent: #e0703c;
   --accent-hover: #cc5f30;
+  /* Fondo de CTA con texto blanco: 4,87:1 (hover 6,02:1). --accent da 3,20:1. */
+  --accent-strong: #b8532a;
+  --accent-strong-hover: #a24822;
   --accent-soft: #fff0e3;
   --secondary: #6b7f4a;
   --secondary-hover: #55633a;
@@ -30,13 +33,15 @@
   --destructive: var(--danger);
   --destructive-foreground: #ffffff;
   --input: var(--border);
-  --ring: var(--focus-ring);
+  /* Anillo de shadcn (ring-ring/50): se mantiene pálido para no sumar una banda naranja al outline global. */
+  --ring: color-mix(in srgb, var(--accent) 48%, white);
   --radius-card: 1.5rem;
   --radius-control: 1rem;
   --radius-input: 0.875rem;
   --radius-chip: 999px;
   --shadow-card: 0 10px 30px rgba(46, 42, 38, 0.055);
-  --focus-ring: color-mix(in srgb, var(--accent) 48%, white);
+  /* Outline global de foco: 3,9:1 sobre surface, 3,75:1 sobre background. */
+  --focus-ring: var(--accent-hover);
 }
 
 @theme inline {
@@ -49,6 +54,8 @@
   --color-border-strong: var(--border-strong);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-strong-hover: var(--accent-strong-hover);
   --color-accent-soft: var(--accent-soft);
   --color-secondary: var(--secondary);
   --color-secondary-hover: var(--secondary-hover);
@@ -123,14 +130,6 @@ select {
 }
 
 @layer components {
-  .ui-eyebrow {
-    color: var(--muted-foreground);
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.24em;
-    text-transform: uppercase;
-  }
-
   .ui-title {
     color: var(--foreground);
     font-weight: 600;
@@ -144,12 +143,12 @@ select {
   }
 
   /* Jerarquía tipográfica beCook */
-  .t-eyebrow { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted-foreground); line-height: 1; }
+  .t-eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted-foreground); line-height: 1; }
   .t-h1      { font-size: 1.5rem;  font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; }   /* Título de página */
   .t-h2      { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }    /* Título de sección */
   .t-h3      { font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }  /* Título de tarjeta / día */
   .t-body-strong { font-size: 1rem; font-weight: 600; line-height: 1.4; }   /* valor de plato, label de item de lista */
   .t-body    { font-size: 0.9375rem; font-weight: 500; line-height: 1.5; }  /* cuerpo general */
   .t-meta    { font-size: 0.8125rem; font-weight: 500; line-height: 1.4; color: var(--muted-foreground); } /* fecha, meta, valores secundarios */
-  .t-micro   { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted-foreground); line-height: 1; } /* COMIDA/CENA, estado, meta de item */
+  .t-micro   { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted-foreground); line-height: 1; } /* COMIDA/CENA, estado, meta de item */
 }

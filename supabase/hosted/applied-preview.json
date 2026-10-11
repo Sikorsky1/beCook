@@ -82,6 +82,14 @@
       "sha256": "f38576d675ca0bde658aa49a91d20952be6899d1f6b0660c5f40b12a1b3aa404",
       "appliedAt": "2026-10-11",
       "notes": "Aplicada con el conector de Supabase; 5 funciones y RLS de week_food_contexts comprobadas."
+    },
+    {
+      "version": "20261011204724",
+      "name": "recipe_cards_tables",
+      "source": "supabase/migrations/20261012090000_recipe_cards.sql",
+      "sha256": "9111a06c34776c636a61510a3ea2c0bccedb8399c321a016ca37bf820ee650ca",
+      "appliedAt": "2026-10-11",
+      "notes": "Aplicada con el conector en dos partes (sin BEGIN/COMMIT: el conector ya usa una transacción). Parte 1: todo salvo apply_week. Parte 2: 20261011204749 recipe_cards_apply_week. Comprobado: 27 recetas de catálogo, 0 versiones, RLS activa, 2 columnas en week_days, EXECUTE de apply_week solo authenticated, save_inferred_recipe sin anon."
     }
   ]
 }

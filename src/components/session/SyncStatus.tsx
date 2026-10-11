@@ -15,7 +15,7 @@ const tones: Record<SyncStatusKind, string> = {
 };
 
 function StatusIcon({ kind }: { kind: SyncStatusKind }) {
-  const className = "h-3.5 w-3.5 shrink-0";
+  const className = "h-4 w-4 shrink-0";
   if (kind === "saved") return <Check aria-hidden="true" className={className} />;
   if (kind === "device") return <Smartphone aria-hidden="true" className={className} />;
   if (kind === "pending" || kind === "error") return <CloudOff aria-hidden="true" className={className} />;
@@ -50,7 +50,7 @@ export function SyncStatus({
         <p
           role="status"
           aria-live="polite"
-          className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.72rem] font-semibold ${tones[view.kind]}`}
+          className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold ${tones[view.kind]}`}
         >
           <StatusIcon kind={view.kind} />
           {view.label}
@@ -59,14 +59,14 @@ export function SyncStatus({
           <button
             type="button"
             onClick={() => onRetry?.()}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-3 text-[0.72rem] font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
           >
-            <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
+            <RefreshCw aria-hidden="true" className="h-4 w-4" />
             Reintentar
           </button>
         ) : null}
       </div>
-      {view.detail ? <p className="t-meta text-[0.78rem]">{view.detail}</p> : null}
+      {view.detail ? <p className="t-meta">{view.detail}</p> : null}
     </div>
   );
 }
