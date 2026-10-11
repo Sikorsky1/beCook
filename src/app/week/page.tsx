@@ -529,6 +529,7 @@ function WeekPageContent() {
                       onRequestIdea={handleRequestIdea}
                       onOpenDish={(dayName, meal) => setDishCardSlot({ day: dayName, meal })}
                       editRequest={dishEditRequest?.day === layout.todayDay.day ? dishEditRequest : null}
+                      onEditRequestHandled={() => setDishEditRequest(null)}
                       loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
                     />
                   ) : (
@@ -560,6 +561,7 @@ function WeekPageContent() {
                         onRequestIdea={handleRequestIdea}
                         onOpenDish={(dayName, meal) => setDishCardSlot({ day: dayName, meal })}
                         editRequest={dishEditRequest?.day === day.day ? dishEditRequest : null}
+                        onEditRequestHandled={() => setDishEditRequest(null)}
                         loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
                       />
                     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { GhostButton, PrimaryButton, SecondaryButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
@@ -47,6 +47,8 @@ type WeekDayCardProps = {
   onOpenDish?: (dayName: string, mealKey: MealKey) => void;
   // «Cambiar plato» from the card: opens this card's editor for that meal (a new key each time).
   editRequest?: { meal: MealKey; key: number } | null;
+  // Called once the request has opened the editor, so a later remount does not open it again.
+  onEditRequestHandled?: () => void;
 };
 
 // What the «Otra idea» helper shows for the meal being edited.
@@ -76,6 +78,7 @@ export function WeekDayCard({
   loginReturnPath = "/week",
   onOpenDish,
   editRequest = null,
+  onEditRequestHandled,
 }: WeekDayCardProps) {
   const [editingMeal, setEditingMeal] = useState<MealKey | null>(null);
   const [draftValue, setDraftValue] = useState("");
@@ -96,6 +99,12 @@ export function WeekDayCard({
     setHandledEditKey(editRequest.key);
     startEditing(editRequest.meal);
   }
+
+  useEffect(() => {
+    if (handledEditKey !== null) onEditRequestHandled?.();
+    // Only when a new request has been handled.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handledEditKey]);
 
   // A planned dish opens its card (C2); a free meal opens the editor to add one.
   const openMeal = (mealKey: MealKey) => {
