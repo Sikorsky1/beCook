@@ -49,7 +49,7 @@ export function checkReplacement(
   if (key === normalizeFood(request.currentDish)) return "same_dish";
   if (request.otherDishes.some((other) => normalizeFood(other) === key)) return "duplicate_dish";
   if (request.rejected.some((other) => normalizeFood(other) === key)) return "already_rejected";
-  const check = checkDish({ title: dish, card: card?.reviewStatus === "reviewed" ? card : null }, profile);
+  const check = checkDish({ title: dish, card: card?.reviewStatus === "reviewed" ? card : null }, profile, { automatic: true });
   if (blocksAutomaticProposal(check)) return "restriction_conflict";
   if (mentionsDislikedFood(check)) return "disliked_food";
   if (isGenericDish(dish)) return "generic_dish";

@@ -153,11 +153,26 @@ const broadWords = /^(fruta|frutas|verdura|verduras|hortaliza|hortalizas|especia
 const fillerPrefix = /^(soy |tengo |me da |me dan )?(alergi[ac]o?s?|alergica|alergicas|intolerancia|intolerante|intolerantes|no me gusta|no me gustan|no tomo|no como|nada de|odio|evito|evitar)( (a|al|a la|a los|a las|de|del|de la|de los|de las|con))?\b ?/;
 const articlePrefix = /^(el|la|los|las|un|una|unos|unas|a|al|de|del) /;
 
+// «ninguna», «nada», «n/a», «-»: the same as an empty field.
+const emptyAnswers = new Set(["", "ninguna", "ninguno", "ningunas", "ningunos", "nada", "no", "n a", "na", "ninguna alergia", "sin alergias", "no tengo"]);
+
 export function freeTextItems(text: string): string[] {
+  if (emptyAnswers.has(normalizeFood(text))) return [];
   return text
-    .split(/[,;\n/()·•]+|\s+y\s+|\s+e\s+|\s+o\s+|\s+ni\s+|\./)
+    .split(/[,;\n()·•]+|(?<!\bn)\/|\s+y\s+|\s+e\s+|\s+o\s+|\s+ni\s+|\./i)
     .map((item) => item.trim())
-    .filter(Boolean);
+    .filter((item) => !emptyAnswers.has(normalizeFood(item)));
+}
+
+// The item as the person wrote it, without «alergia a…», «no me gusta…» or an article, for labels
+// («Alergia: fresas», not «Alergia: alergia a las fresas»).
+export function freeTextLabel(item: string): string {
+  const cleaned = item
+    .trim()
+    .replace(/^(soy |tengo |me da |me dan )?(al[eé]rgi\S*|intoleran\S*|no me gustan?|no tomo|no como|nada de|odio|evito|evitar)\s+((a|al|a la|a los|a las|de|del|de la|de los|de las|con)\s+)?/i, "")
+    .replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, "")
+    .trim();
+  return cleaned || item.trim();
 }
 
 type FreeTextResolution = { type: "groups"; groups: FoodNegation[]; term: string } | { type: "entry"; entry: string } | { type: "literal"; phrase: string } | { type: "uninterpretable" };
@@ -196,7 +211,7 @@ export function compileRestrictions(profile: RestrictionProfile): { compiled: Co
   const freeText = (text: string, kind: "other_allergy" | "disliked") => {
     for (const item of freeTextItems(text)) {
       const resolution = resolveFreeText(item);
-      const restriction: Restriction = { kind, value: item, label: item };
+      const restriction: Restriction = { kind, value: item, label: freeTextLabel(item) };
       if (resolution.type === "uninterpretable") uninterpretable.push(item);
       else if (resolution.type === "groups") compiled.push({ restriction, type: "groups", rules: rulesForGroups(resolution.groups) });
       else if (resolution.type === "entry") {
@@ -209,7 +224,7 @@ export function compileRestrictions(profile: RestrictionProfile): { compiled: Co
   for (const value of profile.allergies) {
     if (value === "none") continue;
     if (value === "other") {
-      if (!profile.otherAllergies.trim()) uninterpretable.push("Otra alergia sin especificar");
+      if (!freeTextItems(profile.otherAllergies).length) uninterpretable.push("Otra alergia sin especificar");
       continue;
     }
     const rules = allergyRules[value];
@@ -233,6 +248,7 @@ function textFindings(
   analysis: FoodAnalysis,
   source: "ingredient" | "title",
   optional: boolean,
+  automatic: boolean,
 ): DishFinding[] {
   const base = { restriction: item.restriction, source, ...(source === "ingredient" ? { ingredient: text } : {}) };
   const cap = (certainty: Certainty): Certainty => (optional ? "possible" : certainty);
@@ -246,10 +262,13 @@ function textFindings(
   }
   const findings: DishFinding[] = [];
   for (const groupRule of item.rules) {
-    if (groupRule.negatedBy.some((negation) => analysis.negated.has(negation))) continue;
     for (const mention of analysis.mentions) {
       if (mention.group !== groupRule.group) continue;
-      const certainty = mention.certainty === "possible" || groupRule.certainty === "possible" ? "possible" : "certain";
+      // «pan sin gluten»: not a finding when shown to the person; for an automatic proposal only
+      // possible (a title is not a certification).
+      const negated = groupRule.negatedBy.some((negation) => mention.negated.includes(negation));
+      if (negated && !automatic) continue;
+      const certainty = negated || mention.certainty === "possible" || groupRule.certainty === "possible" ? "possible" : "certain";
       findings.push({ ...base, certainty: cap(certainty), term: mention.term });
     }
   }
@@ -280,7 +299,13 @@ function uniqueFindings(findings: DishFinding[]) {
   });
 }
 
-export function checkDish(dish: { title: string; card: DishCardForCheck | null }, profile: RestrictionProfile): DishCheck {
+// automatic: the check of a generated or proposed dish (menu, ideas), stricter with «sin …».
+export function checkDish(
+  dish: { title: string; card: DishCardForCheck | null },
+  profile: RestrictionProfile,
+  options: { automatic?: boolean } = {},
+): DishCheck {
+  const automatic = options.automatic === true;
   const { compiled, uninterpretable } = compileRestrictions(profile);
   const basis: DishCheckBasis = dish.card ? (dish.card.reviewStatus === "reviewed" ? "reviewed_card" : "inferred_card") : "title_only";
   const titleAnalysis = analyzeFoodText(dish.title);
@@ -288,8 +313,10 @@ export function checkDish(dish: { title: string; card: DishCardForCheck | null }
 
   const findings = uniqueFindings(
     compiled.flatMap((item) => [
-      ...textFindings(item, dish.title, titleAnalysis, "title", false),
-      ...ingredients.flatMap(({ ingredient, analysis }) => textFindings(item, ingredient.name, analysis, "ingredient", ingredient.optional)),
+      ...textFindings(item, dish.title, titleAnalysis, "title", false, automatic),
+      ...ingredients.flatMap(({ ingredient, analysis }) =>
+        textFindings(item, ingredient.name, analysis, "ingredient", ingredient.optional, automatic),
+      ),
       // A listed allergen counts whatever the ingredient names say.
       ...(dish.card ? tagFindings(item, dish.card.possibleAllergens) : []),
     ]),

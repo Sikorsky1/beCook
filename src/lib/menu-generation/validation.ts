@@ -23,7 +23,7 @@ export type MenuProfile = {
 // proposals: a certain conflict, or a possible one of an allergy. Titles are NOT ingredient lists:
 // passing never certifies absence of allergens or cross-contamination.
 export function visibleFoodConflict(name: string, profile: MenuProfile): boolean {
-  return blocksAutomaticProposal(checkDish({ title: name, card: null }, profile));
+  return blocksAutomaticProposal(checkDish({ title: name, card: null }, profile, { automatic: true }));
 }
 
 export function isGenericDish(dish: string) {

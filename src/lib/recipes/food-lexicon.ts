@@ -74,9 +74,10 @@ const definitions: [string, string][] = [
   ["manteca", "pork?"],
   ["solomillo costilla chuleta carrillada carrillera albondiga hamburguesa salchicha embutido pate foie bolonesa ragu callos", "meat pork?"],
   ["jamon de pavo|pechuga de pavo|salchicha de pollo|salchicha de pavo|hamburguesa de pollo|hamburguesa de ternera|hamburguesa de pavo|solomillo de ternera|chuleta de cordero|chuleta de ternera|costilla de ternera|lomo de ternera|lomo de vacuno|lomo de buey", "meat"],
-  ["carne de membrillo|chorizo vegetal|chorizo vegano|hamburguesa vegetal|hamburguesa vegana|salchicha vegetal|salchicha vegana|manteca de cacao|carne vegetal|carne vegana", ""],
+  ["carne de membrillo|carne de pimiento choricero|carne de pimiento|chorizo vegetal|chorizo vegano|hamburguesa vegetal|hamburguesa vegana|salchicha vegetal|salchicha vegana|manteca de cacao|carne vegetal|carne vegana", ""],
   // Meat.
   ["pollo gallina pavo ternera vaca vacuno buey cordero lechazo cabrito conejo liebre pato oca codorniz perdiz faisan jabali venado ciervo carne cecina chuleton entrecot pechuga muslo contramuslo alita higado rinon molleja rabo osobuco kebab fabada cocido", "meat"],
+  ["ternasco", "meat"],
   ["carne picada|rabo de toro|caldo de pollo|caldo de carne|caldo de huesos|caldo de cocido|fondo de carne", "meat"],
   ["caldo de jamon|", "pork"],
   ["caldo", "meat?"],
@@ -95,6 +96,14 @@ const definitions: [string, string][] = [
   ["marisco", "crustaceans molluscs"],
   ["frutos del mar|frutos de mar|caldo de marisco|fumet de marisco", "crustaceans molluscs"],
   ["marinera", "crustaceans? molluscs? fish?"],
+  ["arroz negro|", "molluscs"],
+  ["zarzuela", "fish crustaceans molluscs"],
+  ["mariscada", "crustaceans molluscs"],
+  ["salpicon", "crustaceans? molluscs? fish?"],
+  ["paella", "crustaceans? molluscs? meat?"],
+  ["fideua", "gluten crustaceans? molluscs?"],
+  ["sushi ceviche caviar", "fish"],
+  ["pad thai|", "peanuts? egg? fish?"],
   // Egg.
   ["huevo yema clara tortilla revuelto mayonesa mahonesa merengue flan natillas quiche carbonara", "egg"],
   ["pasta al huevo|fideos al huevo|huevo hilado|salsa tartara|crema catalana", "egg"],
@@ -103,6 +112,7 @@ const definitions: [string, string][] = [
   ["salsa rosa|", "egg?"],
   ["tortilla de trigo|tortilla mexicana|wrap", "gluten"],
   ["tortilla de maiz|", ""],
+  ["huevo de codorniz|huevo de gallina|huevo de pato|huevo de oca", "egg"],
   // Dairy.
   ["leche queso nata mantequilla yogur yogurt kefir requeson bechamel cuajada lacteo lactosa mozzarella parmesano feta ricotta mascarpone burrata cheddar gouda emmental brie camembert provolone manchego gorgonzola roquefort ghee paneer natillas flan carbonara", "dairy"],
   ["crema de leche|suero de leche|suero lacteo|leche condensada|leche evaporada|leche en polvo|proteina de leche|queso de cabra|leche de cabra|leche de oveja|queso de oveja|leche de vaca|queso de vaca|crema catalana", "dairy"],
@@ -122,11 +132,20 @@ const definitions: [string, string][] = [
   ["bechamel", "gluten"],
   ["lasana canelon", "dairy meat?"],
   ["crepe crepes", "gluten egg dairy"],
-  ["harina tostada avena", "gluten?"],
+  ["a la romana|", "gluten egg?"],
+  ["bocadillo bocata sandwich montadito croissant cruasan brownie churro bunuelo gofre tortita burrito ramen gnocchi couscous", "gluten"],
+  ["croissant cruasan brownie gofre tortita", "egg? dairy?"],
+  ["bunuelo ramen", "egg?"],
+  ["tiramisu", "gluten egg dairy alcohol?"],
+  ["ensaladilla", "egg"],
+  ["ensaladilla rusa|", "egg fish?"],
+  ["harina tostada|harina|avena", "gluten?"],
+  // «tostada» is bread only as a noun (see nounOnlyEntries): «almendras tostadas» is not.
+  ["tostada", "gluten"],
   ["harina de avena|", "gluten?"],
   ["salsa de soja|", "soy gluten?"],
   ["cerveza", "gluten alcohol"],
-  ["harina de maiz|harina de arroz|harina de garbanzo|harina de garbanzos|trigo sarraceno|pasta de arroz|pasta de legumbres|pasta de lentejas|pasta de garbanzos|pasta de curry|pasta de aceitunas|fideos de arroz|semola de maiz|semola de arroz|pan de maiz", ""],
+  ["harina de maiz|harina de arroz|harina de garbanzo|harina de garbanzos|trigo sarraceno|pasta de arroz|pasta de legumbres|pasta de lentejas|pasta de garbanzos|pasta de curry|pasta de aceitunas|pasta de tomate|pasta de pimiento|pasta de ajo|fideos de arroz|semola de maiz|semola de arroz|pan de maiz", ""],
   ["pasta de sesamo|", "sesame"],
   ["pasta de miso|", "soy"],
   ["pasta fresca|fideos chinos|noodles", "egg?"],
@@ -234,7 +253,9 @@ for (const entry of entries) {
 }
 
 // Names of a whole group, for «sin …» and for free text («alergia al marisco»).
-const groupNameDefinitions: [string, FoodNegation[]][] = [
+// Third value: only for free text («alergia al trigo» → all gluten); after «sin» it is just a word
+// («pan sin trigo» may still have rye or barley).
+const groupNameDefinitions: [string, FoodNegation[], "free_text_only"?][] = [
   ["carne|carnes", ["meat"]],
   ["cerdo|porcino", ["pork"]],
   ["pescado", ["fish"]],
@@ -245,6 +266,7 @@ const groupNameDefinitions: [string, FoodNegation[]][] = [
   ["leche|lacteo|proteina de leche|proteina de la leche|leche de vaca", ["dairy"]],
   ["lactosa", ["lactose"]],
   ["gluten|celiaco|celiaca|celiaquia", ["gluten"]],
+  ["trigo|cebada|centeno|espelta|kamut|harina de trigo", ["gluten"], "free_text_only"],
   ["fruto seco|fruto de cascara", ["nuts"]],
   ["cacahuete|mani", ["peanuts"]],
   ["alcohol", ["alcohol"]],
@@ -259,7 +281,9 @@ const groupNameDefinitions: [string, FoodNegation[]][] = [
 ];
 
 const groupNames = groupNameDefinitions
-  .flatMap(([phrases, groups]) => phrases.split("|").map((phrase) => ({ tokens: normalizeFood(phrase).split(" "), groups })))
+  .flatMap(([phrases, groups, scope]) =>
+    phrases.split("|").map((phrase) => ({ tokens: normalizeFood(phrase).split(" "), groups, freeTextOnly: scope === "free_text_only" })),
+  )
   .sort((a, b) => b.tokens.length - a.tokens.length);
 
 function matchesAt(tokens: string[], start: number, phrase: string[]) {
@@ -274,6 +298,8 @@ export type FoodMention = {
   entry: string;
   group: FoodGroup;
   certainty: Certainty;
+  // «sin …» right after this term («pan sin gluten», «leche sin lactosa»): cancelled for those.
+  negated: FoodNegation[];
 };
 
 export type FoodAnalysis = {
@@ -281,55 +307,95 @@ export type FoodAnalysis = {
   mentions: FoodMention[];
   // Entries that matched, in order (also exceptions without groups), with their word span.
   hits: { entry: string; start: number; end: number }[];
+  // Every group some «sin …» of the text names (each one only cancels its own term).
   negated: Set<FoodNegation>;
 };
 
 // Group names at a position («sin frutos secos» → nuts). Longest first.
-export function groupNameAt(tokens: string[], start: number): { groups: FoodNegation[]; length: number } | null {
+export function groupNameAt(
+  tokens: string[],
+  start: number,
+  use: "free_text" | "negation" = "free_text",
+): { groups: FoodNegation[]; length: number } | null {
   for (const name of groupNames) {
+    if (use === "negation" && name.freeTextOnly) continue;
     if (matchesAt(tokens, start, name.tokens)) return { groups: name.groups, length: name.tokens.length };
   }
   return null;
 }
+
+// Words that end the term a «sin …» qualifies: «Pasta sin huevo a la carbonara» (carbonara still
+// counts), «Arroz sin marisco con gambas» (gambas still count).
+const termBoundaries = new Set(["con", "y", "e", "o", "a", "al", "sobre", "en", "mas", "sin", "libre", "apto", "apta", "aptos", "aptas"]);
+// Bread only as a noun: first word or after a connector («Tostadas de aguacate», «con tostadas»),
+// never after another food («almendras tostadas»).
+const nounOnlyEntries = new Set(["tostada"]);
+const nounContext = new Set(["con", "y", "e", "o", "una", "unas", "un", "la", "las", "sobre", "de"]);
 
 export function analyzeFoodText(text: string): FoodAnalysis {
   const tokens = normalizeFood(text).split(" ").filter(Boolean);
   const mentions: FoodMention[] = [];
   const hits: FoodAnalysis["hits"] = [];
   const negated = new Set<FoodNegation>();
+  // Term start of the current stretch (after the last boundary word).
+  let termStart = 0;
+  const tracked: (FoodMention & { start: number })[] = [];
   let index = 0;
   while (index < tokens.length) {
-    // «sin X» / «apto para celiacos»: X does not count, and a whole group named after it is cancelled.
+    // «sin X» / «libre de X»: X does not count. Only a group name («gluten», «lactosa», «huevo»)
+    // cancels that group for the term before it; another word («sin queso», «sin trigo») only itself.
     if ((tokens[index] === "sin" || tokens[index] === "libre") && index + 1 < tokens.length) {
       const offset = tokens[index] === "libre" && tokens[index + 1] === "de" ? 2 : 1;
-      const named = groupNameAt(tokens, index + offset);
-      if (named) {
-        named.groups.forEach((group) => negated.add(group));
-        index += offset + named.length;
-        continue;
-      }
-      const entry = entryAt(tokens, index + offset);
-      if (entry) {
-        index += offset + entry.tokens.length;
+      const named = groupNameAt(tokens, index + offset, "negation");
+      const entry = named ? null : entryAt(tokens, index + offset);
+      if (named || entry) {
+        if (named) {
+          negateTracked(tracked, termStart, index, named.groups);
+          named.groups.forEach((group) => negated.add(group));
+        }
+        index += offset + (named ? named.length : (entry as Entry).tokens.length);
+        termStart = index;
         continue;
       }
     }
     if (/^apt[oa]s?$/.test(tokens[index]) && tokens[index + 1] === "para" && /^celiac/.test(tokens[index + 2] ?? "")) {
+      negateTracked(tracked, termStart, index, ["gluten"]);
       negated.add("gluten");
       index += 3;
+      termStart = index;
       continue;
     }
     const entry = entryAt(tokens, index);
-    if (!entry) {
+    if (termBoundaries.has(tokens[index])) {
+      termStart = entry ? index : index + 1;
+      // A phrase may start with a connector («a la romana»).
+      if (!entry) {
+        index += 1;
+        continue;
+      }
+    }
+    if (!entry || (nounOnlyEntries.has(entry.key) && index > 0 && !nounContext.has(tokens[index - 1]))) {
       index += 1;
       continue;
     }
     const term = tokens.slice(index, index + entry.tokens.length).join(" ");
     hits.push({ entry: entry.key, start: index, end: index + entry.tokens.length });
-    for (const mark of entry.marks) mentions.push({ term, entry: entry.key, group: mark.group, certainty: mark.certainty });
+    for (const mark of entry.marks) {
+      tracked.push({ term, entry: entry.key, group: mark.group, certainty: mark.certainty, negated: [], start: index });
+    }
     index += entry.tokens.length;
   }
+  for (const { start: _start, ...mention } of tracked) {
+    void _start;
+    mentions.push(mention);
+  }
   return { tokens, mentions, hits, negated };
+}
+
+function negateTracked(tracked: (FoodMention & { start: number })[], from: number, until: number, groups: FoodNegation[]) {
+  for (const mention of tracked) {
+    if (mention.start >= from && mention.start < until) mention.negated.push(...groups);
+  }
 }
 
 function entryAt(tokens: string[], start: number): Entry | null {

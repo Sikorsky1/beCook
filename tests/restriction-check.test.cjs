@@ -158,7 +158,7 @@ test("checkDish: optional ingredients and possible mentions are possible conflic
  assert.equal(peanut.status, "possible_conflict", "peanuts are possible under «frutos secos»");
  const nutmeg = checkDish({title: "Bechamel ligera", card: card(["leche", "harina de arroz", "nuez moscada"], ["milk"])}, nuts);
  assert.equal(nutmeg.status, "none_detected");
- const glutenFree = checkDish({title: "Bocadillo vegetal", card: card(["pan sin gluten", "tomate", "lechuga"], [])}, profile({allergies: ["gluten"]}));
+ const glutenFree = checkDish({title: "Ensalada de tomate", card: card(["pan sin gluten", "tomate", "lechuga"], [])}, profile({allergies: ["gluten"]}));
  assert.equal(glutenFree.status, "none_detected");
  const lactoseFree = card(["leche sin lactosa", "arroz", "canela"], []);
  assert.equal(checkDish({title: "Arroz con leche", card: lactoseFree}, profile({allergies: ["lactose"]})).status, "conflict", "the title still says «leche»");
@@ -233,4 +233,75 @@ test("replacement checks use the lexicon: free-text allergies are a restriction,
  const reviewedPesto = card(["espaguetis", "albahaca", "piñones", "parmesano"], ["gluten", "milk", "nuts"], "reviewed");
  assert.equal(checkReplacement("Pasta a la genovesa", request, profile({allergies: ["nuts"]}), reviewedPesto), "restriction_conflict");
  assert.equal(checkReplacement("Pasta a la genovesa", request, profile({allergies: ["nuts"]}), {...reviewedPesto, reviewStatus: "inferred"}), null, "only reviewed cards decide automatic ideas");
+});
+
+test("review 1: free-text wheat, barley, rye, spelt and wheat flour mean all gluten", () => {
+ for (const word of ["trigo", "cebada", "centeno", "espelta", "harina de trigo", "alergia al trigo"]) {
+  assert.deepEqual(resolveFreeText(word), {type: "groups", groups: ["gluten"], term: normalizeFood(word).replace(/^alergia al /, "")}, word);
+  assert.equal(checkDish({title: "Pan con tomate", card: null}, profile({allergies: ["other"], otherAllergies: word})).status, "conflict", word);
+ }
+ assert.equal(checkDish({title: "Espaguetis con setas", card: card(["espaguetis", "setas"])}, profile({allergies: ["other"], otherAllergies: "trigo"})).status, "conflict");
+ assert.ok(!analyzeFoodText("Pan sin trigo").mentions[0].negated.includes("gluten"), "«sin trigo» does not make bread gluten-free");
+});
+
+test("review 2: «sin X» cancels only the term it qualifies, never other terms of the group", () => {
+ assert.equal(checkDish({title: "Crema sin leche con mantequilla", card: null}, profile({allergies: ["lactose"]})).status, "conflict");
+ assert.equal(checkDish({title: "Arroz sin marisco con gambas", card: null}, profile({allergies: ["shellfish"]})).status, "conflict");
+ assert.equal(checkDish({title: "Ensalada sin huevo con mayonesa", card: null}, profile({allergies: ["egg"]})).status, "conflict");
+ assert.equal(checkDish({title: "Pasta sin huevo a la carbonara", card: null}, profile({allergies: ["egg"]})).status, "conflict");
+ assert.equal(checkDish({title: "Pan sin gluten con queso", card: null}, profile({allergies: ["gluten"]})).status, "unverifiable", "the bread is gluten-free");
+ assert.equal(checkDish({title: "Pan sin gluten con queso", card: null}, profile({allergies: ["lactose"]})).status, "conflict");
+ assert.equal(checkDish({title: "Bizcocho de chocolate sin huevo", card: null}, profile({allergies: ["egg"]})).status, "unverifiable");
+ assert.equal(checkDish({title: "Pizza sin queso", card: card(["masa de pizza sin gluten", "tomate"])}, profile({allergies: ["gluten"]})).status, "conflict", "the title still says pizza");
+});
+
+test("review 3: dishes whose name implies the ingredients", () => {
+ const expect = [
+  ["Arroz negro", "molluscs"], ["Fideuá", "gluten"], ["Fideuá", "crustaceans?"], ["Paella valenciana", "meat?"], ["Paella", "crustaceans?"],
+  ["Zarzuela de pescado", "fish"], ["Mariscada", "crustaceans"], ["Salpicón", "molluscs?"], ["Calamares a la romana", "gluten"], ["Calamares a la romana", "egg?"],
+  ["Bocadillo de tortilla", "gluten"], ["Bocata de calamares", "gluten"], ["Sándwich mixto", "gluten"], ["Montaditos", "gluten"], ["Croissant", "gluten"],
+  ["Cruasán", "gluten"], ["Brownie", "gluten"], ["Churros", "gluten"], ["Buñuelos", "gluten"], ["Gofres", "gluten"], ["Tortitas", "gluten"],
+  ["Burrito", "gluten"], ["Ramen", "gluten"], ["Gnocchi", "gluten"], ["Ñoquis", "gluten"], ["Couscous", "gluten"], ["Tiramisú", "gluten"],
+  ["Tiramisú", "egg"], ["Tiramisú", "dairy"], ["Ensaladilla rusa", "egg"], ["Sushi", "fish"], ["Ceviche", "fish"], ["Caviar", "fish"],
+  ["Ternasco asado", "meat"], ["Pad thai", "peanuts?"],
+ ];
+ for (const [text, group] of expect) assert.ok(groups(text).includes(group), `${text} → ${group}: ${groups(text)}`);
+ assert.ok(!has("Lechuga romana", "gluten"));
+});
+
+test("review 4: in automatic proposals «sin gluten» / «apto para celíacos» only lowers to possible", () => {
+ const gluten = profile({allergies: ["gluten"]});
+ for (const title of ["Pizza sin gluten", "Pan apto para celíacos"]) {
+  const shown = checkDish({title, card: null}, gluten);
+  assert.equal(shown.findings.length, 0, title);
+  const automatic = checkDish({title, card: null}, gluten, {automatic: true});
+  assert.equal(automatic.status, "possible_conflict", title);
+  assert.equal(blocksAutomaticProposal(automatic), true, "an allergy possible blocks");
+  assert.equal(visibleFoodConflict(title, gluten), true, title);
+ }
+});
+
+test("review 5: «tostada» as an adjective is not bread; flour and oats stay possible", () => {
+ assert.deepEqual(groups("Almendras tostadas"), ["nuts"]);
+ assert.deepEqual(groups("Harina tostada"), ["gluten?"]);
+ assert.deepEqual(groups("Avena"), ["gluten?"]);
+ assert.ok(has("Tostadas de aguacate", "gluten"));
+ assert.ok(has("Aguacate con tostadas", "gluten"));
+});
+
+test("review 6: quail and hen eggs are only egg; pepper flesh and tomato paste have no group", () => {
+ for (const text of ["Huevos de codorniz", "Huevo de gallina", "Huevos de pato", "Huevo de oca"]) assert.deepEqual(groups(text), ["egg"], text);
+ assert.deepEqual(groups("Carne de pimiento choricero"), []);
+ assert.deepEqual(groups("Carne de pimiento"), []);
+ for (const text of ["Pasta de tomate", "Pasta de pimiento", "Pasta de ajo"]) assert.deepEqual(groups(text), [], text);
+ assert.equal(checkDish({title: "Ensalada con huevos de codorniz", card: null}, profile({dietaryRestrictions: ["vegetarian"]})).status, "unverifiable");
+});
+
+test("review 7: «ninguna», «nada», «n/a», «-» are an empty field", () => {
+ for (const text of ["ninguna", "Ninguno", "nada", "No", "n/a", "N/A", "-", "  "]) {
+  assert.deepEqual(compileRestrictions(profile({allergies: ["other"], otherAllergies: text})), {compiled: [], uninterpretable: ["Otra alergia sin especificar"]}, text);
+  assert.equal(hasFoodRestrictions(profile({otherAllergies: text, dislikedFoods: [text].filter((t) => t.trim())})), false, text);
+ }
+ assert.deepEqual(compileRestrictions(profile({otherAllergies: "kiwi, ninguna"})).compiled.map((c) => c.restriction.label), ["kiwi"]);
+ assert.equal(compileRestrictions(profile({allergies: ["other"], otherAllergies: "Alergia a las fresas"})).compiled[0].restriction.label, "fresas");
 });
