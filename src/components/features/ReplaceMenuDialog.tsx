@@ -29,11 +29,16 @@ export function ReplaceMenuDialog({
   onCancel,
 }: ReplaceMenuDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const keepRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      // autoFocus does not act here (the dialog opens after mounting): the safe choice gets focus.
+      keepRef.current?.focus();
+    }
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
@@ -47,43 +52,46 @@ export function ReplaceMenuDialog({
         event.preventDefault();
         onCancel();
       }}
-      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-0 text-[color:var(--color-foreground)] shadow-[0_24px_60px_rgba(32,28,23,0.22)] backdrop:bg-[rgba(46,42,38,0.45)]"
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-0 text-[color:var(--color-foreground)] shadow-[0_24px_60px_rgba(32,28,23,0.22)] backdrop:bg-[rgba(46,42,38,0.45)]"
     >
-      <div className="space-y-4 p-5">
-        <div>
-          <h2 id="replace-menu-title" className="t-h2 text-[color:var(--color-foreground)]">
-            ¿Reemplazar el menú de la {weekTitle}?
-          </h2>
-          <p className="t-meta mt-1">{weekDates}</p>
-        </div>
+      {/* Only the content scrolls: the two actions stay visible on short screens (320×640). */}
+      <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 pb-3">
+          <div>
+            <h2 id="replace-menu-title" className="t-h2 text-[color:var(--color-foreground)]">
+              ¿Reemplazar el menú de la {weekTitle}?
+            </h2>
+            <p className="t-meta mt-1">{weekDates}</p>
+          </div>
 
-        <div>
-          <p className="t-body-strong">Menú que se reemplaza</p>
-          <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto rounded-[var(--radius-input)] bg-[color:var(--color-surface-muted)] px-3 py-2.5 text-sm leading-5">
-            {current.map((day) => (
-              <li key={day.day} className="min-w-0">
-                <span className="font-semibold">{day.day}:</span>{" "}
-                <span className="break-words">
-                  {mealText(day.lunch)} · {mealText(day.dinner)}
-                </span>
-              </li>
-            ))}
+          <div>
+            <p className="t-body-strong">Menú que se reemplaza</p>
+            <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto rounded-[var(--radius-input)] bg-[color:var(--color-surface-muted)] px-3 py-2.5 text-sm leading-5">
+              {current.map((day) => (
+                <li key={day.day} className="min-w-0">
+                  <span className="font-semibold">{day.day}:</span>{" "}
+                  <span className="break-words">
+                    {mealText(day.lunch)} · {mealText(day.dinner)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <ul id="replace-menu-consequences" className="list-disc space-y-1.5 pl-5 text-sm leading-6">
+            <li>La propuesta sustituye este menú entero; los platos no se mezclan.</li>
+            <li>
+              {signedIn
+                ? "Si tienes lista de la compra para esta semana, se preparará otra para los platos nuevos y las marcas de la lista actual no pasan a ella."
+                : "Si tienes lista de la compra para esta semana, dejará de corresponder al menú."}
+            </li>
+            <li>La despensa no cambia.</li>
+            <li>Justo después podrás deshacerlo durante unos segundos.</li>
           </ul>
         </div>
 
-        <ul id="replace-menu-consequences" className="list-disc space-y-1.5 pl-5 text-sm leading-6">
-          <li>La propuesta sustituye este menú entero; los platos no se mezclan.</li>
-          <li>
-            {signedIn
-              ? "Si tienes lista de la compra para esta semana, se preparará otra para los platos nuevos y las marcas de la lista actual no pasan a ella."
-              : "Si tienes lista de la compra para esta semana, dejará de corresponder al menú."}
-          </li>
-          <li>La despensa no cambia.</li>
-          <li>Justo después podrás deshacerlo durante unos segundos.</li>
-        </ul>
-
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <TertiaryButton onClick={onCancel} autoFocus className="w-full sm:w-auto">
+        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-[color:var(--color-border)] px-5 pt-3 pb-5 sm:flex-row sm:justify-end">
+          <TertiaryButton ref={keepRef} onClick={onCancel} autoFocus className="w-full sm:w-auto">
             Mantener el actual
           </TertiaryButton>
           <PrimaryButton onClick={onConfirm} className="w-full sm:w-auto">
