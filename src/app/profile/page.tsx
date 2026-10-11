@@ -336,7 +336,6 @@ export default function ProfilePage() {
         <Button
           type="button"
           variant={canSaveSection(statuses[section]) ? "primary" : "soft"}
-          size="sm"
           disabled={!canSave}
           onClick={() => void save(section)}
           className="w-full rounded-full sm:w-auto"

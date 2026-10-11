@@ -1260,7 +1260,7 @@ export default function CreateMenuPage() {
                   )
                 }
                 placeholder="Ejemplo: cenas ligeras, comidas fáciles de tupper, algo mediterráneo y sin mucho pescado."
-                className="min-h-28 resize-y bg-[color:var(--color-surface)] text-sm"
+                className="min-h-28 resize-y bg-[color:var(--color-surface)]"
               />
               <span className="t-meta block text-right">
                 {freeTextPrompt.length}/{freeTextPromptMaxLength}
@@ -1357,7 +1357,6 @@ export default function CreateMenuPage() {
                 </p>
                 {needsLogin || isLoading ? null : (
                   <TertiaryButton
-                    size="sm"
                     onClick={mode === "generate" ? handleGenerateMenu : handleProcessMenu}
                     className="mt-2 w-full sm:w-auto"
                   >

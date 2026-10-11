@@ -317,7 +317,7 @@ export default function OnboardingPage() {
         title="No se ha podido cargar tu cuenta"
         variant="error"
         action={
-          <Button type="button" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+          <Button type="button" onClick={() => setReloadKey((key) => key + 1)}>
             Reintentar
           </Button>
         }

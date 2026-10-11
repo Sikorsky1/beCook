@@ -48,7 +48,7 @@ export function GenerationProgress({ mode, startedAt, maxSeconds, onCancel }: Ge
         </div>
       </div>
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <TertiaryButton size="sm" onClick={onCancel} className="w-full sm:w-auto">
+        <TertiaryButton onClick={onCancel} className="w-full sm:w-auto">
           Cancelar
         </TertiaryButton>
         <p className="t-meta">
