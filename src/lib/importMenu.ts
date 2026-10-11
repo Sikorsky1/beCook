@@ -1,5 +1,6 @@
 import type { WeekDay } from "@/data/mockWeek";
 import type { IsoWeek } from "@/lib/isoWeek";
+import type { VerifiedFoodContext } from "@/lib/menu-generation/food-context";
 import { withWeekDates } from "@/lib/weekStorage";
 
 export type ImportedMealSlot = {
@@ -37,6 +38,8 @@ export type OpenAIMenuGenerationTelemetry = {
 
 export type GeneratedMenuApiResponse = ImportedMenuResponse & {
   openaiTelemetry?: OpenAIMenuGenerationTelemetry;
+  // C1: servings and restrictions read from the account on the server and used for this menu.
+  foodContext?: VerifiedFoodContext;
 };
 
 export type MenuGenerationApiErrorResponse = {

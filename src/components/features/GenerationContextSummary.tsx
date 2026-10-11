@@ -1,19 +1,26 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { allergyOptions, dietaryRestrictionOptions } from "@/components/features/ProfileFields";
+import type { VerifiedFoodContext } from "@/lib/menu-generation/food-context";
 import type { UserProfile } from "@/lib/supabase/profiles";
 
 // «Generando para…» (D3, step 27): who and what the menu is created for, from the profile this
 // page has loaded. It does not claim the restrictions were verified: the generator checks the
 // name of each dish against them, not a full recipe (that is C2/C3).
-type GenerationContextSummaryProps = {
-  profile: UserProfile | null;
-  peopleCount: number;
-  styleLabels: string[];
-  elaborationLabel: string;
-  pantryCount: number;
-  generating: boolean;
-};
+// With `verified` (C1) it shows what the server read from the account and used for the proposal
+// on screen (`foodContext` of /api/generate-menu) instead of the profile loaded by the page.
+type GenerationContextSummaryProps =
+  | {
+      verified?: undefined;
+      profile: UserProfile | null;
+      peopleCount: number;
+      styleLabels: string[];
+      elaborationLabel: string;
+      pantryCount: number;
+      generating: boolean;
+    }
+  | { verified: VerifiedFoodContext; peopleCount: number };
 
 function labelsFor<T extends string>(values: T[], options: { label: string; value: string }[]) {
   return values
@@ -21,37 +28,56 @@ function labelsFor<T extends string>(values: T[], options: { label: string; valu
     .map((value) => options.find((option) => option.value === value)?.label ?? value);
 }
 
-export function GenerationContextSummary({
-  profile,
-  peopleCount,
-  styleLabels,
-  elaborationLabel,
-  pantryCount,
-  generating,
-}: GenerationContextSummaryProps) {
-  const restrictions = profile ? labelsFor(profile.dietaryRestrictions, dietaryRestrictionOptions) : [];
-  const allergies = profile
-    ? [
-        ...labelsFor(
-          profile.allergies.filter((allergy) => allergy !== "other"),
-          allergyOptions,
-        ),
-        ...(profile.otherAllergies?.trim() ? [profile.otherAllergies.trim()] : []),
-      ]
-    : [];
-  const disliked = profile?.dislikedFoods.filter((food) => food.trim()) ?? [];
+function restrictionRows(food: {
+  dietaryRestrictions: string[];
+  allergies: string[];
+  otherAllergies?: string | null;
+  dislikedFoods: string[];
+}) {
+  const restrictions = labelsFor(food.dietaryRestrictions, dietaryRestrictionOptions);
+  const allergies = [
+    ...labelsFor(
+      food.allergies.filter((allergy) => allergy !== "other"),
+      allergyOptions,
+    ),
+    ...(food.otherAllergies?.trim() ? [food.otherAllergies.trim()] : []),
+  ];
+  const disliked = food.dislikedFoods.filter((item) => item.trim());
+  return [
+    { term: "Restricciones", value: restrictions.length ? restrictions.join(", ") : "Ninguna indicada" },
+    { term: "Alergias", value: allergies.length ? allergies.join(", ") : "Ninguna indicada" },
+    ...(disliked.length ? [{ term: "Evitar", value: disliked.join(", ") }] : []),
+  ];
+}
 
+export function GenerationContextSummary(props: GenerationContextSummaryProps) {
+  if (props.verified) {
+    const { verified } = props;
+    const rows = [
+      { term: "Personas", value: String(verified.servings ?? props.peopleCount) },
+      ...restrictionRows(verified),
+    ];
+
+    return (
+      <SummaryFrame title="Generado para…" rows={rows}>
+        Datos de tu cuenta con los que se ha creado esta propuesta. Comprobamos las restricciones por el nombre de
+        cada plato, no por su receta: revísala.{" "}
+        <Link href="/profile" className="font-semibold underline underline-offset-2">
+          Revisar perfil
+        </Link>
+      </SummaryFrame>
+    );
+  }
+
+  const { profile, peopleCount, styleLabels, elaborationLabel, pantryCount, generating } = props;
   const rows = [
     { term: "Personas", value: String(peopleCount) },
-    {
-      term: "Restricciones",
-      value: profile ? (restrictions.length ? restrictions.join(", ") : "Ninguna indicada") : "Sin perfil",
-    },
-    {
-      term: "Alergias",
-      value: profile ? (allergies.length ? allergies.join(", ") : "Ninguna indicada") : "Sin perfil",
-    },
-    ...(disliked.length ? [{ term: "Evitar", value: disliked.join(", ") }] : []),
+    ...(profile
+      ? restrictionRows(profile)
+      : [
+          { term: "Restricciones", value: "Sin perfil" },
+          { term: "Alergias", value: "Sin perfil" },
+        ]),
     { term: "Estilo", value: `${styleLabels.join(", ")} · ${elaborationLabel.toLowerCase()}` },
     {
       term: "Despensa",
@@ -60,13 +86,32 @@ export function GenerationContextSummary({
   ];
 
   return (
+    <SummaryFrame title={generating ? "Generando para…" : "Se creará para…"} rows={rows}>
+      {profile
+        ? "Según tu perfil. Comprobamos las restricciones por el nombre de cada plato, no por su receta: revisa la propuesta."
+        : "Sin perfil, el menú no tiene en cuenta restricciones ni alergias."}{" "}
+      <Link href="/profile" className="font-semibold underline underline-offset-2">
+        {profile ? "Revisar perfil" : "Completar perfil"}
+      </Link>
+    </SummaryFrame>
+  );
+}
+
+function SummaryFrame({
+  title,
+  rows,
+  children,
+}: {
+  title: string;
+  rows: { term: string; value: string }[];
+  children: ReactNode;
+}) {
+  return (
     <section
-      aria-label={generating ? "Generando para" : "Se creará para"}
+      aria-label={title.replace("…", "")}
       className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3.5 py-3"
     >
-      <p className="t-body-strong text-[color:var(--color-foreground)]">
-        {generating ? "Generando para…" : "Se creará para…"}
-      </p>
+      <p className="t-body-strong text-[color:var(--color-foreground)]">{title}</p>
       <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm leading-5">
         {rows.map((row) => (
           <div key={row.term} className="contents">
@@ -75,14 +120,7 @@ export function GenerationContextSummary({
           </div>
         ))}
       </dl>
-      <p className="t-meta mt-2">
-        {profile
-          ? "Según tu perfil. Comprobamos las restricciones por el nombre de cada plato, no por su receta: revisa la propuesta."
-          : "Sin perfil, el menú no tiene en cuenta restricciones ni alergias."}{" "}
-        <Link href="/profile" className="font-semibold underline underline-offset-2">
-          {profile ? "Revisar perfil" : "Completar perfil"}
-        </Link>
-      </p>
+      <p className="t-meta mt-2">{children}</p>
     </section>
   );
 }

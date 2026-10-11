@@ -310,3 +310,57 @@ test("a malformed profile never gets an idea (its allergies could be skipped)", 
  const idea = requestProposalIdea(weekDays, {day: "Lunes", meal: "lunch"}, [], {allergies: "nuts"}, "catalog", true);
  assert.equal(idea.status, "error");
 });
+
+// Integration of C1 and D3: the proposal carries the context /api/generate-menu used.
+const {parseVerifiedFoodContext} = require("../src/lib/menu-generation/food-context.ts");
+const {proposalIdeaProfile, requestAiIdea} = require("../src/lib/dishSubstitution.ts");
+const serverContext = {servings: 3, dietaryRestrictions: ["vegetarian"], allergies: ["nuts"], otherAllergies: "", dislikedFoods: ["rábano"], version: "fc1:abc"};
+
+test("the verified food context of a response is read as is, and a malformed or absent one is ignored", () => {
+ assert.deepEqual(parseVerifiedFoodContext(serverContext), serverContext);
+ assert.deepEqual(parseVerifiedFoodContext({...serverContext, servings: null}), {...serverContext, servings: null});
+ assert.equal(parseVerifiedFoodContext(undefined), null);
+ assert.equal(parseVerifiedFoodContext({...serverContext, allergies: "nuts"}), null);
+ assert.equal(parseVerifiedFoodContext({...serverContext, version: undefined}), null);
+});
+
+test("preview ideas honour the server context even without (or against) the profile on this device", () => {
+ const slot = {day: "Lunes", meal: "lunch"};
+ const serverProfile = readMenuProfile(serverContext);
+ for (const local of [null, {dietaryRestrictions: [], allergies: [], dislikedFoods: []}]) {
+  const profile = proposalIdeaProfile(serverContext, local);
+  const idea = requestProposalIdea(weekDays, slot, [], profile, "catalog", true);
+  assert.equal(idea.status, "found");
+  assert.equal(checkReplacement(idea.dish, substitutionRequestFor(weekDays, slot, []), serverProfile), null);
+ }
+ // A restriction added on this device after generating also counts.
+ const both = readMenuProfile(proposalIdeaProfile(serverContext, {allergies: ["lactose"], otherAllergies: "sésamo"}));
+ assert.deepEqual(both.allergies.sort(), ["lactose", "nuts"]);
+ assert.deepEqual(both.dietaryRestrictions, ["vegetarian"]);
+ assert.match(both.otherAllergies, /sésamo/);
+ // Imported menus have no server context: the page's profile, unchanged.
+ const local = {dietaryRestrictions: ["vegan"]};
+ assert.equal(proposalIdeaProfile(null, local), local);
+});
+
+test("an AI idea is asked without the profile in the body and rejected if it breaks the context the server used", async () => {
+ const auth = require("../src/lib/supabase/auth.ts");
+ const originalToken = auth.getAccessToken;
+ const originalFetch = global.fetch;
+ const bodies = [];
+ auth.getAccessToken = async () => "token";
+ global.fetch = async (_url, init) => {
+  bodies.push(JSON.parse(init.body));
+  return new Response(JSON.stringify({dish: "Pollo al horno con patatas", source: "ai", foodContext: serverContext}), {status: 200});
+ };
+ try {
+  const idea = await requestAiIdea(weekDays, {day: "Lunes", meal: "lunch"}, [], {}, undefined);
+  assert.equal(idea.status, "error");
+  assert.equal(bodies.length, 1);
+  assert.equal("profile" in bodies[0], false);
+  assert.equal(bodies[0].currentDish, "Lentejas estofadas");
+ } finally {
+  auth.getAccessToken = originalToken;
+  global.fetch = originalFetch;
+ }
+});

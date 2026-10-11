@@ -1,6 +1,7 @@
 import type { WeekDay } from "@/data/mockWeek";
 import { isAiLoginRequiredError, postAi } from "@/lib/ai-client";
 import type { ImportedMenuResponse } from "@/lib/importMenu";
+import { parseVerifiedFoodContext, type VerifiedFoodContext } from "@/lib/menu-generation/food-context";
 import { readMenuProfile } from "@/lib/menu-generation/prompt";
 import {
   catalogAlternative,
@@ -32,6 +33,24 @@ function readProfile(profile: unknown) {
   }
 }
 
+// Ideas for a generated proposal (C1 + D3): the restrictions the server used for it plus the
+// profile this page has loaded, if any. A profile changed after generating can only add
+// restrictions here, never drop the ones the proposal was checked against.
+export function proposalIdeaProfile(verified: VerifiedFoodContext | null, profile: unknown): unknown {
+  if (!verified) return profile;
+  if (profile === null || profile === undefined) return verified;
+  const local = readProfile(profile);
+  if (!local) return profile; // Malformed: requestProposalIdea refuses it, as before.
+  const union = (a: string[], b: string[]) => [...new Set([...a, ...b])];
+  return {
+    ...local,
+    dietaryRestrictions: union(verified.dietaryRestrictions, local.dietaryRestrictions),
+    allergies: union(verified.allergies, local.allergies),
+    otherAllergies: [verified.otherAllergies, local.otherAllergies].filter((text) => text.trim()).join(", "),
+    dislikedFoods: union(verified.dislikedFoods, local.dislikedFoods),
+  };
+}
+
 // Free and local: the next compatible reviewed recipe, or «catalog_exhausted».
 export function nextCatalogIdea(weekDays: WeekDay[], slot: SubstitutionSlot, rejected: string[], profile: unknown): DishIdea {
   const menuProfile = readProfile(profile);
@@ -53,8 +72,11 @@ export async function requestAiIdea(
   const request = substitutionRequestFor(weekDays, slot, rejected);
 
   try {
-    const response = await postAi("/api/substitute-dish", { profile: menuProfile, ...request }, signal);
-    const data = (await response.json().catch(() => null)) as (Partial<SubstituteDishResponse> & { error?: string }) | null;
+    // The server reads the profile of the account (C1); the body carries only the week.
+    const response = await postAi("/api/substitute-dish", request, signal);
+    const data = (await response.json().catch(() => null)) as
+      | (Partial<SubstituteDishResponse> & { error?: string; foodContext?: unknown })
+      | null;
 
     if (!response.ok || !data || typeof data.dish !== "string") {
       return {
@@ -64,8 +86,14 @@ export async function requestAiIdea(
       };
     }
 
-    // Defence in depth: the browser checks the idea against its own copy of the week.
-    if (checkReplacement(data.dish, request, menuProfile)) {
+    // Defence in depth: the browser checks the idea against its own copy of the week, with the
+    // profile it was given and with the context the server says it used.
+    const serverContext = parseVerifiedFoodContext(data.foodContext);
+    const serverProfile = serverContext ? readProfile(serverContext) : null;
+    if (
+      checkReplacement(data.dish, request, menuProfile) ||
+      (serverProfile && checkReplacement(data.dish, request, serverProfile))
+    ) {
       return { status: "error", message: "La propuesta no encaja con tu perfil o con el resto de la semana. Inténtalo de nuevo." };
     }
 

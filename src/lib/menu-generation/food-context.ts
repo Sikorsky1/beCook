@@ -109,6 +109,16 @@ export function parseWeekFoodContextStatus(value: unknown): WeekFoodContextStatu
   };
 }
 
+// The foodContext of a response (or of a stored proposal): null when absent or malformed, so a
+// caller never shows or checks against a context the server did not return.
+export function parseVerifiedFoodContext(value: unknown): VerifiedFoodContext | null {
+  if (!isRecord(value) || typeof value.version !== "string") return null;
+  const restrictions = parseRestrictions(value);
+  if (!restrictions) return null;
+  const servings = Number.isInteger(value.servings) ? (value.servings as number) : null;
+  return { servings, ...restrictions, version: value.version };
+}
+
 export function menuProfileFromContext(context: Extract<CurrentFoodContext, { found: true }>): MenuProfile {
   return readMenuProfile({ ...context.restrictions, ...context.preferences });
 }

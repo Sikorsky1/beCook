@@ -35,7 +35,8 @@ import {
   startGenerationRun,
   type GenerationRun,
 } from "@/lib/createMenuDraft";
-import { replaceProposalDish, requestProposalIdea } from "@/lib/dishSubstitution";
+import { proposalIdeaProfile, replaceProposalDish, requestProposalIdea } from "@/lib/dishSubstitution";
+import { parseVerifiedFoodContext } from "@/lib/menu-generation/food-context";
 import { registerBeforeLoginSaver } from "@/lib/session/login-return";
 import {
   importedMenuToWeekDays,
@@ -202,6 +203,10 @@ export default function CreateMenuPage() {
     importedMenu && targetIsoWeek
       ? importedMenuToWeekDays(importedMenu.days, targetIsoWeek)
       : null;
+  // C1: what /api/generate-menu read from the account and used for the proposal on screen.
+  const proposalFoodContext = parseVerifiedFoodContext(
+    (importedMenu as GeneratedMenuApiResponse | null)?.foodContext,
+  );
   const madridToday = getMadridToday();
   const todayDayName =
     targetIsoWeek && isSameIsoWeek(targetIsoWeek, madridToday.week)
@@ -984,7 +989,9 @@ export default function CreateMenuPage() {
       return { status: "error", message: "No hay propuesta en pantalla." };
     }
 
-    if (!profileReady) {
+    // A generated proposal carries the context the server used (C1): ideas honour it even before
+    // this page has read the profile. Imported menus have none and need the profile.
+    if (!profileReady && !proposalFoodContext) {
       return { status: "error", message: "Aún no hemos podido leer tu perfil. Inténtalo en unos segundos." };
     }
 
@@ -992,7 +999,7 @@ export default function CreateMenuPage() {
       importedWeekDays,
       { day: dayName, meal: mealKey },
       rejected,
-      profile,
+      proposalIdeaProfile(proposalFoodContext, profileReady ? profile : null),
       ideaMode,
       Boolean(identity.userId),
       signal,
@@ -1356,6 +1363,10 @@ export default function CreateMenuPage() {
                   Descartar propuesta
                 </button>
               </div>
+            ) : null}
+
+            {proposalFoodContext ? (
+              <GenerationContextSummary verified={proposalFoodContext} peopleCount={peopleCount} />
             ) : null}
 
             <p className="t-meta">
