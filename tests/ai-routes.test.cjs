@@ -13,7 +13,8 @@ const shoppingList = {items: [{name: "lentejas", quantity: 500, unit: "g", categ
 
 const routes = {
  "generate-menu": {valid: {peopleCount: 2}, invalidShape: {peopleCount: 9}, maxBytes: 64 * 1024},
- "import-menu": {valid: {text: "Lunes\tLentejas\tLIBRE"}, invalidShape: {text: 42}, maxBytes: 32 * 1024},
+ // C6: prose with a day name (an unambiguous paste is parsed without OpenAI).
+ "import-menu": {valid: {text: "El lunes comemos lentejas"}, invalidShape: {text: 42}, maxBytes: 32 * 1024},
  // Vegan saved profile (C1: read on the server) whose compatible catalogue recipes are already in the week: needs the AI.
  "substitute-dish": {profile: {dietaryRestrictions: ["vegan"]}, valid: {day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: ["Lentejas estofadas", "Espaguetis con brócoli", "Escalibada", "Espárragos, berenjena, calabacín y zanahoria plancha"]}, invalidShape: {day: "Lunes", meal: "brunch"}, maxBytes: 16 * 1024},
  "generate-shopping-list": {valid: {week: [{day: "Lunes", date: "5 oct", lunch: "Lentejas", dinner: "LIBRE"}]}, invalidShape: {week: [{day: "Lunes", date: "5 oct", lunch: {dish: "x"}, dinner: "LIBRE"}]}, maxBytes: 16 * 1024},

@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircle, RefreshCw } from "lucide-react";
+import { AlertTriangle, LoaderCircle, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import type { MealKey, WeekDay } from "@/data/mockWeek";
 import { aiLoginRequiredMessage } from "@/lib/ai-client";
 import type { DishIdea } from "@/lib/dishSubstitution";
+import type { ImportedDishWarning } from "@/lib/importWarnings";
 import { loginHrefFor } from "@/lib/navigation";
 
 // One day of the proposal in Crear menú, with «Otra idea» per dish (D3, step 28). An idea
@@ -30,6 +31,9 @@ type ProposalDayCardProps = {
   onRequestIdea: RequestProposalIdea;
   onReplaceDish: (dayName: string, mealKey: MealKey, dish: string) => void;
   loginReturnPath: string;
+  // C6: for an imported menu, what the restriction check and the culinary rules find in each dish
+  // name. Only shown: the user's dish is never changed.
+  dishWarnings?: (dish: string) => ImportedDishWarning[];
 };
 
 const meals = [
@@ -37,7 +41,15 @@ const meals = [
   { key: "dinner", label: "Cena" },
 ] as const;
 
-export function ProposalDayCard({ day, isToday, locked, onRequestIdea, onReplaceDish, loginReturnPath }: ProposalDayCardProps) {
+export function ProposalDayCard({
+  day,
+  isToday,
+  locked,
+  onRequestIdea,
+  onReplaceDish,
+  loginReturnPath,
+  dishWarnings,
+}: ProposalDayCardProps) {
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center gap-2 border-b border-[color:var(--color-border)] px-4 py-3">
@@ -65,6 +77,7 @@ export function ProposalDayCard({ day, isToday, locked, onRequestIdea, onReplace
             onRequestIdea={onRequestIdea}
             onReplaceDish={onReplaceDish}
             loginReturnPath={loginReturnPath}
+            warnings={dishWarnings ? dishWarnings(day[meal.key]) : []}
           />
         ))}
       </div>
@@ -93,6 +106,7 @@ function ProposalMeal({
   onRequestIdea,
   onReplaceDish,
   loginReturnPath,
+  warnings,
 }: {
   dayName: string;
   mealKey: MealKey;
@@ -103,6 +117,7 @@ function ProposalMeal({
   onRequestIdea: RequestProposalIdea;
   onReplaceDish: ProposalDayCardProps["onReplaceDish"];
   loginReturnPath: string;
+  warnings: ImportedDishWarning[];
 }) {
   const isFree = value === "LIBRE";
   const [idea, setIdea] = useState<IdeaState>(() => ({
@@ -178,6 +193,24 @@ function ProposalMeal({
       >
         {isFree ? "Libre" : value}
       </div>
+
+      {warnings.length ? (
+        <ul aria-label={`Avisos de la ${mealName}`} className="mt-1.5 space-y-1">
+          {warnings.map((warning) => (
+            <li
+              key={warning.text}
+              className={`flex gap-1.5 rounded-[var(--radius-input)] px-2.5 py-2 text-sm leading-5 ${
+                warning.tone === "danger"
+                  ? "bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger)]"
+                  : "bg-[color:var(--color-warning-soft)] text-[color:var(--color-foreground)]"
+              }`}
+            >
+              <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{warning.text}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       {isFree ? null : (
         <div className="mt-1.5 space-y-1.5" aria-live="polite">

@@ -388,3 +388,34 @@ test("an AI idea is asked without the profile in the body and rejected if it bre
   global.fetch = originalFetch;
  }
 });
+
+// C6 (step 22, decision 2): a guest imports a clear menu with the device's parser and applies it,
+// with no request at all; the proposal is kept per identity and week until it is saved.
+test("a guest imports a clear menu on the device and applies it without any request or AI", async () => {
+ const {parseMenuTextLocally, localMenuResponse, importedMenuToWeekDays} = require("../src/lib/importMenu.ts");
+ const {describeProposal, readMenuProposal, writeMenuProposal, clearMenuProposal} = require("../src/lib/menuProposal.ts");
+ const originalFetch = global.fetch;
+ let fetched = 0;
+ global.fetch = async () => { fetched++; throw new Error("no network in this test"); };
+ try {
+  const parsed = parseMenuTextLocally("Lunes\tLentejas estofadas\tLIBRE\nMiércoles\tMerluza al horno\tCrema de calabaza");
+  assert.equal(parsed.kind, "parsed");
+  const menu = localMenuResponse(parsed.days, parsed.warnings);
+  writeMenuProposal(guest, W41, {menu, generationRequestId: null, attempt: null, ...describeProposal(menu, "import")});
+  const stored = readMenuProposal(guest, W41);
+  assert.equal(stored.source, "import");
+  assert.equal(stored.parsedBy, "local");
+  assert.equal(stored.contextVersion, null);
+  assert.equal(readMenuProposal(asA, W41), null, "the account that signs in later does not inherit it silently");
+
+  const weekDays = importedMenuToWeekDays(stored.menu.days, W41);
+  const result = await apply(guest, weekDays);
+  assert.equal(result.outcome.menu, "device");
+  clearMenuProposal(guest, W41);
+  assert.equal(readMenuProposal(guest, W41), null);
+  assert.equal(fetched, 0);
+  assert.equal(account.st.pushes, 0);
+ } finally {
+  global.fetch = originalFetch;
+ }
+});

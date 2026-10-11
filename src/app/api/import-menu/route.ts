@@ -3,8 +3,14 @@ import { NextResponse } from "next/server";
 
 import {
   completeImportedMenuDays,
+  hasPlannedDish,
   importedMenuSchema,
+  importErrorMessage,
   isImportedMenuResponse,
+  localMenuResponse,
+  mentionsAnyDayName,
+  parseMenuTextLocally,
+  validateImportText,
   type ImportedMenuResponse,
 } from "@/lib/importMenu";
 import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
@@ -36,6 +42,11 @@ Reglas importantes:
 - Devuelve solo datos compatibles con el esquema solicitado.
 `.trim();
 
+// Error bodies carry a machine reason (C6) so the client can say what to change.
+function importError(status: number, reason: string, error: string) {
+  return NextResponse.json({ error, reason }, { status });
+}
+
 export async function POST(request: Request) {
   const guard = await guardAiRequest(request, aiRequestLimits.importMenu);
 
@@ -43,31 +54,30 @@ export async function POST(request: Request) {
     return guard.response;
   }
 
-  const rawText = guard.body.text;
+  const limits = aiRequestLimits.importMenu;
+  const checked = validateImportText(guard.body.text, limits);
 
-  if (rawText !== undefined && typeof rawText !== "string") {
-    return NextResponse.json(
-      { error: "El menú pegado debe ser texto." },
-      { status: 400 },
-    );
+  if (!checked.ok) {
+    return importError(400, checked.reason, checked.error);
   }
 
-  const text = (rawText ?? "").trim();
+  const { text } = checked;
 
-  if (!text) {
-    return NextResponse.json(
-      { error: "Pega un menú antes de procesarlo." },
-      { status: 400 },
-    );
+  // C6: the same local attempt the browser makes first. A client deployed before C6 still gets an
+  // unambiguous paste ordered without the AI, without opening a usage record and without cost.
+  const local = parseMenuTextLocally(text);
+
+  if (local.kind === "parsed") {
+    if (!hasPlannedDish(local.days)) {
+      return importError(422, "empty_menu", importErrorMessage("empty_menu", "", limits));
+    }
+
+    return NextResponse.json(localMenuResponse(local.days, local.warnings));
   }
 
-  if (text.length > aiRequestLimits.importMenu.maxTextLength) {
-    return NextResponse.json(
-      {
-        error: `El menú pegado es demasiado largo (máximo ${aiRequestLimits.importMenu.maxTextLength} caracteres).`,
-      },
-      { status: 400 },
-    );
+  // Not a weekly menu at all: answered before the AI, free.
+  if (!mentionsAnyDayName(text)) {
+    return importError(422, "no_menu_found", importErrorMessage("no_menu_found", "", limits));
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -99,6 +109,9 @@ export async function POST(request: Request) {
           {
             model: OPENAI_MODEL,
             store: false,
+            // Extraction: little reasoning, and a cap on the answer (a week is ~600 tokens).
+            ...(/^gpt-5/.test(OPENAI_MODEL) ? { reasoning_effort: "low" as const } : {}),
+            max_completion_tokens: limits.maxCompletionTokens,
             response_format: {
               type: "json_schema",
               json_schema: {
@@ -139,15 +152,13 @@ export async function POST(request: Request) {
       }),
     });
 
-    const content = completion.choices[0]?.message?.content;
+    const choice = completion.choices[0];
+    const content = choice?.message?.content;
 
-    if (!content) {
-      outcome.reason = "empty_output";
+    if (!content || choice?.finish_reason === "length") {
+      outcome.reason = choice?.finish_reason === "length" ? "truncated_output" : "empty_output";
       return withRequestId(
-        NextResponse.json(
-          { error: "OpenAI no devolvió contenido para interpretar el menú." },
-          { status: 502 },
-        ),
+        importError(502, outcome.reason, "No hemos podido ordenar el menú. Inténtalo de nuevo."),
         usage.requestId,
       );
     }
@@ -163,19 +174,26 @@ export async function POST(request: Request) {
     if (!isImportedMenuResponse(parsedJson)) {
       outcome.reason = "invalid_output";
       return withRequestId(
-        NextResponse.json(
-          { error: "La respuesta del modelo no tiene el formato esperado." },
-          { status: 502 },
-        ),
+        importError(502, "invalid_output", "No hemos podido ordenar el menú. Inténtalo de nuevo."),
         usage.requestId,
       );
     }
 
     const parsedMenu = parsedJson as ImportedMenuResponse;
     const completedMenu: ImportedMenuResponse = {
-      ...parsedMenu,
+      week: parsedMenu.week,
       days: completeImportedMenuDays(text, parsedMenu.days),
+      parsedBy: "ai",
     };
+
+    // The AI read it and found no dish: a 422 that still counts (it used tokens, A4).
+    if (!hasPlannedDish(completedMenu.days)) {
+      outcome.reason = "empty_menu";
+      return withRequestId(
+        importError(422, "empty_menu", importErrorMessage("empty_menu_ai", "", limits)),
+        usage.requestId,
+      );
+    }
 
     outcome.status = "succeeded";
     outcome.reason = undefined;
@@ -191,9 +209,10 @@ export async function POST(request: Request) {
           : "error";
 
     return withRequestId(
-      NextResponse.json(
-        { error: "Ha fallado el procesamiento del menú. Inténtalo de nuevo." },
-        { status: 502 },
+      importError(
+        502,
+        outcome.reason === "timeout" ? "timeout" : "ai_failed",
+        "Ha fallado el procesamiento del menú. Inténtalo de nuevo.",
       ),
       usage.requestId,
     );
