@@ -204,6 +204,9 @@ export default function CreateMenuPage() {
   const importedMenuRef = useRef(importedMenu);
   const isApplyingWeekRef = useRef(false);
   const applyAttemptRef = useRef<ApplyWeekAttempt<ImportedMenuResponse> | null>(null);
+  // M-1: scope whose people count came from a restored draft. The draft is read once, but this
+  // effect runs again (e.g. once the week is set): the profile must not overwrite that choice.
+  const draftPeopleScopeRef = useRef<string | null>(null);
   const navigationTimeoutRef = useRef<number | null>(null);
   const [targetIsoWeek, setTargetIsoWeek] = useState<IsoWeek | null>(null);
   // Each proposed or imported day is dated by its name inside the target week.
@@ -261,6 +264,7 @@ export default function CreateMenuPage() {
       setMenuText(draft.menuText);
       setFreeTextPrompt(draft.freeTextPrompt.slice(0, freeTextPromptMaxLength));
       setPeopleCount(normalizePeopleCount(draft.peopleCount));
+      draftPeopleScopeRef.current = dataIdentity.scope;
       const restoredStyles = draft.menuStyles.filter(isMenuStyle);
       setMenuStyles(restoredStyles.length ? restoredStyles : defaultMenuStyles);
       setElaborationLevel(draft.elaborationLevel);
@@ -272,7 +276,7 @@ export default function CreateMenuPage() {
     const applyProfile = (value: unknown) => {
       const nextProfile = isProfile(value) ? value : null;
       setProfile(nextProfile);
-      if (nextProfile && !draft) {
+      if (nextProfile && !draft && draftPeopleScopeRef.current !== dataIdentity.scope) {
         setPeopleCount(normalizePeopleCount(nextProfile.householdSize));
       }
     };
