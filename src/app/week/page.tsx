@@ -388,16 +388,16 @@ function WeekPageContent() {
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
               {isCurrentWeek ? (
-                <span className="text-xs font-semibold text-[color:var(--color-muted-foreground)]">
+                <span className="text-sm font-semibold text-[color:var(--color-muted-foreground)]">
                   Semana actual
                 </span>
               ) : selectedIsoWeek && today ? (
                 <button
                   type="button"
                   onClick={() => goToWeek(today.week)}
-                  className="min-h-11 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-xs font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)]"
+                  className="min-h-11 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)]"
                 >
-                  ↩ Volver a hoy
+                  <span aria-hidden="true">↩</span> Volver a hoy
                 </button>
               ) : (
                 <span />
@@ -405,7 +405,7 @@ function WeekPageContent() {
               {weekDays && selectedIsoWeek ? (
                 <Link
                   href={buildWeekHref("/create-menu", selectedIsoWeek)}
-                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-accent)] bg-[color:var(--color-accent)] px-4 text-sm font-semibold text-white shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-colors hover:border-[color:var(--color-accent-hover)] hover:bg-[color:var(--color-accent-hover)]"
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-accent-hover)] bg-[color:var(--color-accent-hover)] px-4 text-sm font-semibold text-white shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-[background-color,box-shadow] hover:shadow-[0_12px_28px_rgba(224,112,60,0.24)] hover:brightness-95"
                 >
                   Editar menú
                 </Link>
@@ -414,7 +414,7 @@ function WeekPageContent() {
 
             {selectedIsoWeek && weekDayNumbers ? (
               <div
-                className="mt-2.5 grid grid-cols-7 gap-1.5"
+                className="mt-2.5 grid grid-cols-7 gap-1 sm:gap-1.5"
                 role="group"
                 aria-label="Ir a un día de la semana"
               >
@@ -433,20 +433,20 @@ function WeekPageContent() {
                       aria-pressed={cell.hasMenu ? cell.isSelected : undefined}
                       className={`flex min-h-11 flex-col items-center justify-center rounded-xl border-2 transition-colors disabled:cursor-default disabled:opacity-45 ${
                         cell.isToday
-                          ? "bg-[color:var(--color-accent)] text-white"
+                          ? "bg-[color:var(--color-accent-hover)] text-white"
                           : "bg-[color:var(--color-surface)] text-[color:var(--color-foreground)]"
                       } ${
                         cell.isSelected
                           ? "border-[color:var(--color-foreground)]"
                           : cell.isToday
-                            ? "border-[color:var(--color-accent)]"
+                            ? "border-[color:var(--color-accent-hover)]"
                             : "border-[color:var(--color-border)] hover:border-[color:var(--color-border-strong)]"
                       }`}
                     >
-                      <span className="text-[0.82rem] font-bold leading-none">
+                      <span className="text-sm font-bold leading-none">
                         {day.initial}
                       </span>
-                      <span className="mt-0.5 text-[0.62rem] font-semibold leading-none opacity-75">
+                      <span className="mt-1 text-xs font-semibold leading-none">
                         {dayNumber}
                       </span>
                     </button>
