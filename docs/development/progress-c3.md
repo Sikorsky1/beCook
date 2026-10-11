@@ -10,8 +10,19 @@ Plan: `plan-ola6.md`, sección C3. Resumen para pasar a `PROGRESS.md` al integra
 | Comprobación | `src/lib/recipes/restriction-check.ts`: `checkDish({title, card}, perfil)` → `conflict / possible_conflict / unverifiable / none_detected`, base `reviewed_card / inferred_card / title_only`, hallazgos por ingrediente, etiqueta UE-14 o título, y texto no interpretable. `blocksAutomaticProposal`, `mentionsDislikedFood` |
 | Generación e ideas | `visibleFoodConflict` y `checkReplacement` delegan en el léxico. Bloqueo automático: conflicto seguro de dieta o alergia, o posible de alergia. «Otras alergias» → `restriction_conflict` (antes `disliked_food` en ideas y nada al generar). `catalogAlternative` acepta una búsqueda de fichas revisadas (`ReviewedCardLookup`); una estimada no decide |
 | Ficha de plato | `DishCard`: sección «Compatibilidad con tu perfil» con base visible, una línea por restricción, notas de texto no interpretable y «No garantiza ausencia de alérgenos ni trazas». Nunca «apto». `dishCardFlow.ts`: `dishCardRestrictions` (cuenta: `status.current` de C1; invitado: perfil local; sin leer o malformado → «No hemos podido leer tus restricciones») y `dishCompatibilityView`. `week/page.tsx` solo pasa las restricciones. Solo clases Tailwind con tokens existentes (`danger-soft`, `warning-soft`), nada por debajo de `t-meta` |
-| Tests | 313 → **334** (16 nuevos en `restriction-check`, 1 en `dish-substitution`, 4 en `recipe-cards`, casos añadidos en `menu-generation`). `food-context.test.cjs`: «Hummus con crudités» cambiado por otro plato, porque con «sésamo» en otras alergias ahora se bloquea (es la corrección) |
-| Comprobaciones | lint, typecheck, test 334/334 (con `GITLEAKS_BIN`), build en una copia sin `.env*` con variables sintéticas |
+| Tests | 313 → **334** (342 tras la revisión) (16 nuevos en `restriction-check`, 1 en `dish-substitution`, 4 en `recipe-cards`, casos añadidos en `menu-generation`). `food-context.test.cjs`: «Hummus con crudités» cambiado por otro plato, porque con «sésamo» en otras alergias ahora se bloquea (es la corrección) |
+| Comprobaciones | lint, typecheck, test 342/342 (con `GITLEAKS_BIN`), build en una copia sin `.env*` con variables sintéticas |
+
+## Cambios de la revisión (apta con cambios)
+
+1. «trigo», «cebada», «centeno», «espelta», «kamut» y «harina de trigo» en texto libre → todo el gluten (tras «sin» siguen siendo solo una palabra: «pan sin trigo» sigue con gluten).
+2. «sin X» ya no anula el grupo en todo el texto: solo un nombre de grupo cancela ese grupo en el término al que acompaña, hasta el conector anterior; «sin» + otra palabra solo quita esa palabra.
+3. Léxico ampliado: arroz negro, fideuá, paella, zarzuela, mariscada, salpicón, «a la romana», bocadillo, bocata, sándwich, montadito, cruasán, brownie, churros, buñuelos, gofres, tortitas, burrito, ramen, ñoquis/gnocchi, couscous, tiramisú, ensaladilla rusa, sushi, ceviche, caviar, ternasco, pad thai.
+4. En propuestas automáticas (`checkDish(..., {automatic: true})`, usado por `visibleFoodConflict` y `checkReplacement`) la negación rebaja a posible: «Pizza sin gluten» con alergia al gluten se bloquea.
+5. «harina tostada|harina|avena» como posibles; «tostada» solo es pan como sustantivo (no en «almendras tostadas»).
+6. Excepciones: huevos de codorniz/gallina/pato/oca (solo huevo), «carne de pimiento (choricero)», «pasta de tomate/pimiento/ajo».
+7. «ninguna», «nada», «no», «n/a», «-» = vacío; etiquetas sin conectores («Alergia: fresas»).
+8. Ficha: «Cargando tus restricciones…» mientras se leen y «No tenemos tu perfil de restricciones» sin perfil.
 
 ## Decisiones
 

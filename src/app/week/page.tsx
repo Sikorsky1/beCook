@@ -514,7 +514,7 @@ function WeekPageContent() {
             weekServings={foodContextEntry?.key === foodContextKey ? (foodContextEntry.status?.frozen?.servings ?? null) : null}
             restrictions={dishCardRestrictions(
               isSignedIn,
-              foodContextEntry?.key === foodContextKey ? foodContextEntry.status : null,
+              foodContextEntry?.key === foodContextKey ? foodContextEntry.status : undefined,
               { loaded: profileEntry?.key === profileKey, data: profileEntry?.data ?? null },
             )}
             loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}

@@ -411,10 +411,12 @@ test("C3 dish card: restrictions come from the account (status.current) or, for 
  assert.deepEqual(flow.dishCardRestrictions(true, null, {loaded: true, data: {allergies: ["gluten"]}}), {state: "unknown"}, "unread account context: unknown, not the device profile");
  assert.equal(flow.dishCardRestrictions(false, null, {loaded: true, data: {allergies: ["gluten"]}}).profile.allergies[0], "gluten");
  assert.deepEqual(flow.dishCardRestrictions(false, null, {loaded: true, data: null}), {state: "no_profile"});
- assert.deepEqual(flow.dishCardRestrictions(false, null, {loaded: false, data: null}), {state: "unknown"});
+ assert.deepEqual(flow.dishCardRestrictions(false, null, {loaded: false, data: null}), {state: "loading"});
+ assert.deepEqual(flow.dishCardRestrictions(true, undefined, {loaded: true, data: null}), {state: "loading"}, "account context still being read");
  assert.deepEqual(flow.dishCardRestrictions(false, null, {loaded: true, data: {allergies: "gluten"}}), {state: "unknown"}, "malformed allergies are never read as none");
  assert.equal(flow.dishCompatibilityView("Tortilla", null, {state: "unknown"}).heading, "No hemos podido leer tus restricciones");
- assert.equal(flow.dishCompatibilityView("Tortilla", null, {state: "no_profile"}).heading, "Tu perfil no tiene restricciones ni alergias");
+ assert.equal(flow.dishCompatibilityView("Tortilla", null, {state: "no_profile"}).heading, "No tenemos tu perfil de restricciones");
+ assert.equal(flow.dishCompatibilityView("Tortilla", null, {state: "loading"}).heading, "Cargando tus restricciones…");
  assert.equal(flow.dishCompatibilityView("Tortilla", null, ready({})).heading, "Tu perfil no tiene restricciones ni alergias");
 });
 
@@ -426,4 +428,11 @@ test("C3 dish card: the dialog shows the compatibility section with its basis an
  assert.doesNotMatch(source, /text-xs|text-\[1[01]px\]/);
  const page = fs.readFileSync(path.join(root, "src/app/week/page.tsx"), "utf8");
  assert.match(page, /restrictions=\{dishCardRestrictions\(/);
+});
+
+test("C3 dish card: free-text labels without connectors", () => {
+ const view = flow.dishCompatibilityView("Fresas con nata", null, ready({allergies: ["other"], otherAllergies: "Alergia a las fresas"}));
+ assert.deepEqual(view.lines, ["Alergia: fresas: «fresas» en el nombre."]);
+ const disliked = flow.dishCompatibilityView("Coliflor gratinada", null, ready({dislikedFoods: ["No me gusta la coliflor"]}));
+ assert.deepEqual(disliked.lines, ["No te gusta «coliflor»: «coliflor» en el nombre."]);
 });
