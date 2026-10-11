@@ -1,4 +1,4 @@
-# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1, C2)
+# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1, C2, C3, C4)
 
 Pasos 06 y 07 del roadmap (H3, H7), sin cambios de base de datos, y paso 10 (B4, H8):
 escrituras de semana transaccionales con versión e idempotencia.
@@ -159,6 +159,76 @@ Despliegue: migración antes que el código. El cliente de `main` (un INSERT de 
 completa por clic) sigue funcionando y el cliente nuevo reutiliza su lista más
 reciente (escenario 8 de `scripts/shopping-db-tests.cjs`, con una copia congelada
 del cliente de 5a573ff en `tests/fixtures/`).
+
+## Compra desde las fichas y cambios de plato sin perder lo comprado (C4)
+
+Pasos 19 y 20 del roadmap. Código en `src/lib/shopping/{units,build,reconcile}.ts` (puros) y
+`src/lib/data/shopping.ts`; migración `20261013090000_shopping_item_origins` (aditiva salvo
+`save_shopping_list`, redefinida con la misma firma).
+
+- **Origen de cada artículo.** `shopping_items.item_key` («categoría|nombre normalizado|dimensión»;
+  nombre sin mayúsculas, acentos ni plurales simples) y `origins` (`[{day, meal, dish, kind,
+  versionId?, quantity}]`, `kind` = `card_reviewed` | `card_inferred` | `ai_title`). Un artículo
+  activo por clave y lista (índice único parcial). `shopping_lists.ingredient_basis` = `mixed-v1`
+  cuando los artículos tienen clave y orígenes; NULL en listas anteriores a C4 o del cliente previo.
+- **Unidades** (`units.ts`, misma tabla que `shopping_quantity_base`): masa en g (kg ×1000),
+  volumen en ml (cl ×10, l ×1000), unidades en «ud» (ud, uds, unidad(es) o sin unidad); cucharada,
+  cucharadita, diente y pizca se agrupan por nombre sin convertir; nunca volumen ↔ masa. kg y l solo
+  al mostrar (desde 1000). Cantidad NULL = «al gusto» (fila propia; la base solo la acepta con esa
+  unidad). Redondeo de compra: g/ml/ud enteros hacia arriba, cucharadas y pizcas de media en media.
+- **Compra mixta.** Plato con ficha (C2): ingredientes de la ficha × raciones de la semana (C1,
+  `foodContext.servings`, 2 si no hay) / raciones de la ficha, leídas en una sola consulta
+  (`getRecipeCardsFromSupabase`, `.in`). Los opcionales no entran (aviso fijo en Compra). Plato sin
+  ficha: los ingredientes `ai_title` que la lista ya tiene para ese plato (misma comida o el mismo
+  plato movido de día), si la lista se hizo para las mismas raciones y restricciones; si no, una
+  llamada a `/api/generate-shopping-list` con `breakdown: true` y solo esos platos (el resto
+  «LIBRE»), que responde `dishes: [{day, meal, items}]` además de `items` (cliente anterior intacto).
+  Una llamada, una unidad de cuota. Con todos los platos con ficha no hay IA. Las fichas no se
+  generan al preparar la compra. Un plato cuyo título coincide con una ficha propia que no está
+  enlazada a esa comida (p. ej. el mismo plato escrito a mano otro día) cuenta como «sin ficha» y va
+  a la IA; «Crear ficha estimada (IA)» en la ficha del plato la enlaza sin IA (pendiente).
+- **Despensa** (B7, sin cantidades): no se descuenta nada; al pintar, `classifyShoppingLine`
+  distingue «Te falta comprar», «Ya lo tienes habitualmente» (nombre normalizado y plural simple),
+  «Comprado», «Comprado, ya no hace falta» y «Revisar».
+- **Firma.** Sin ningún plato con ficha, exactamente la de B6/C1 (las listas existentes no cambian).
+  Con alguno, añade `cards: [[pos, lunchV, dinnerV]]` e `ingredientSource: "mixed-v1"`.
+- **Cambio de platos** (`loadShoppingList` → `outdated` en lugar de `missing`): conjunto deseado →
+  diff por `item_key` en el cliente (`diffShoppingList`; a las filas sin clave se les calcula con
+  las mismas reglas) → `reconcile_shopping_list(año, semana, lista, firma origen, firma destino,
+  ops, versión)`: `FOR UPDATE` de la semana; `no_week` | `week_changed` | `stale` (otra lista
+  vigente, otra firma o un artículo que no es de esa lista) | `existing` (otro dispositivo ya la
+  dejó en la firma destino) | `applied` con resumen `{added, removed, keptBought, changed, review}`.
+  La lista conserva id y `created_at`. Quitar: no marcado → se borra
+  (`shopping_items_discard_unbought`); marcado → `removed_at` («Comprado, ya no hace falta»).
+  Actualizar un marcado: sigue marcado; si ahora hace falta más que lo comprado (`checked_quantity`,
+  en unidades base; en filas marcadas antes de C4 se fija con la cantidad que tenían) →
+  `needs_review` hasta volver a marcarlo. Una clave ya ocupada (dos dispositivos añadiendo a la vez)
+  → `stale` sin escribir nada. El resumen compara cantidades en unidades base (1 kg → 1000 g no es
+  un cambio). «Usar este menú»
+  (`ensureShoppingList`) también reconcilia.
+- **Marcado** (`set_shopping_items_checked` sin cambios): el trigger `shopping_items_check_state`
+  guarda `checked_quantity` al marcar, lo quita al desmarcar y resuelve `needs_review`, también
+  para el cliente desplegado. Un marcado sobre un artículo que ya no está → `stale` y se relee.
+- **Si la IA falla o no hay cuota.** Lista con orígenes válidos (mismas raciones y restricciones):
+  se aplica lo sabido, sin quitar filas que un plato pendiente pueda necesitar, y el plato queda
+  pendiente («Faltan ingredientes de «X»», botón «Calcular (IA)» = reconciliación con la misma firma
+  solo para esos platos). Lista sin orígenes (anterior a C4) u orígenes de otras raciones o
+  restricciones: no se toca y se muestra tal cual con «Esta lista es de tu menú anterior» y el botón
+  «Actualizar lista (IA)»; nunca un error en lugar de la lista. Un fallo no se vuelve a pagar al
+  reabrir Compra en la misma sesión (solo con el botón); al cambiar de identidad (entrar, salir o
+  sesión caducada) esos fallos se olvidan (`forgetShoppingUpdateFailures`, desde `IdentityProvider`). Las respuestas de la IA se recuerdan entre
+  los reintentos de una misma actualización (lista o semana que cambian a la vez); si tras tres
+  intentos sigue cambiando, se muestra la lista como está. Sin la RPC en la base (solo PGRST202 o
+  un 42883 que la nombre) o servidor sin desglose: lista nueva, como en B6.
+- **Despliegue.** Migración antes que código. El cliente de `main` (copia congelada
+  `tests/fixtures/legacy-shopping-client-6121e34.ts`) sigue guardando, marcando y leyendo; el
+  cliente nuevo reconcilia sus listas en el sitio conservando marcados. Límite conocido: una pestaña
+  con el cliente anterior no puede leer una lista con filas «al gusto» del cliente nuevo.
+- **Pruebas.** `tests/shopping-recipes.test.cjs` (unidades, construcción, diff, firma, capa de
+  datos con cuenta en memoria de `tests/helpers/fake-shopping.cjs`, ruta con desglose) y
+  `scripts/shopping-reconcile-db-tests.cjs` en `test:db` (fichas, cambio de plato en el sitio,
+  trigger con el cliente anterior, contrato de la RPC, permisos, concurrencia, despliegue).
+  `tests/shopping-week.test.cjs` y `scripts/shopping-db-tests.cjs` cubren además el respaldo a B6.
 
 ## Despensa (B7)
 
@@ -325,8 +395,55 @@ Pasos 11 y 15 del roadmap (H9). Sin cambios de base de datos.
   estimada (IA)». Nada se crea ni se enlaza automáticamente. Invitados: solo catálogo, sin IA.
 - **Borrador del catálogo.** `src/data/recipe-cards/catalog-v1.json` (estado `draft_unreviewed`)
   no se carga en la base ni en la app; publicar fichas revisadas requiere una migración nueva.
-- **Fuera de alcance** (C3/C4): validar restricciones contra ingredientes, compra desde las fichas,
-  escalado de cantidades y firma de compra (sigue basada en títulos).
+- **Después de C2**: las restricciones se comprueban contra los ingredientes de la ficha (C3) y la
+  compra sale de las fichas, escaladas a las raciones de la semana, con firma que incluye sus
+  versiones (C4); ver sus secciones.
+
+## Restricciones contra ingredientes (C3)
+
+Sin cambios de esquema ni de datos: todo se calcula en el navegador o en la ruta, con las fichas de
+C2 y el contexto alimentario de C1.
+
+- **Léxico** (`src/lib/recipes/food-lexicon.ts`): grupos en español (carne, cerdo, pescado,
+  crustáceos, moluscos, huevo, lácteos, gluten, frutos secos, cacahuete, alcohol, miel, gelatina y
+  el resto de alérgenos UE-14) con plurales, variantes y frases. Coincidencia por palabras completas
+  tras `normalizeFood` («pan» ≠ «panceta»); la frase más larga gana («nuez moscada», «leche de
+  coco», «mantequilla de cacahuete», «vinagre de vino», «buey de mar» no cuentan como frutos secos,
+  lácteos, alcohol o carne). «sin» + nombre de grupo («sin gluten/lactosa/huevo…») anula ese grupo
+  solo en el término al que acompaña, hasta el conector anterior («Pan sin gluten con queso»: el pan
+  no, el queso sí; «Pasta sin huevo a la carbonara» sigue siendo huevo). «sin» + otra palabra («sin
+  queso», «sin trigo») solo quita esa palabra. «sin lactosa» solo vale para la intolerancia, no para
+  vegano. En propuestas automáticas la negación rebaja a posible en vez de anular. Hay menciones
+  posibles (harina sin calificar, avena, salsa de soja, alioli, paella, cacahuete bajo frutos secos,
+  ingrediente opcional). «tostada» solo cuenta como pan y «cocido» como el guiso cuando son sustantivos
+  («almendras tostadas», «garbanzos cocidos» no).
+- **Comprobación** (`src/lib/recipes/restriction-check.ts`, `checkDish`): título siempre, más
+  ingredientes y etiquetas `possibleAllergens` si hay ficha. Una etiqueta presente es conflicto.
+  Resultado `conflict | possible_conflict | unverifiable | none_detected` con su base
+  (`reviewed_card | inferred_card | title_only`). Solo con el título nunca es «sin conflictos»; un
+  texto libre vago («algunas frutas», «trazas», menos de 3 letras, categorías como «frutas» o
+  «legumbres») queda en `uninterpretable` y el resultado es como mucho `unverifiable`. Texto libre:
+  nombre de grupo o alérgeno (también dentro de la frase: «pescado azul» → todo el pescado; «trigo»,
+  «cebada», «centeno», «espelta» o «harina de trigo» → todo el gluten), palabra
+  del léxico (solo esa, más la etiqueta del grupo como posible) o literal con plural. Una dieta
+  desconocida o «Otra» alergia sin texto tampoco se ignora; «ninguna», «nada», «no», «n/a» o «-»
+  equivalen a un campo vacío.
+- **Propuestas automáticas** (menú IA en `selectionToMenu`, ejemplos del prompt, «Otra idea» de
+  catálogo e IA en `checkReplacement`/`catalogAlternative`): se bloquea un conflicto seguro de dieta o
+  alergia, o uno posible de alergia; los alimentos que no gustan siguen como `disliked_food` (solo
+  ideas, no el menú semanal). «Otras alergias» ahora también bloquea al generar (422
+  `restriction_conflict`, aceptado). Una ficha **revisada** del catálogo se comprueba por
+  ingredientes (`ReviewedCardLookup`); una estimada no decide. Hoy no está conectado a la lectura de
+  fichas (el catálogo no tiene ninguna revisada y la búsqueda de ideas es síncrona): al publicar
+  fichas revisadas, cargarlas por lotes (`recipeCards` de `repositories.ts`) y pasar la búsqueda a
+  `nextCatalogIdea` y a `/api/substitute-dish`.
+- **Ficha de plato**: sección «Compatibilidad con tu perfil» con la base visible y «No garantiza
+  ausencia de alérgenos ni trazas». Restricciones: `status.current` de la cuenta (C1) con sesión
+  («Cargando tus restricciones…» mientras se lee; si falla, «No hemos podido leer tus restricciones»,
+  nunca el perfil del dispositivo en su lugar; sin perfil, «No tenemos tu perfil de restricciones»);
+  invitado, el perfil local. Solo avisa: no cambia platos elegidos a mano ni semanas guardadas.
+- Pruebas: `tests/restriction-check.test.cjs` (léxico, `checkDish`, texto libre, defectos del
+  filtro anterior), más casos en `menu-generation`, `dish-substitution` y `recipe-cards`.
 
 ## Datos anteriores a B1 (sin ámbito)
 

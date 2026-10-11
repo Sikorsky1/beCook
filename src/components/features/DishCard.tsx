@@ -13,10 +13,13 @@ import { formatIngredientAmount, recipeAllergenLabels, type RecipeCard } from "@
 import {
   cardToShow,
   dishCardSlotKey,
+  dishCompatibilityDisclaimer,
+  dishCompatibilityView,
   linkCatalogCard,
   loadDishCardView,
   requestEstimatedCard,
   type DishCardAction,
+  type DishCardRestrictions,
   type DishCardView,
 } from "@/lib/recipes/dishCardFlow";
 import { mealRecipeLink } from "@/lib/weekStorage";
@@ -31,6 +34,8 @@ type DishCardProps = {
   isoWeek: IsoWeek | null;
   // Servings the week was planned for (C1); informative, the card is not scaled.
   weekServings: number | null;
+  // C3: the current restrictions (account profile when signed in, device profile for a guest).
+  restrictions: DishCardRestrictions;
   loginReturnPath: string;
   onClose: () => void;
   // «Cambiar plato»: opens the usual editor of that meal.
@@ -40,6 +45,46 @@ type DishCardProps = {
 };
 
 const mealLabels: Record<MealKey, string> = { lunch: "Comida", dinner: "Cena" };
+
+const compatibilityToneClasses = {
+  danger: "border-[color:var(--color-danger)] bg-[color:var(--color-danger-soft)]",
+  warning: "border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)]",
+  neutral: "border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)]",
+} as const;
+
+// C3: what the card (or only the title) says about the current profile. Static text, read in
+// order with the card; never «apto», at most «no hemos detectado conflictos».
+function CompatibilitySection({ title, card, restrictions }: { title: string; card: RecipeCard | null; restrictions: DishCardRestrictions }) {
+  const view = dishCompatibilityView(title, card, restrictions);
+  const headingId = `${useId()}-dish-card-compatibility`;
+
+  return (
+    <section aria-labelledby={headingId} className={`space-y-1.5 rounded-[var(--radius-input)] border px-3 py-3 ${compatibilityToneClasses[view.tone]}`}>
+      <h3 id={headingId} className="t-meta font-semibold text-[color:var(--color-foreground)]">
+        Compatibilidad con tu perfil
+      </h3>
+      <p className={`t-body-strong ${view.tone === "danger" ? "text-[color:var(--color-danger)]" : "text-[color:var(--color-foreground)]"}`}>
+        {view.heading}
+      </p>
+      {view.basis ? <p className="t-meta text-[color:var(--color-foreground)]">{view.basis}</p> : null}
+      {view.lines.length ? (
+        <ul className="t-body list-disc space-y-1 pl-5 text-[color:var(--color-foreground)]">
+          {view.lines.map((line) => (
+            <li key={line} className="[overflow-wrap:anywhere]">
+              {line}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {view.notes.map((note) => (
+        <p key={note} className="t-meta text-[color:var(--color-foreground)] [overflow-wrap:anywhere]">
+          {note}
+        </p>
+      ))}
+      <p className="t-meta text-[color:var(--color-foreground)]">{dishCompatibilityDisclaimer}</p>
+    </section>
+  );
+}
 
 function CardBody({ card, weekServings }: { card: RecipeCard; weekServings: number | null }) {
   const reviewed = card.reviewStatus === "reviewed";
@@ -74,8 +119,8 @@ function CardBody({ card, weekServings }: { card: RecipeCard; weekServings: numb
       </dl>
       {weekServings ? (
         <p className="t-meta">
-          Esta semana está planificada para {weekServings} {weekServings === 1 ? "ración" : "raciones"}. Las cantidades
-          de la ficha no se ajustan automáticamente.
+          Esta semana está planificada para {weekServings} {weekServings === 1 ? "ración" : "raciones"}. La lista de la
+          compra ajusta las cantidades de esta ficha a esas raciones.
         </p>
       ) : null}
 
@@ -133,6 +178,7 @@ export function DishCard({
   identity,
   isoWeek,
   weekServings,
+  restrictions,
   loginReturnPath,
   onClose,
   onChangeDish,
@@ -254,6 +300,8 @@ export function DishCard({
               {title}
             </h2>
           </div>
+
+          {card || view?.kind === "title_only" ? <CompatibilitySection title={title} card={card} restrictions={restrictions} /> : null}
 
           {card ? (
             <CardBody card={card} weekServings={weekServings} />

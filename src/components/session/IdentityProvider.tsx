@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 
+import { forgetShoppingUpdateFailures } from "@/lib/data/shopping";
 import { createIdentityStore, type Identity, type IdentityStore } from "@/lib/session/identity";
 import { supabase } from "@/lib/supabase/client";
 
@@ -28,6 +29,20 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void store.start();
+  }, [store]);
+
+  // Another identity (sign-in, sign-out, expired session): shopping AI failures remembered for the
+  // previous one are forgotten, so the next opening of Compra may try again.
+  useEffect(() => {
+    let userId = store.getSnapshot().userId;
+    const unsubscribe = store.subscribe(() => {
+      const next = store.getSnapshot().userId;
+      if (next !== userId) forgetShoppingUpdateFailures();
+      userId = next;
+    });
+    return () => {
+      unsubscribe();
+    };
   }, [store]);
 
   return <IdentityContext.Provider value={store}>{children}</IdentityContext.Provider>;

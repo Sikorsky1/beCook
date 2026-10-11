@@ -10,8 +10,9 @@ const selection = {
 };
 const veggieSelection = {
  lunches: ["Lentejas estofadas", "Garbanzos con espinacas", "Espaguetis con setas", "Arroz con verduras", "Pisto con huevo", "Alubias con verduras", "Crema de calabaza"],
- dinners: ["Tortilla de patata", "Ensalada de tomate y queso fresco", "Revuelto de champiñones", "Tosta de aguacate", "Calabacín relleno de verduras", "Sopa de verduras", "Hummus con crudités"],
+ dinners: ["Tortilla de patata", "Ensalada de tomate y queso fresco", "Revuelto de champiñones", "Tosta de aguacate", "Calabacín relleno de verduras", "Sopa de verduras", "Berenjenas asadas con tomate"],
 };
+// (C3) «Hummus» lleva tahini: con «sésamo» en otras alergias ya no pasa la validación del menú.
 const shoppingList = {items: [{name: "lentejas", quantity: 500, unit: "g", category: "despensa"}]};
 
 let fakes;

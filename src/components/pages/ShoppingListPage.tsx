@@ -24,7 +24,9 @@ import { loadPantry, readCachedPantry } from "@/lib/data/pantry";
 import {
   generateShoppingList,
   loadShoppingList,
+  reconcileShoppingList,
   setShoppingItemChecked,
+  type PendingDish,
   type ShoppingLoad,
 } from "@/lib/data/shopping";
 import { getCurrentIsoWeek, type IsoWeek } from "@/lib/isoWeek";
@@ -32,13 +34,21 @@ import { getAccessToken } from "@/lib/supabase/auth";
 import { pageShellClass } from "@/lib/ui";
 import {
   activePantryNames,
-  pantryHasItem,
   pantryItemsOrDefault,
 } from "@/lib/pantryStorage";
 import {
-  groupShoppingListItems,
-  type ShoppingCategoryGroup,
-  type ShoppingListItem,
+  classifyShoppingLine,
+  describeOrigins,
+  pantryNameKeys,
+  plannedDishes,
+  shoppingLineLabels,
+  type PlannedDish,
+} from "@/lib/shopping/build";
+import { describeReconcileSummary, type ReconcileSummary } from "@/lib/shopping/reconcile";
+import { formatShoppingAmount } from "@/lib/shopping/units";
+import {
+  supermarketCategoryLabels,
+  type ShoppingViewItem,
   type SupermarketCategory,
 } from "@/lib/shoppingList";
 import { ShoppingListApiError } from "@/lib/shoppingListStorage";
@@ -136,11 +146,24 @@ function CategorySelector({
   );
 }
 
+type ShoppingCategoryGroup = {
+  category: SupermarketCategory;
+  items: ShoppingViewItem[];
+};
+
+// Visible lines by category, in supermarket order (the data layer already made one line per item).
+function groupByCategory(items: ShoppingViewItem[]): ShoppingCategoryGroup[] {
+  return supermarketCategoryLabels
+    .map((category) => ({ category, items: items.filter((item) => item.category === category) }))
+    .filter((group) => group.items.length > 0);
+}
+
 type ShoppingItemsForCategoryProps = {
   group: ShoppingCategoryGroup;
   checkedItems: string[];
   onToggleCheckedItem: (itemId: string) => void;
   pantryItems: string[];
+  dishes: PlannedDish[];
 };
 
 function ShoppingItemsForCategory({
@@ -148,13 +171,18 @@ function ShoppingItemsForCategory({
   checkedItems,
   onToggleCheckedItem,
   pantryItems,
+  dishes,
 }: ShoppingItemsForCategoryProps) {
+  const pantry = pantryNameKeys(pantryItems);
+
   return (
     <Card className="overflow-visible">
       <ul className="divide-y divide-[color:var(--color-border)]">
         {group.items.map((item) => {
           const isChecked = checkedItems.includes(item.id);
-          const isAvailableInPantry = pantryHasItem(pantryItems, item.name);
+          const line = classifyShoppingLine(item, isChecked, pantry);
+          // A bought item no dish needs any more is not «for» anything now.
+          const forDishes = item.removed ? [] : describeOrigins(item.origins, dishes);
 
           return (
             <li key={item.id}>
@@ -162,16 +190,26 @@ function ShoppingItemsForCategory({
                 checked={isChecked}
                 label={capitalizeIngredientName(item.name)}
                 meta={
-                  isAvailableInPantry ? (
-                    <span className="mt-1.5 inline-flex w-fit rounded-full bg-[color:var(--color-success-soft)] px-2.5 py-1 text-sm font-semibold text-[color:var(--color-success-hover)]">
-                      En despensa
-                    </span>
-                  ) : null
+                  <>
+                    {forDishes.length > 0 ? (
+                      <span className="t-meta mt-1 block">Para: {forDishes.join(", ")}</span>
+                    ) : null}
+                    {line === "pantry" ? (
+                      <span className="mt-1.5 inline-flex w-fit rounded-full bg-[color:var(--color-success-soft)] px-2.5 py-1 text-sm font-semibold text-[color:var(--color-success-hover)]">
+                        {shoppingLineLabels.pantry}
+                      </span>
+                    ) : null}
+                    {line === "review" ? (
+                      <span className="mt-1.5 inline-flex w-fit rounded-full bg-[color:var(--color-warning-soft)] px-2.5 py-1 text-sm font-semibold text-[color:var(--color-foreground)]">
+                        Revisar: ahora hace falta más de lo que compraste
+                      </span>
+                    ) : null}
+                  </>
                 }
                 onChange={() => onToggleCheckedItem(item.id)}
-                status={isChecked ? "Comprado" : undefined}
-                strikeWhenChecked
-                valueBadge={`${item.quantity} ${item.unit}`}
+                status={isChecked ? shoppingLineLabels[line] : undefined}
+                strikeWhenChecked={line !== "review"}
+                valueBadge={formatShoppingAmount(item.quantity, item.unit)}
               />
             </li>
           );
@@ -181,13 +219,90 @@ function ShoppingItemsForCategory({
   );
 }
 
+const mealLabel = (dish: PendingDish) => `${["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][dish.day]}, ${dish.meal === "lunch" ? "comida" : "cena"}`;
+
+type ListNoticesProps = {
+  change: ReconcileSummary | null;
+  pendingDishes: PendingDish[];
+  aiError: string | null;
+  fromCards: boolean;
+  notUpdated: boolean;
+  calculating: boolean;
+  onCalculate: () => void;
+};
+
+const emptyNotes = { change: null, pendingDishes: [], aiError: null, fromCards: false, notUpdated: false };
+
+// C4: what the last update changed, a list that could not be updated, dishes still without
+// ingredients and where items come from. Always rendered (empty or not) inside a polite live
+// region, so screen readers hear a new summary or a new pending dish.
+function ListNotices({ change, pendingDishes, aiError, fromCards, notUpdated, calculating, onCalculate }: ListNoticesProps) {
+  const calculateButton = (label: string) => (
+    <button
+      type="button"
+      onClick={onCalculate}
+      disabled={calculating}
+      className="mt-4 min-h-11 rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white hover:bg-[color:var(--color-accent-strong-hover)] disabled:opacity-60"
+    >
+      {calculating ? "Calculando…" : label}
+    </button>
+  );
+
+  return (
+    <div className="space-y-3 empty:hidden" aria-live="polite">
+      {change ? (
+        <StateMessage title="Lista actualizada con tu menú" variant="success">
+          <p className="t-meta max-w-xl text-[color:var(--color-success-hover)]">
+            {describeReconcileSummary(change)}. Lo que ya habías comprado sigue marcado.
+          </p>
+        </StateMessage>
+      ) : null}
+      {notUpdated ? (
+        <Card className="border-[color:var(--color-warning)] p-5">
+          <h2 className="t-h3 text-[color:var(--color-foreground)]">Esta lista es de tu menú anterior</h2>
+          <p className="mt-2 max-w-xl text-base leading-7 text-[color:var(--color-foreground)]">
+            No se ha podido actualizar con los platos de ahora. Lo que ya has comprado sigue marcado.
+          </p>
+          {aiError ? <p className="t-meta mt-2 max-w-xl">{aiError}</p> : null}
+          {calculateButton("Actualizar lista (IA)")}
+        </Card>
+      ) : pendingDishes.length > 0 ? (
+        <Card className="border-[color:var(--color-warning)] p-5">
+          <h2 className="t-h3 text-[color:var(--color-foreground)]">Faltan ingredientes de algunos platos</h2>
+          <ul className="mt-2 max-w-xl space-y-1 text-base leading-7 text-[color:var(--color-foreground)]">
+            {pendingDishes.map((dish) => (
+              <li key={`${dish.day}-${dish.meal}`}>
+                Faltan ingredientes de «{dish.title}» ({mealLabel(dish)})
+              </li>
+            ))}
+          </ul>
+          {aiError ? <p className="t-meta mt-2 max-w-xl">{aiError}</p> : null}
+          {calculateButton("Calcular (IA)")}
+        </Card>
+      ) : null}
+      {fromCards ? (
+        <p className="t-meta px-1">
+          Parte de la lista sale de las fichas de los platos, para las raciones de la semana. Los
+          ingredientes opcionales de las fichas no se incluyen.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function ShoppingListPage() {
   const [checkedItems, setCheckedItems] = useState<string[]>([]);
   const [pantryItems, setPantryItems] = useState<string[]>([]);
   const [weekDays, setWeekDays] = useState<WeekDay[] | null>(null);
   const [hasLoadedWeek, setHasLoadedWeek] = useState(false);
-  const [generatedItems, setGeneratedItems] = useState<ShoppingListItem[]>([]);
+  const [generatedItems, setGeneratedItems] = useState<ShoppingViewItem[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(false);
+  // C4: updating an existing list in place (not generating a new one).
+  const [isUpdatingList, setIsUpdatingList] = useState(false);
+  const [listNotes, setListNotes] = useState<Omit<ListNoticesProps, "calculating" | "onCalculate">>(emptyNotes);
+  // Which step failed: generating a new list or updating the existing one.
+  const [errorTitle, setErrorTitle] = useState("No se pudo generar la lista.");
+  const [calculating, setCalculating] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [needsLogin, setNeedsLogin] = useState(false);
   const [accountUnreachable, setAccountUnreachable] = useState(false);
@@ -218,9 +333,12 @@ export default function ShoppingListPage() {
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
     const weekToLoad = readSelectedWeek(dataIdentity) ?? getCurrentIsoWeek();
     const loadKey = `${dataIdentity.scope}:${identity.epoch}`;
-    const isSameLoad = lastLoadRef.current === loadKey;
-    lastLoadRef.current = loadKey;
     const loadTimer = window.setTimeout(() => {
+      // Decided when the load really starts: an effect run cancelled before its timer (React's
+      // double run in development, after a client-side navigation) never counts as a first load,
+      // or the page would wait forever for a week it never asked for.
+      const isSameLoad = lastLoadRef.current === loadKey;
+      lastLoadRef.current = loadKey;
       if (isSameLoad) {
         // Retry: the list stays on screen and its state stays visible while the account answers.
         void loadWeek(dataIdentity, weekToLoad).then((result) => {
@@ -234,6 +352,7 @@ export default function ShoppingListPage() {
 
       setHasLoadedWeek(false);
       setGeneratedItems([]);
+      setListNotes(emptyNotes);
       setCheckedItems([]);
       setErrorMessage("");
       setNeedsLogin(false);
@@ -284,6 +403,14 @@ export default function ShoppingListPage() {
       if (loaded.status !== "ready") return false;
       setGeneratedItems(loaded.view.items);
       setCheckedItems(loaded.view.checkedItemIds);
+      setListNotes((current) => ({
+        // A change summary stays visible until another update replaces it.
+        change: loaded.view.change ?? current.change,
+        pendingDishes: loaded.view.pendingDishes,
+        aiError: loaded.view.aiError,
+        fromCards: loaded.view.fromCards,
+        notUpdated: loaded.view.notUpdated,
+      }));
       setListSyncState({
         offline: loaded.view.offline,
         pending: loaded.view.pending,
@@ -319,6 +446,39 @@ export default function ShoppingListPage() {
         return;
       }
 
+      // C4: the week has a list for other dishes: it is updated in place (marks are kept).
+      if (loaded.status === "outdated") {
+        setIsUpdatingList(true);
+        setErrorMessage("");
+        try {
+          const updated = await reconcileShoppingList(dataIdentity, currentIsoWeek, currentWeekDays);
+          // Never read again on its own: an update that cannot finish shows the list as it is.
+          if (!show(updated) && !isCancelled) {
+            if (updated.status === "no_week") setWeekDays(null);
+            else if (updated.status === "missing" && updated.offline) setAccountUnreachable(true);
+            else {
+              setErrorTitle("No se pudo actualizar la lista.");
+              setErrorMessage("Ha fallado la actualización de la lista de la compra.");
+            }
+          }
+        } catch (error) {
+          if (isCancelled) return;
+          if (isAiLoginRequiredError(error)) {
+            setNeedsLogin(true);
+            return;
+          }
+          setErrorTitle("No se pudo actualizar la lista.");
+          setErrorMessage(
+            error instanceof ShoppingListApiError
+              ? error.message
+              : "Ha fallado la conexión al actualizar la lista de la compra.",
+          );
+        } finally {
+          if (!isCancelled) setIsUpdatingList(false);
+        }
+        return;
+      }
+
       // Guests keep reading their local week; only the AI call needs a session.
       if (!(await getAccessToken())) {
         if (!isCancelled) {
@@ -329,6 +489,7 @@ export default function ShoppingListPage() {
       }
 
       // 2. Generate with AI only when the account has no list for this week's dishes.
+      setErrorTitle("No se pudo generar la lista.");
       setNeedsLogin(false);
       setIsLoadingList(true);
       setErrorMessage("");
@@ -371,9 +532,43 @@ export default function ShoppingListPage() {
     };
   }, [hasLoadedWeek, weekDays, isoWeek, identity.scope, identity.userId, listReload]);
 
-  const shoppingList = useMemo(() => {
-    return groupShoppingListItems(generatedItems);
-  }, [generatedItems]);
+  const shoppingList = useMemo(() => groupByCategory(generatedItems), [generatedItems]);
+  const dishes = useMemo(() => plannedDishes(weekDays ?? []), [weekDays]);
+
+  // C4: «Calcular (IA)» for the dishes still without ingredients (one call, marks kept).
+  const calculatePendingDishes = () => {
+    if (!isoWeek || !weekDays || calculating) return;
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    setCalculating(true);
+    void reconcileShoppingList(dataIdentity, isoWeek, weekDays, { retryPending: true })
+      .then((loaded) => {
+        if (loaded.status !== "ready") {
+          if (loaded.status === "no_week") setWeekDays(null);
+          else setListNotes((current) => ({ ...current, aiError: "No se ha podido comprobar tu lista. Revisa la conexión." }));
+          return;
+        }
+        setGeneratedItems(loaded.view.items);
+        setCheckedItems(loaded.view.checkedItemIds);
+        setListNotes({
+          change: loaded.view.change,
+          pendingDishes: loaded.view.pendingDishes,
+          aiError: loaded.view.aiError,
+          fromCards: loaded.view.fromCards,
+          notUpdated: loaded.view.notUpdated,
+        });
+      })
+      .catch((error: unknown) => {
+        setListNotes((current) => ({
+          ...current,
+          aiError: isAiLoginRequiredError(error)
+            ? "Inicia sesión para calcular los ingredientes con IA."
+            : error instanceof ShoppingListApiError
+              ? error.message
+              : "No se pudieron calcular los ingredientes con IA.",
+        }));
+      })
+      .finally(() => setCalculating(false));
+  };
 
   useEffect(() => {
     const firstCategory = shoppingList[0]?.category ?? null;
@@ -426,27 +621,30 @@ export default function ShoppingListPage() {
     discardedLocalChanges: listSyncState.discardedLocalChanges,
   };
 
+  // Items bought that no dish needs any more are not part of the progress.
   const totalVisibleItems = shoppingList.reduce(
-    (totalItems, group) => totalItems + group.items.length,
+    (totalItems, group) => totalItems + group.items.filter((item) => !item.removed).length,
     0,
   );
   const checkedVisibleItems = shoppingList.reduce(
     (totalItems, group) =>
       totalItems +
-      group.items.filter((item) => checkedItems.includes(item.id)).length,
+      group.items.filter((item) => !item.removed && checkedItems.includes(item.id)).length,
     0,
   );
+  // Same rule per category, so the pills add up to the total above.
   const categoryProgress = shoppingList.map((group) => {
-    const checkedItemsInCategory = group.items.filter((item) =>
+    const neededItems = group.items.filter((item) => !item.removed);
+    const checkedItemsInCategory = neededItems.filter((item) =>
       checkedItems.includes(item.id),
     ).length;
 
     return {
       category: group.category,
       checked: checkedItemsInCategory,
-      total: group.items.length,
+      total: neededItems.length,
       isCompleted:
-        group.items.length > 0 && checkedItemsInCategory === group.items.length,
+        neededItems.length > 0 && checkedItemsInCategory === neededItems.length,
     };
   });
   const selectedGroup =
@@ -494,6 +692,13 @@ export default function ShoppingListPage() {
         ) : null}
         {identity.userId ? <SyncNotice state={syncState} /> : null}
 
+        {/* Persistent live region: the list's notices appear and change inside it. */}
+        <ListNotices
+          {...(generatedItems.length > 0 && !isUpdatingList && !errorMessage ? listNotes : emptyNotes)}
+          calculating={calculating}
+          onCalculate={calculatePendingDishes}
+        />
+
         <section className="transition-opacity duration-200 ease-out motion-reduce:transition-none">
           {!hasLoadedWeek ? (
             <Card className="p-6 sm:p-7">
@@ -512,6 +717,16 @@ export default function ShoppingListPage() {
                 lista de la compra.
               </p>
             </StateMessage>
+          ) : isUpdatingList ? (
+            <Card className="p-6 sm:p-7" aria-live="polite">
+              <p className="t-eyebrow">Actualizando</p>
+              <h2 className="t-h2 mt-3 text-[color:var(--color-foreground)]">
+                Actualizando tu lista con el menú
+              </h2>
+              <p className="t-meta mt-3 max-w-xl">
+                Recalculamos los ingredientes de tu menú. Lo que ya has comprado sigue marcado.
+              </p>
+            </Card>
           ) : isLoadingList ? (
             <Card className="p-6 sm:p-7">
               <p className="t-eyebrow">Generando</p>
@@ -552,7 +767,7 @@ export default function ShoppingListPage() {
           ) : errorMessage ? (
             <StateMessage
               className="p-6 sm:p-7"
-              title="No se pudo generar la lista."
+              title={errorTitle}
               variant="error"
             >
               <p className="max-w-xl text-base leading-7">{errorMessage}</p>
@@ -570,6 +785,7 @@ export default function ShoppingListPage() {
               checkedItems={checkedItems}
               onToggleCheckedItem={toggleCheckedItem}
               pantryItems={pantryItems}
+              dishes={dishes}
             />
           ) : (
             <StateMessage title="No hay lista de la compra." variant="empty">

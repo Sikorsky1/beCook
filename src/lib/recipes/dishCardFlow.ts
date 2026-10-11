@@ -19,6 +19,15 @@ import {
   type CatalogRecipeIdentity,
   type RecipeCard,
 } from "@/lib/recipes/card";
+import {
+  checkDish,
+  hasFoodRestrictions,
+  type DishCheck,
+  type DishFinding,
+  type RestrictionProfile,
+} from "@/lib/recipes/restriction-check";
+import { readMenuProfile } from "@/lib/menu-generation/prompt";
+import type { WeekFoodContextStatus } from "@/lib/menu-generation/food-context";
 import { mealRecipeLink, withMealRecipe } from "@/lib/weekStorage";
 
 // card: the slot points to a card that could be read · title_only: no card for this meal (menus
@@ -159,3 +168,145 @@ export function cardToShow(
 }
 
 export const dishCardSlotKey = (slot: { day: string; meal: MealKey }, title: string) => JSON.stringify([slot.day, slot.meal, title]);
+
+// --- Compatibility with the profile (C3) -------------------------------------------------------
+// The restrictions the card is checked against: the account's current profile (C1, status.current)
+// when signed in; the device profile for a guest. loading: not read yet · unknown: could not be read.
+export type DishCardRestrictions =
+  | { state: "ready"; profile: RestrictionProfile }
+  | { state: "no_profile" }
+  | { state: "loading" }
+  | { state: "unknown" };
+
+// foodContext: undefined while it is being read, null when it could not be read.
+export function dishCardRestrictions(
+  signedIn: boolean,
+  foodContext: WeekFoodContextStatus | null | undefined,
+  deviceProfile: { loaded: boolean; data: unknown },
+): DishCardRestrictions {
+  if (signedIn) {
+    if (foodContext === undefined) return { state: "loading" };
+    if (foodContext === null) return { state: "unknown" };
+    return foodContext.current.found ? { state: "ready", profile: foodContext.current.restrictions } : { state: "no_profile" };
+  }
+  if (!deviceProfile.loaded) return { state: "loading" };
+  if (deviceProfile.data === null || deviceProfile.data === undefined) return { state: "no_profile" };
+  try {
+    return { state: "ready", profile: readMenuProfile(deviceProfile.data) };
+  } catch {
+    // Malformed safety constraints are never read as «none».
+    return { state: "unknown" };
+  }
+}
+
+export type DishCompatibilityView = {
+  tone: "danger" | "warning" | "neutral";
+  heading: string;
+  basis: string | null;
+  lines: string[];
+  notes: string[];
+};
+
+export const dishCompatibilityDisclaimer = "No garantiza ausencia de alérgenos ni trazas.";
+
+const basisTexts: Record<DishCheck["basis"], string> = {
+  reviewed_card: "Según la ficha revisada.",
+  inferred_card: "Según una ficha estimada por IA, sin revisar.",
+  title_only: "Solo por el nombre del plato.",
+};
+
+function findingTerm(finding: DishFinding) {
+  if (finding.source === "ingredient") return finding.ingredient ?? finding.term;
+  if (finding.source === "allergen_tag") return `${finding.term} (alérgeno indicado en la ficha)`;
+  return `«${finding.term}» en el nombre`;
+}
+
+function restrictionPrefix(finding: DishFinding) {
+  const { kind, label } = finding.restriction;
+  if (kind === "diet") return label;
+  if (kind === "disliked") return `No te gusta «${label}»`;
+  if (kind === "other_allergy") return `Alergia: ${label}`;
+  return `Alergia: ${label.toLowerCase()}`;
+}
+
+// One line per restriction: what was found, and what only might be there.
+function findingLines(findings: DishFinding[]) {
+  const groups = new Map<string, { prefix: string; certain: string[]; possible: string[] }>();
+  for (const finding of findings) {
+    const key = `${finding.restriction.kind}:${finding.restriction.value}`;
+    const entry = groups.get(key) ?? { prefix: restrictionPrefix(finding), certain: [], possible: [] };
+    const list = finding.certainty === "certain" ? entry.certain : entry.possible;
+    const term = findingTerm(finding);
+    if (!list.includes(term)) list.push(term);
+    groups.set(key, entry);
+  }
+  return [...groups.values()].map(({ prefix, certain, possible }) => {
+    const parts = [certain.join(", "), possible.length ? `quizá ${possible.join(", ")}` : ""].filter(Boolean);
+    return `${prefix}: ${parts.join("; ")}.`;
+  });
+}
+
+// What the card says about the profile. Never «apto»: at most, no conflict detected.
+export function dishCompatibilityView(
+  title: string,
+  card: RecipeCard | null,
+  restrictions: DishCardRestrictions,
+): DishCompatibilityView {
+  if (restrictions.state === "loading") {
+    return { tone: "neutral", heading: "Cargando tus restricciones…", basis: null, lines: [], notes: [] };
+  }
+  if (restrictions.state === "no_profile") {
+    return {
+      tone: "neutral",
+      heading: "No tenemos tu perfil de restricciones",
+      basis: null,
+      lines: [],
+      notes: ["Sin él no comprobamos este plato. Si en casa hay alergias o dietas, añádelas en tu perfil."],
+    };
+  }
+  if (restrictions.state === "unknown") {
+    return {
+      tone: "neutral",
+      heading: "No hemos podido leer tus restricciones",
+      basis: null,
+      lines: [],
+      notes: ["Sin ellas no comprobamos este plato. Revisa tu perfil o vuelve a abrir la ficha."],
+    };
+  }
+  if (!hasFoodRestrictions(restrictions.profile)) {
+    return {
+      tone: "neutral",
+      heading: "Tu perfil no tiene restricciones ni alergias",
+      basis: null,
+      lines: [],
+      notes: ["Si en casa hay alguna, añádela en tu perfil para que la tengamos en cuenta."],
+    };
+  }
+
+  const check = checkDish({ title, card }, restrictions.profile);
+  const notes: string[] = [];
+  if (check.uninterpretable.length) {
+    notes.push(`No sabemos comprobar: ${check.uninterpretable.map((item) => `«${item}»`).join(", ")}. Revísalo tú.`);
+  }
+  const lines = findingLines(check.findings);
+  const basis = basisTexts[check.basis];
+
+  if (check.status === "conflict") {
+    const onlyDisliked = check.findings.every((finding) => finding.certainty === "possible" || finding.restriction.kind === "disliked");
+    return {
+      tone: onlyDisliked ? "warning" : "danger",
+      heading: onlyDisliked ? "Lleva algo que no te gusta" : "Choca con tu perfil",
+      basis,
+      lines,
+      notes,
+    };
+  }
+  if (check.status === "possible_conflict") {
+    return { tone: "warning", heading: "Puede chocar con tu perfil", basis, lines, notes };
+  }
+  if (check.status === "unverifiable") {
+    if (check.basis === "title_only") notes.unshift("Solo conocemos el nombre del plato, no sus ingredientes.");
+    return { tone: "warning", heading: check.basis === "title_only" ? "No podemos comprobarlo" : "No podemos comprobarlo del todo", basis, lines, notes };
+  }
+  return { tone: "neutral", heading: "No hemos detectado conflictos con tu perfil", basis, lines, notes };
+}

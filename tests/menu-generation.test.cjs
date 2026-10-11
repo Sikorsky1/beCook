@@ -25,8 +25,12 @@ test("rejects incomplete, blank, duplicate and generic output", () => {
  assert.throws(() => selectionToMenu({...selection,lunches:[" SALMÓN A LA PLANCHA ",...selection.lunches.slice(1)]},profile), /duplicate/);
 });
 test("blocks visible dietary/allergen conflicts including accents and compound dishes", () => {
- for (const [key, restriction, dish] of [["allergies","nuts","Espaguetis al pesto"],["allergies","shellfish","Arroz de gambas"],["allergies","egg","Tortilla de patata"],["allergies","lactose","Ensalada con feta"],["allergies","gluten","Tosta de tomate"],["dietaryRestrictions","vegan","Crema con nata"],["dietaryRestrictions","vegetarian","Espaguetis a la boloñesa"],["dietaryRestrictions","pescatarian","Pollo al limón"],["dietaryRestrictions","no_pork","Alcachofas con jamón"],["dietaryRestrictions","no_alcohol","Pollo al vino"]]) assert.ok(visibleFoodConflict(dish, readMenuProfile({[key]:[restriction]})),dish);
+ for (const [key, restriction, dish] of [["allergies","nuts","Espaguetis al pesto"],["allergies","shellfish","Arroz de gambas"],["allergies","egg","Tortilla de patata"],["allergies","lactose","Ensalada con feta"],["allergies","gluten","Tosta de tomate"],["dietaryRestrictions","vegan","Crema con nata"],["dietaryRestrictions","vegetarian","Espaguetis a la boloñesa"],["dietaryRestrictions","pescatarian","Pollo al limón"],["dietaryRestrictions","no_pork","Alcachofas con jamón"],["dietaryRestrictions","no_alcohol","Pollo al vino"],["dietaryRestrictions","no_pork","Espaguetis carbonara"],["dietaryRestrictions","no_pork","Fabada asturiana"],["dietaryRestrictions","vegan","Yogur con miel"],["allergies","nuts","Pollo con salsa satay"]]) assert.ok(visibleFoodConflict(dish, readMenuProfile({[key]:[restriction]})),dish);
  assert.equal(visibleFoodConflict("Garbanzos con espinacas",readMenuProfile({dietaryRestrictions:["vegan"]})), false);
+ // C3: «otras alergias» also block generated dishes; nutmeg and coconut milk are not nuts or dairy.
+ assert.ok(visibleFoodConflict("Pollo al sésamo",readMenuProfile({allergies:["other"],otherAllergies:"sésamo"})));
+ assert.equal(visibleFoodConflict("Crema de calabaza con nuez moscada",readMenuProfile({allergies:["nuts"]})), false);
+ assert.equal(visibleFoodConflict("Curry de garbanzos con leche de coco",readMenuProfile({allergies:["lactose"]})), false);
  assert.throws(() => selectionToMenu(selection,readMenuProfile({dietaryRestrictions:["vegetarian"]})), /restriction/);
 });
 test("keeps weekly requests and safety constraints distinct; filters examples without claiming ingredient safety", () => {

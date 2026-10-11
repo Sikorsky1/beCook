@@ -4,7 +4,8 @@ import type { WeekDay } from "@/data/mockWeek";
 import { getIsoWeekStorageId, parseIsoWeek, type IsoWeek } from "@/lib/isoWeek";
 import type { WeekFoodContextStatus } from "@/lib/menu-generation/food-context";
 import type { ShoppingFoodContext } from "@/lib/shoppingListStorage";
-import type { GeneratedShoppingListItem } from "@/lib/shoppingList";
+import type { StoredShoppingItem } from "@/lib/shoppingList";
+import type { ReconcileOps } from "@/lib/shopping/reconcile";
 import {
   loadEntity,
   readCached,
@@ -29,7 +30,12 @@ import type {
   PantryRowsWriteResult,
 } from "@/lib/supabase/pantry";
 import type { UserProfile } from "@/lib/supabase/profiles";
-import type { SaveShoppingListResult, SetShoppingItemsCheckedResult, ShoppingList } from "@/lib/supabase/shopping-lists";
+import type {
+  ReconcileShoppingListResult,
+  SaveShoppingListResult,
+  SetShoppingItemsCheckedResult,
+  ShoppingList,
+} from "@/lib/supabase/shopping-lists";
 import type { MealKind, WeekWriteResult } from "@/lib/supabase/weeks";
 import type { RecipeCard } from "@/lib/recipes/card";
 import { recipeTitleKey } from "@/lib/recipes/card";
@@ -91,10 +97,19 @@ export type ShoppingRemote = {
   fetch: () => Promise<RemoteShoppingState>;
   save: (input: {
     signature: string;
-    items: GeneratedShoppingListItem[];
+    items: StoredShoppingItem[];
     expectedWeekVersion: number | null;
   }) => Promise<SaveShoppingListResult>;
   setChecked: (itemIds: string[], checked: boolean) => Promise<SetShoppingItemsCheckedResult>;
+  // C4: updates the current list in place (reconcile_shopping_list). Absent: not supported (the
+  // data layer then saves a new list, as before C4).
+  reconcile?: (input: {
+    listId: string;
+    fromSignature: string | null;
+    toSignature: string;
+    ops: ReconcileOps;
+    expectedWeekVersion: number | null;
+  }) => Promise<ReconcileShoppingListResult>;
 };
 
 // The account side of the pantry (B7): its rows, and writes of one item at a time.
@@ -119,6 +134,8 @@ export type Remotes = {
   // recipes that have a reviewed version, by title key.
   recipeCard?: (versionId: string) => Promise<RecipeCard | null>;
   catalogRecipes?: () => Promise<Map<string, WeekRecipeLink>>;
+  // C4: several card versions in one read (the dishes of a week), by version id.
+  recipeCards?: (versionIds: string[]) => Promise<Map<string, RecipeCard>>;
 };
 
 // C1: right after a whole-week write, the week keeps the food context it was planned with (saved
@@ -281,6 +298,18 @@ const supabaseRemotes: Remotes = {
         const { setShoppingItemsCheckedInSupabase } = await import("@/lib/supabase/shopping-lists");
         return setShoppingItemsCheckedInSupabase(itemIds, checked);
       },
+      async reconcile({ listId, fromSignature, toSignature, ops, expectedWeekVersion }) {
+        const { reconcileShoppingListInSupabase } = await import("@/lib/supabase/shopping-lists");
+        return reconcileShoppingListInSupabase({
+          isoYear: isoWeek.isoYear,
+          isoWeek: isoWeek.isoWeek,
+          listId,
+          fromSignature,
+          toSignature,
+          ops,
+          expectedWeekVersion,
+        });
+      },
     };
   },
 };
@@ -298,6 +327,11 @@ supabaseRemotes.planningRequest = async (userId, isoWeek) => {
 supabaseRemotes.recipeCard = async (versionId) => {
   const { getRecipeCardFromSupabase } = await import("@/lib/supabase/recipes");
   return getRecipeCardFromSupabase(versionId);
+};
+
+supabaseRemotes.recipeCards = async (versionIds) => {
+  const { getRecipeCardsFromSupabase } = await import("@/lib/supabase/recipes");
+  return getRecipeCardsFromSupabase(versionIds);
 };
 
 supabaseRemotes.catalogRecipes = async () => {
@@ -413,6 +447,21 @@ export async function loadRecipeCard(versionId: string): Promise<RecipeCard | nu
   return remotes.recipeCard ? remotes.recipeCard(versionId) : null;
 }
 
+// C4: the cards of several dishes (one read when possible). Versions that are not readable are
+// absent; throws when the account cannot be reached.
+export async function loadRecipeCards(versionIds: string[]): Promise<Map<string, RecipeCard>> {
+  const ids = [...new Set(versionIds)];
+  if (ids.length === 0) return new Map();
+  if (remotes.recipeCards) return remotes.recipeCards(ids);
+  const cards = new Map<string, RecipeCard>();
+  if (!remotes.recipeCard) return cards;
+  for (const id of ids) {
+    const card = await remotes.recipeCard(id);
+    if (card) cards.set(card.versionId, card);
+  }
+  return cards;
+}
+
 // Links (or unlinks) the card of one planned meal. Only that link is written (signed in:
 // update_week_slot_recipe with the week version of this copy; guest: this device).
 export function saveWeekRecipe(
@@ -455,15 +504,21 @@ export function writeSelectedWeek(identity: DataIdentity, isoWeek: IsoWeek) {
 }
 
 // --- Shopping (per week; the account list is read first, see @/lib/data/shopping) ---
+// C4: needsReview / removed are the account state of a row (bought, now needs more / no longer
+// needed). Copies written before C4 have neither, nor keys or origins.
+export type CachedShoppingItem = StoredShoppingItem & { needsReview?: boolean; removed?: boolean };
+
 export type ShoppingCache = {
   weekSignature: string;
-  items: GeneratedShoppingListItem[];
+  items: CachedShoppingItem[];
   checkedItemIds: string[];
   // B6. listId: the account list these items are (null: only on this device so far).
   // itemIds: account rows of each visible item. pendingChecks: marks the account has not accepted yet.
   listId?: string | null;
   itemIds?: Record<string, string[]>;
   pendingChecks?: Record<string, boolean>;
+  // C4: 'mixed-v1' when the items have keys and origins (see shopping_lists.ingredient_basis).
+  ingredientBasis?: string | null;
 };
 
 export function readShoppingCache(identity: DataIdentity, isoWeek: IsoWeek) {

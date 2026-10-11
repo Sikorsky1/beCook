@@ -127,7 +127,9 @@ async function runShoppingTests({ check: baseCheck, sql, id, supabase, api, crea
     const staleMark = await freshLayer().shopping.setShoppingItemChecked(asA, week(1), ONION, true);
     const afterEdit = listsOf(1);
     observed = { regenerated: regenerated.status, aiCalls, staleMark: staleMark.status, lists: afterEdit.map(checkedNames) };
-    check("B6 shopping: a dish change makes a new list, the previous one is kept, and a mark on the old one is refused", () => {
+    // C4: this route stub answers whole-week items only (no breakdown), so the client falls back to the
+    // B6 behaviour; the in-place update is scripts/shopping-reconcile-db-tests.cjs.
+    check("B6 shopping: a dish change (server without breakdown) makes a new list, the previous one is kept, and a mark on the old one is refused", () => {
       assert.equal(regenerated.status, "ready");
       assert.equal(aiCalls, 2);
       assert.equal(afterEdit.length, 2);

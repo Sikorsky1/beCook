@@ -90,6 +90,14 @@
       "sha256": "9111a06c34776c636a61510a3ea2c0bccedb8399c321a016ca37bf820ee650ca",
       "appliedAt": "2026-10-11",
       "notes": "Aplicada con el conector en dos partes (sin BEGIN/COMMIT: el conector ya usa una transacción). Parte 1: todo salvo apply_week. Parte 2: 20261011204749 recipe_cards_apply_week. Comprobado: 27 recetas de catálogo, 0 versiones, RLS activa, 2 columnas en week_days, EXECUTE de apply_week solo authenticated, save_inferred_recipe sin anon."
+    },
+    {
+      "version": "20261011223501",
+      "name": "shopping_item_origins",
+      "source": "supabase/migrations/20261013090000_shopping_item_origins.sql",
+      "sha256": "231604a9b14c8990faaef689c84a54770d19bc6012d2228e8b4cb624a3075a0e",
+      "appliedAt": "2026-10-11",
+      "notes": "Conector, una parte, sin BEGIN/COMMIT. Cuerpos de las 7 funciones idénticos a los de la BD local (md5 de prosrc; save_shopping_list y reconcile_shopping_list idénticos sin comentarios)."
     }
   ]
 }
