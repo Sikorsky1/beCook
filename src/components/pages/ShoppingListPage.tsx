@@ -37,6 +37,7 @@ import {
   addManualShoppingItem,
   generateShoppingList,
   loadShoppingList,
+  readShoppingView,
   reconcileShoppingList,
   removeManualShoppingItem,
   setShoppingItemChecked,
@@ -84,6 +85,26 @@ function ShoppingProgress({
       {checkedItemsCount}/{totalItemsCount} comprados
     </StatusPill>
   );
+}
+
+// What the user hears after an edit of the list, by what the account did with it.
+function editMessage(status: EditResult["status"], done: string) {
+  switch (status) {
+    case "synced":
+      return done;
+    case "local":
+      return `${done} Solo en este dispositivo.`;
+    case "pending":
+      return `${done} Se guardará en tu cuenta al recuperar la conexión.`;
+    case "stale":
+      return "La lista ha cambiado en otro dispositivo; la volvemos a cargar. Inténtalo de nuevo.";
+    case "discarded":
+      return "Tu cuenta no ha aceptado el cambio. Se muestra la lista guardada.";
+    case "no_list":
+      return "Primero necesitas una lista para esta semana.";
+    default:
+      return "No se ha podido hacer el cambio.";
+  }
 }
 
 type SectionView = { category: SupermarketCategory; rows: ShoppingRowData[]; done: number; total: number };
@@ -537,6 +558,8 @@ export default function ShoppingListPage() {
     if (result.status === "stale") {
       setListSyncState({ conflict: true });
       setListReload((value) => value + 1);
+    } else if (result.status === "discarded") {
+      setListSyncState((current) => ({ ...current, discardedLocalChanges: true }));
     } else if (result.status === "pending") {
       setListSyncState((current) => ({ ...current, pending: true }));
     } else if (result.status === "synced" && result.view) {
@@ -547,7 +570,14 @@ export default function ShoppingListPage() {
   const runEdit = async (edit: () => Promise<EditResult>) => {
     setSavingChecks((count) => count + 1);
     try {
-      const result = await edit();
+      const sent = edit();
+      // The device copy already has the edit: shown at once, before the account answers.
+      const now = isoWeek && weekDays ? readShoppingView(dataIdentityOf(), isoWeek, weekDays) : null;
+      if (now) {
+        setGeneratedItems(now.items);
+        setCheckedItems(now.checkedItemIds);
+      }
+      const result = await sent;
       showEdit(result);
       return result;
     } finally {
@@ -559,22 +589,11 @@ export default function ShoppingListPage() {
     if (!isoWeek || !weekDays) return "Primero necesitas una lista para esta semana.";
     const result = await runEdit(() => addManualShoppingItem(dataIdentityOf(), isoWeek, draft, weekDays));
     const name = `«${capitalize(draft.name)}»`;
-    switch (result.status) {
-      case "synced":
-        return `${name} añadido a ${capitalize(draft.category)}.`;
-      case "local":
-        return `${name} añadido en este dispositivo.`;
-      case "pending":
-        return `${name} añadido en este dispositivo. Se guardará en tu cuenta al recuperar la conexión.`;
-      case "existing":
-        return `${name} ya está en la lista.`;
-      case "stale":
-        return "La lista ha cambiado en otro dispositivo. Vuelve a intentarlo.";
-      case "no_list":
-        return "Primero necesitas una lista para esta semana.";
-      default:
-        return "Revisa el nombre y la cantidad.";
-    }
+    // Frozen food is shown under «Otros».
+    const section = capitalize(draft.category === "congelados" ? "otros" : draft.category);
+    if (result.status === "existing") return `${name} ya está en la lista.`;
+    if (result.status === "refused") return "Revisa el nombre y la cantidad.";
+    return editMessage(result.status, `${name} añadido a ${section}.`);
   };
 
   const dataIdentityOf = () => ({ scope: identity.scope, userId: identity.userId });
@@ -589,14 +608,18 @@ export default function ShoppingListPage() {
         setActionMessage(
           result.status === "refused"
             ? `No se puede cambiar la cantidad de «${capitalize(item.name)}».`
-            : `Cantidad de «${capitalize(item.name)}»: ${formatShoppingAmount(quantity, unit ?? item.unit)}.`,
+            : editMessage(result.status, `Cantidad de «${capitalize(item.name)}»: ${formatShoppingAmount(quantity, unit ?? item.unit)}.`),
         ),
       );
     },
     onRemove: (item) => {
       if (!isoWeek || !weekDays) return;
       void runEdit(() => removeManualShoppingItem(dataIdentityOf(), isoWeek, item.id, weekDays)).then((result) =>
-        setActionMessage(result.status === "refused" ? `No se puede quitar «${capitalize(item.name)}».` : `«${capitalize(item.name)}» quitado de la lista.`),
+        setActionMessage(
+          result.status === "refused"
+            ? `No se puede quitar «${capitalize(item.name)}».`
+            : editMessage(result.status, `«${capitalize(item.name)}» quitado de la lista.`),
+        ),
       );
     },
     onAddToPantry: (item) => {
@@ -619,7 +642,9 @@ export default function ShoppingListPage() {
       setActionMessage(
         result.status === "missing"
           ? `«${capitalize(item.name)}» no está en tu despensa.`
-          : `«${capitalize(item.name)}» pasa a la lista: lo hemos marcado como agotado en tu despensa.`,
+          : result.status === "conflict"
+            ? "Tu despensa ha cambiado en otro dispositivo. Revisa la despensa."
+            : `«${capitalize(item.name)}» pasa a la lista: lo hemos marcado como agotado en tu despensa${result.status === "pending" ? " (se guardará al recuperar la conexión)" : ""}.`,
       );
     });
   };
@@ -820,7 +845,14 @@ export default function ShoppingListPage() {
                         <span className="text-sm font-semibold text-[color:var(--color-muted-foreground)]">{formatShoppingAmount(item.quantity, item.unit)}</span>
                         <button
                           type="button"
-                          onClick={() => markUsedUp(item)}
+                          onClick={(event) => {
+                            // The line leaves this group: the focus goes to the next one (or the group's title).
+                            const line = event.currentTarget.closest("li");
+                            const target = (line?.nextElementSibling ?? line?.previousElementSibling)?.querySelector<HTMLElement>("button")
+                              ?? line?.closest("details")?.querySelector<HTMLElement>("summary");
+                            markUsedUp(item);
+                            requestAnimationFrame(() => target?.focus());
+                          }}
                           aria-label={`Se me acabó: ${capitalize(item.name)}. Pasarlo a la lista`}
                           className="min-h-11 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-foreground)]"
                         >

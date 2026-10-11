@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { pantryCategoryOrder, type PantryCategory } from "@/lib/pantryStorage";
 
@@ -18,6 +18,7 @@ export function PantryBasicsPicker({ offered, onAdd }: PantryBasicsPickerProps) 
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const id = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
   if (offered.length === 0) return null;
 
   const visible = selected.filter((name) => offered.some((basic) => basic.name === name));
@@ -30,6 +31,7 @@ export function PantryBasicsPicker({ offered, onAdd }: PantryBasicsPickerProps) 
   return (
     <div className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
       <button
+        ref={toggleRef}
         type="button"
         aria-expanded={open}
         aria-controls={`${id}-panel`}
@@ -70,6 +72,8 @@ export function PantryBasicsPicker({ offered, onAdd }: PantryBasicsPickerProps) 
               onAdd(offered.filter((basic) => visible.includes(basic.name)));
               setSelected([]);
               setOpen(false);
+              // The panel closes: the focus goes back to the button that opened it.
+              requestAnimationFrame(() => toggleRef.current?.focus());
             }}
             className="mt-4 min-h-11 rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white hover:bg-[color:var(--color-accent-strong-hover)] disabled:opacity-60"
           >

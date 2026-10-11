@@ -32,6 +32,17 @@ export type ShoppingRowActions = {
   onAddToPantry: (item: ShoppingViewItem) => void;
 };
 
+// Where the focus goes when a line disappears: the next (or previous) line's checkbox, else the
+// next (or previous) block of the list (a section title, the folded group, the add form).
+export function focusTargetAfterRemoval(from: HTMLElement): HTMLElement | null {
+  const line = from.closest("li");
+  const sibling = line?.nextElementSibling ?? line?.previousElementSibling;
+  if (sibling) return sibling.querySelector<HTMLElement>('input[type="checkbox"], button');
+  const block = line?.closest("section");
+  const other = block?.nextElementSibling ?? block?.previousElementSibling;
+  return other?.querySelector<HTMLElement>("h2[tabindex], summary, button") ?? null;
+}
+
 const secondaryButtonClass =
   "inline-flex min-h-11 items-center rounded-[var(--radius-control)] px-2 text-sm font-semibold text-[color:var(--color-accent-hover)] underline-offset-4 hover:underline";
 
@@ -81,12 +92,31 @@ export function ShoppingRow({ row, actions }: { row: ShoppingRowData; actions: S
           {item.manual || canAddToPantry ? (
             <div className="mt-1 flex flex-wrap gap-x-2">
               {canAddToPantry ? (
-                <button type="button" onClick={() => actions.onAddToPantry(item)} className={secondaryButtonClass} aria-label={`Añadir ${name} a la despensa`}>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    // The button goes away once it is in the pantry: the focus stays on the line.
+                    const checkbox = event.currentTarget.closest("li")?.querySelector<HTMLElement>('input[type="checkbox"]');
+                    actions.onAddToPantry(item);
+                    requestAnimationFrame(() => checkbox?.focus());
+                  }}
+                  className={secondaryButtonClass}
+                  aria-label={`Añadir a despensa: ${name}`}
+                >
                   Añadir a despensa
                 </button>
               ) : null}
               {item.manual ? (
-                <button type="button" onClick={() => actions.onRemove(item)} className={secondaryButtonClass} aria-label={`Quitar ${name} de la lista`}>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    const target = focusTargetAfterRemoval(event.currentTarget);
+                    actions.onRemove(item);
+                    requestAnimationFrame(() => target?.focus());
+                  }}
+                  className={secondaryButtonClass}
+                  aria-label={`Quitar ${name} de la lista`}
+                >
                   Quitar
                 </button>
               ) : null}
@@ -125,7 +155,7 @@ export function ShoppingSection({ category, rows, done, total, actions }: Shoppi
   return (
     <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-64">
       <div className="flex items-baseline justify-between gap-3 px-1">
-        <h2 id={`${id}-title`} className="t-h3 text-[color:var(--color-foreground)]">
+        <h2 id={`${id}-title`} tabIndex={-1} className="t-h3 text-[color:var(--color-foreground)]">
           {capitalize(category)}
         </h2>
         <p className="t-meta">{done} de {total} comprados</p>

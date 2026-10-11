@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil } from "lucide-react";
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 
 import { formatShoppingAmount } from "@/lib/shopping/units";
 
@@ -25,6 +25,12 @@ export function QuantityEditor({ name, quantity, unit, editable, manual, checked
   const [unitText, setUnitText] = useState(unit);
   const [error, setError] = useState("");
   const formId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // Saving or cancelling closes the form and gives the focus back to the amount.
+  const close = () => {
+    setOpen(false);
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  };
   const shown = formatShoppingAmount(quantity, unit);
   const badgeClass = `inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold ${
     checked ? "bg-white text-[color:var(--color-muted-foreground)]" : "bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
@@ -51,12 +57,13 @@ export function QuantityEditor({ name, quantity, unit, editable, manual, checked
       return;
     }
     onSave(value, manual ? unitText.trim() : undefined);
-    setOpen(false);
+    close();
   };
 
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => (open ? setOpen(false) : openForm())}
         aria-expanded={open}
@@ -104,7 +111,7 @@ export function QuantityEditor({ name, quantity, unit, editable, manual, checked
           </button>
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={close}
             className="min-h-11 self-end rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)]"
           >
             Cancelar

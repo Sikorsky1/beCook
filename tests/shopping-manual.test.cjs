@@ -388,3 +388,23 @@ test("Compra: every checkbox has its own accessible name (not «on»), fields at
  assert.ok(checkboxes > 0);
  assert.ok(!read("src/components/pages/ShoppingListPage.tsx").includes("CheckboxItem"), "Compra no longer uses the shared row that announced «on»");
 });
+
+test("review UI: messages follow what the account did, focus is given back, names and errors are announced", () => {
+ const page = read("src/components/pages/ShoppingListPage.tsx");
+ const section = read("src/components/features/ShoppingSection.tsx");
+ const editor = read("src/components/features/QuantityEditor.tsx");
+ const form = read("src/components/features/ManualItemForm.tsx");
+ // Quantity and removal messages go through the same switch as the add (never «done» when stale/pending).
+ assert.match(page, /function editMessage\(status/);
+ for (const status of ["pending", "stale", "discarded", "local"]) assert.match(page, new RegExp(`case "${status}"`));
+ assert.equal((page.match(/editMessage\(result\.status/g) ?? []).length, 3);
+ assert.match(page, /draft\.category === "congelados" \? "otros"/, "the message names the section where it is shown");
+ // Focus: after «Quitar», saving or cancelling a quantity, closing the add form.
+ assert.match(section, /focusTargetAfterRemoval\(event\.currentTarget\)/);
+ assert.match(section, /<h2 id=\{`\$\{id\}-title`\} tabIndex=\{-1\}/);
+ assert.match(editor, /triggerRef\.current\?\.focus\(\)/);
+ assert.match(form, /openButtonRef\.current\?\.focus\(\)/);
+ assert.match(section, /aria-label=\{`Añadir a despensa: \$\{name\}`\}/);
+ assert.match(form, /aria-invalid=\{errorField === "quantity" \? true : undefined\}/);
+ assert.match(form, /aria-describedby=\{errorField === "quantity" \?/);
+});

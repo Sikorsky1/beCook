@@ -131,3 +131,15 @@ test("Despensa: «Tengo / Se acabó» as explicit pressed buttons, multiple basi
   assert.equal(source.match(/\bmin-h-(?:9|10)\b/g), null, file);
  }
 });
+
+test("review UI: pending deletes are committed on pagehide; focus after delete, undo and adding basics; message by result", () => {
+ const page = read("src/components/pages/PantryPage.tsx");
+ const picker = read("src/components/features/PantryBasicsPicker.tsx");
+ assert.match(page, /addEventListener\("pagehide", commitPending\)/);
+ assert.match(page, /removeEventListener\("pagehide", commitPending\)/);
+ assert.match(page, /data-pantry-key=\{pantryItemKey\(item\)\}/);
+ assert.match(page, /undoDelete\(key, \{ focus: true \}\)/);
+ assert.match(page, /requestAnimationFrame\(\(\) => target\?\.focus\(\)\)/);
+ assert.match(page, /result\.status === "conflict"\s*\?\s*"Tu despensa había cambiado/);
+ assert.match(picker, /toggleRef\.current\?\.focus\(\)/);
+});

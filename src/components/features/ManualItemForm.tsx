@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { supermarketCategoryLabels, type SupermarketCategory } from "@/lib/shoppingList";
 
@@ -26,15 +26,28 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
   const [unit, setUnit] = useState("ud");
   const [category, setCategory] = useState<SupermarketCategory>("otros");
   const [error, setError] = useState("");
+  // Which field the error is about (its input gets aria-invalid and the message).
+  const [errorField, setErrorField] = useState<"name" | "quantity" | null>(null);
+  const openButtonRef = useRef<HTMLButtonElement>(null);
+  const focusOpenButton = useRef(false);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const id = useId();
+
+  // Closing the form gives the focus back to the button that opened it.
+  useEffect(() => {
+    if (!open && focusOpenButton.current) {
+      focusOpenButton.current = false;
+      openButtonRef.current?.focus();
+    }
+  }, [open]);
 
   const reset = () => {
     setName("");
     setQuantity("1");
     setUnit("ud");
     setError("");
+    setErrorField(null);
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -43,13 +56,16 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
     const amount = quantity.trim() === "" ? 1 : Number(quantity.replace(",", ".").trim());
     if (!cleanName) {
       setError("Escribe qué quieres añadir.");
+      setErrorField("name");
       return;
     }
     if (!Number.isFinite(amount) || amount <= 0 || amount > 100000) {
       setError("Escribe una cantidad mayor que 0.");
+      setErrorField("quantity");
       return;
     }
     setError("");
+    setErrorField(null);
     setSaving(true);
     try {
       setMessage(await onAdd({ name: cleanName, quantity: amount, unit: unit.trim() || "ud", category }));
@@ -74,8 +90,8 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
                 maxLength={120}
                 required
                 autoComplete="off"
-                aria-invalid={error && !name.trim() ? true : undefined}
-                aria-describedby={error ? `${id}-error` : undefined}
+                aria-invalid={errorField === "name" ? true : undefined}
+                aria-describedby={errorField === "name" ? `${id}-error` : undefined}
                 className={fieldClass}
                 onChange={(event) => setName(event.target.value)}
                 autoFocus
@@ -83,7 +99,15 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
             </label>
             <label className="grid gap-1">
               <span className="text-sm font-semibold text-[color:var(--color-foreground)]">Cantidad</span>
-              <input type="text" inputMode="decimal" value={quantity} className={fieldClass} onChange={(event) => setQuantity(event.target.value)} />
+              <input
+                type="text"
+                inputMode="decimal"
+                value={quantity}
+                aria-invalid={errorField === "quantity" ? true : undefined}
+                aria-describedby={errorField === "quantity" ? `${id}-error` : undefined}
+                className={fieldClass}
+                onChange={(event) => setQuantity(event.target.value)}
+              />
             </label>
             <label className="grid gap-1">
               <span className="text-sm font-semibold text-[color:var(--color-foreground)]">Unidad</span>
@@ -116,6 +140,7 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
             <button
               type="button"
               onClick={() => {
+                focusOpenButton.current = true;
                 setOpen(false);
                 reset();
               }}
@@ -127,6 +152,7 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
         </form>
       ) : (
         <button
+          ref={openButtonRef}
           type="button"
           aria-expanded={false}
           onClick={() => {

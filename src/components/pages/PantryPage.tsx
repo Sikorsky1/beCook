@@ -170,7 +170,7 @@ function PantryItemsForCategory({
       <div className="sticky top-0 z-10 border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-3 sm:px-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="t-h3 capitalize text-[color:var(--color-foreground)]">
+            <h2 tabIndex={-1} className="t-h3 capitalize text-[color:var(--color-foreground)]">
               {group.category}
             </h2>
             <p className="t-meta mt-1">
@@ -221,7 +221,7 @@ function PantryItemsForCategory({
       {group.items.length > 0 ? (
         <ul className="max-h-[min(56dvh,34rem)] overflow-y-auto divide-y divide-[color:var(--color-border)]">
           {group.items.map((item) => (
-            <li key={`${item.category}:${item.name}`} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
+            <li key={`${item.category}:${item.name}`} data-pantry-key={pantryItemKey(item)} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
               <div className="min-w-0 flex-1">
                 <p className="t-body-strong text-[color:var(--color-foreground)]">{item.name}</p>
                 <p className="t-meta mt-0.5">{item.active ? "En casa" : "Se ha acabado: sale en la compra"}</p>
@@ -233,7 +233,15 @@ function PantryItemsForCategory({
               />
               <IconButton
                 aria-label={`Borrar ${item.name}`}
-                onClick={() => onDeleteItem(group.category, item.name)}
+                onClick={(event) => {
+                  // The line disappears: the focus goes to the next line (or the previous one, or
+                  // the section's title).
+                  const line = event.currentTarget.closest("li");
+                  const target = (line?.nextElementSibling ?? line?.previousElementSibling)?.querySelector<HTMLElement>("button")
+                    ?? line?.closest("article")?.querySelector<HTMLElement>("h2");
+                  onDeleteItem(group.category, item.name);
+                  requestAnimationFrame(() => target?.focus());
+                }}
                 className="shrink-0"
               >
                 <Trash2 aria-hidden="true" className="h-4 w-4" />
@@ -272,6 +280,8 @@ export default function PantryPage() {
   const [pendingDeletes, setPendingDeletes] = useState<string[]>([]);
   const [deletedNames, setDeletedNames] = useState<Record<string, string>>({});
   const [basicsMessage, setBasicsMessage] = useState("");
+  // An item brought back by «Deshacer», to give it the focus once it is shown again.
+  const [focusKey, setFocusKey] = useState<string | null>(null);
   const deletesRef = useRef<ReturnType<typeof createDeferredDeletes> | null>(null);
   const deleteTargets = useRef(new Map<string, { identity: DataIdentity; category: PantryCategory; name: string }>());
   const currentScopeRef = useRef<string | null>(null);
@@ -302,13 +312,27 @@ export default function PantryPage() {
       },
     });
     deletesRef.current = deletes;
-    return () => deletes.flush();
+    // Closing the tab or leaving the app (pagehide, also on mobile) commits what is pending.
+    const commitPending = () => deletes.flush();
+    window.addEventListener("pagehide", commitPending);
+    return () => {
+      window.removeEventListener("pagehide", commitPending);
+      deletes.flush();
+    };
   }, []);
 
   useEffect(() => {
     const deletes = deletesRef.current;
     return () => deletes?.flush();
   }, [identity.scope, identity.epoch]);
+
+  useEffect(() => {
+    if (!focusKey || pendingDeletes.includes(focusKey)) return;
+    const line = Array.from(document.querySelectorAll<HTMLElement>("[data-pantry-key]")).find((element) => element.dataset.pantryKey === focusKey);
+    line?.querySelector<HTMLElement>("button")?.focus();
+    const timer = window.setTimeout(() => setFocusKey(null), 0);
+    return () => window.clearTimeout(timer);
+  }, [focusKey, pendingDeletes, selectedCategory]);
 
   useEffect(() => {
     // Identity first; the pantry shown always belongs to the current identity.
@@ -355,7 +379,7 @@ export default function PantryPage() {
   const showChange = (change: Promise<PantryChangeResult>) => {
     setPantryItems(readPantryView(dataIdentity));
     setSavingChanges((count) => count + 1);
-    void change.then((result) => {
+    return change.then((result) => {
       setSavingChanges((count) => count - 1);
       setPantryItems(readPantryView(dataIdentity));
       if (result.status === "conflict") {
@@ -363,6 +387,7 @@ export default function PantryPage() {
       } else {
         setSyncState(result.status === "pending" ? { pending: true } : {});
       }
+      return result;
     });
   };
 
@@ -442,9 +467,16 @@ export default function PantryPage() {
     deletesRef.current?.schedule(key);
   };
 
-  const undoDelete = (key: string) => {
+  const undoDelete = (key: string, { focus = false } = {}) => {
+    const target = deleteTargets.current.get(key);
     deletesRef.current?.undo(key);
     deleteTargets.current.delete(key);
+    if (focus && target) {
+      // The item comes back in its section; the focus goes to it (the «Deshacer» button goes away).
+      setSelectedCategory(target.category);
+      setAddingCategory(null);
+      setFocusKey(key);
+    }
   };
 
   const addBasics = (basics: { name: string; category: PantryCategory }[]) => {
@@ -455,11 +487,19 @@ export default function PantryPage() {
       undoDelete(key);
       return false;
     });
-    if (toAdd.length) showChange(addPantryItems(dataIdentity, toAdd));
-    setBasicsMessage(
-      basics.length === 1
-        ? `«${basics[0].name}» añadido a tu despensa.`
-        : `${basics.length} básicos añadidos a tu despensa.`,
+    const added = basics.length === 1 ? `«${basics[0].name}» añadido a tu despensa.` : `${basics.length} básicos añadidos a tu despensa.`;
+    if (!toAdd.length) {
+      setBasicsMessage(added);
+      return;
+    }
+    void showChange(addPantryItems(dataIdentity, toAdd)).then((result) =>
+      setBasicsMessage(
+        result.status === "conflict"
+          ? "Tu despensa había cambiado en otro dispositivo: revisa la lista antes de añadir más."
+          : result.status === "pending"
+            ? `${added} Se guardará en tu cuenta al recuperar la conexión.`
+            : added,
+      ),
     );
   };
 
@@ -532,7 +572,7 @@ export default function PantryPage() {
               <p className="text-sm font-semibold text-[color:var(--color-foreground)]">«{deletedNames[key]}» borrado de la despensa.</p>
               <button
                 type="button"
-                onClick={() => undoDelete(key)}
+                onClick={() => undoDelete(key, { focus: true })}
                 className="min-h-11 rounded-[var(--radius-control)] px-3 text-sm font-semibold text-[color:var(--color-accent-hover)] underline underline-offset-4"
               >
                 Deshacer
