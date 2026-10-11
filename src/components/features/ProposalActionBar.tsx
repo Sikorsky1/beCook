@@ -19,10 +19,24 @@ type ProposalActionBarProps = {
   onUse: () => void;
   undo: { busy: boolean; onUndo: () => void } | null;
   onOpenWeek: (() => void) | null;
+  // C6, decision 3: the proposal was generated with a profile that has changed since. Saying it and
+  // asking is enough; it is never blocked.
+  contextWarning?: { onConfirm: () => void; onCancel: () => void } | null;
 };
 
-export function ProposalActionBar({ summary, weekLabel, status, menu, message, onUse, undo, onOpenWeek }: ProposalActionBarProps) {
+export function ProposalActionBar({
+  summary,
+  weekLabel,
+  status,
+  menu,
+  message,
+  onUse,
+  undo,
+  onOpenWeek,
+  contextWarning = null,
+}: ProposalActionBarProps) {
   const isError = status === "error";
+  const askContext = contextWarning !== null && status !== "applying" && status !== "success";
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-[calc(6.5rem+env(safe-area-inset-bottom))] z-40 flex justify-center pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
@@ -43,13 +57,28 @@ export function ProposalActionBar({ summary, weekLabel, status, menu, message, o
             </p>
           ) : null}
         </div>
-        {message ? null : (
+        {message || askContext ? null : (
           <p className="t-meta mb-2">
             {summary} · se guarda en {weekLabel}
           </p>
         )}
 
-        {status === "success" ? (
+        {askContext ? (
+          <div role="alert" className="space-y-2">
+            <p className="text-sm leading-5 text-[color:var(--color-foreground)]">
+              <span className="font-semibold">Tu perfil ha cambiado desde que se creó esta propuesta.</span> Los
+              platos se eligieron con tus alergias, restricciones y gustos anteriores. ¿La usas igualmente?
+            </p>
+            <div className="flex gap-2">
+              <TertiaryButton onClick={contextWarning.onCancel} className="flex-1">
+                Ahora no
+              </TertiaryButton>
+              <PrimaryButton onClick={contextWarning.onConfirm} className="flex-1">
+                Usar igualmente
+              </PrimaryButton>
+            </div>
+          </div>
+        ) : status === "success" ? (
           <div className="flex gap-2">
             {undo ? (
               <TertiaryButton onClick={undo.onUndo} disabled={undo.busy} className="flex-1">

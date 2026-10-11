@@ -44,7 +44,7 @@ test("each tab and its panel share stable, distinct ids", () => {
 
 test("every role=tablist is a complete tab pattern: tabs, panels, aria-controls and roving tabindex", () => {
   const withTablist = sourceFiles("src").filter(file => read(file).includes('role="tablist"'));
-  assert.ok(withTablist.length > 0);
+  // C6 (step 32): Crear menú has no tabs any more; any tab list that appears must still be complete.
   for (const file of withTablist) {
     const source = read(file);
     for (const required of ['role="tab"', "aria-selected=", "aria-controls=", 'role="tabpanel"', "aria-labelledby=", "tabIndex=", "onKeyDown="]) {

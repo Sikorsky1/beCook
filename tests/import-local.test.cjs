@@ -1,11 +1,25 @@
-const {test} = require("node:test");
+const {test, beforeEach, afterEach} = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 // C6 (roadmap step 22, and the Crear menú part of step 32): an unambiguous pasted menu is ordered on
 // the device without any request or quota; the route repeats that attempt before the AI, answers
 // 400/422/502 with a reason, and the form and the proposal are kept per identity and week.
 // Synthetic values only: no Supabase project or OpenAI key is contacted.
 const {installFakeBackends, validToken} = require("./helpers/fake-backends.cjs");
+const {createDevice, useDevice} = require("./helpers/fake-browser.cjs");
+
+const root = path.resolve(__dirname, "..");
+const read = file => fs.readFileSync(path.join(root, file), "utf8");
+
+const A = "00000000-0000-4000-8000-00000000000a";
+const B = "00000000-0000-4000-8000-00000000000b";
+const asA = {scope: "u_" + A, userId: A};
+const asB = {scope: "u_" + B, userId: B};
+const guest = {scope: "guest", userId: null};
+const W41 = {isoYear: 2026, isoWeek: 41};
+const W42 = {isoYear: 2026, isoWeek: 42};
 
 const structured = "Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\nComida: Pollo con arroz\nCena: Tortilla francesa";
 const tabular = "DÍA\tCOMIDA\tCENA\nLunes\tLentejas estofadas\tLIBRE\nMIÉRCOLES\tMerluza al horno\tCrema de calabaza";
@@ -187,3 +201,124 @@ test("route: 400 with a reason for wrong type, empty text, too long or too many 
  assert.equal(fakes.openAICalls, 0);
  assert.equal(fakes.begin.length, 0);
 }));
+
+// --- Form draft and proposal per identity and week -----------------------------------------------
+let restoreDevice;
+beforeEach(() => { restoreDevice = useDevice(createDevice()); });
+afterEach(() => restoreDevice());
+
+const draft = {mode: "import", menuText: "Lunes\tLentejas\tLIBRE", freeTextPrompt: "", peopleCount: 3, menuStyles: ["mediterranean"], elaborationLevel: 2};
+
+test("the form draft is kept on this device per identity and week: another account, a guest or another week never see it", () => {
+ const {readMenuFormDraft, writeMenuFormDraft, clearMenuFormDraft} = require("../src/lib/createMenuDraft.ts");
+ writeMenuFormDraft(asA, W41, draft);
+ assert.deepEqual(readMenuFormDraft(asA, W41), draft);
+ assert.equal(readMenuFormDraft(asB, W41), null);
+ assert.equal(readMenuFormDraft(guest, W41), null);
+ assert.equal(readMenuFormDraft(asA, W42), null);
+ assert.ok(window.localStorage.getItem(`becook:u_${A}:menu-draft:2026-W41`));
+ clearMenuFormDraft(asA, W41);
+ assert.equal(readMenuFormDraft(asA, W41), null);
+});
+
+test("the guest → login trip still uses the unscoped session draft (on purpose)", () => {
+ const {consumeCreateMenuDraft, saveCreateMenuDraft} = require("../src/lib/createMenuDraft.ts");
+ saveCreateMenuDraft(draft);
+ assert.deepEqual(consumeCreateMenuDraft(), draft);
+ assert.equal(consumeCreateMenuDraft(), null);
+});
+
+test("drafts and proposals of past weeks are removed when Crear menú loads; this week and later ones stay", () => {
+ const {writeMenuFormDraft, readMenuFormDraft, pruneStaleMenuDrafts} = require("../src/lib/createMenuDraft.ts");
+ const {writeMenuProposal, readMenuProposal} = require("../src/lib/menuProposal.ts");
+ const menu = {week: "Semana importada", days: [{dayName: "Lunes", lunch: {status: "planned", dishName: "Lentejas"}, dinner: {status: "free", dishName: ""}}]};
+ const W40 = {isoYear: 2026, isoWeek: 40};
+ for (const week of [W40, W41, W42]) {
+  writeMenuFormDraft(asA, week, draft);
+  writeMenuProposal(asA, week, {menu, generationRequestId: null, attempt: null, source: "import", parsedBy: "local", contextVersion: null, createdAt: "2026-10-05T10:00:00.000Z"});
+ }
+ writeMenuFormDraft(asB, W40, draft);
+ pruneStaleMenuDrafts(asA, W41);
+ assert.equal(readMenuFormDraft(asA, W40), null);
+ assert.equal(readMenuProposal(asA, W40), null);
+ assert.deepEqual(readMenuFormDraft(asA, W41), draft);
+ assert.ok(readMenuProposal(asA, W41));
+ assert.ok(readMenuProposal(asA, W42));
+ assert.deepEqual(readMenuFormDraft(asB, W40), draft, "another identity's data is not touched");
+});
+
+test("a proposal keeps where it came from, how it was parsed, its food context version and when it was made", () => {
+ const {writeMenuProposal, readMenuProposal} = require("../src/lib/menuProposal.ts");
+ const menu = {week: "Semana", days: [{dayName: "Lunes", lunch: {status: "planned", dishName: "Lentejas"}, dinner: {status: "free", dishName: ""}}]};
+ writeMenuProposal(asA, W41, {menu, generationRequestId: "g1", attempt: null, source: "generate", parsedBy: null, contextVersion: "fc1:abc", createdAt: "2026-10-12T09:00:00.000Z"});
+ const stored = readMenuProposal(asA, W41);
+ assert.equal(stored.source, "generate");
+ assert.equal(stored.contextVersion, "fc1:abc");
+ assert.equal(stored.createdAt, "2026-10-12T09:00:00.000Z");
+ assert.equal(readMenuProposal(asB, W41), null);
+
+ // A proposal stored before C6 (B5 format) is still read: source from its food context.
+ window.localStorage.setItem(`becook:u_${A}:menu-proposal:2026-W42`, JSON.stringify({v: 1, data: {menu: {...menu, foodContext: {servings: 2, dietaryRestrictions: [], allergies: [], otherAllergies: "", dislikedFoods: [], version: "fc1:old"}}, generationRequestId: null}, savedAt: "2026-10-12T08:00:00.000Z", remoteVersion: null, pending: false}));
+ const old = readMenuProposal(asA, W42);
+ assert.equal(old.source, "generate");
+ assert.equal(old.contextVersion, "fc1:old");
+ assert.equal(old.parsedBy, null);
+ assert.equal(old.createdAt, "2026-10-12T08:00:00.000Z");
+});
+
+test("«Usar este menú» is refused while a generation runs for that identity and week, and asks when the profile changed since generating", () => {
+ const {startGenerationRun} = require("../src/lib/createMenuDraft.ts");
+ const {checkProposalUse} = require("../src/lib/menuProposal.ts");
+ const generated = {source: "generate", contextVersion: "fc1:abc"};
+ const {finish} = startGenerationRun({scope: asA.scope, week: "2026-W41", mode: "generate", startedAt: Date.now()}, draft);
+ assert.deepEqual(checkProposalUse({scope: asA.scope, week: "2026-W41", proposal: generated, currentContextVersion: "fc1:abc"}), {status: "generation_running"});
+ // Another identity or another week is not blocked by it.
+ assert.equal(checkProposalUse({scope: asB.scope, week: "2026-W41", proposal: generated, currentContextVersion: "fc1:abc"}).status, "ok");
+ assert.equal(checkProposalUse({scope: asA.scope, week: "2026-W42", proposal: generated, currentContextVersion: "fc1:abc"}).status, "ok");
+ finish({status: "cancelled"});
+
+ const base = {scope: asA.scope, week: "2026-W41", proposal: generated};
+ assert.equal(checkProposalUse({...base, currentContextVersion: "fc1:abc"}).status, "ok");
+ assert.equal(checkProposalUse({...base, currentContextVersion: "fc1:new"}).status, "context_changed");
+ assert.equal(checkProposalUse({...base, currentContextVersion: "fc1:new", contextChangeConfirmed: true}).status, "ok");
+ // Unknown current context (guest, account unreachable) or an imported menu: nothing to compare.
+ assert.equal(checkProposalUse({...base, currentContextVersion: null}).status, "ok");
+ assert.equal(checkProposalUse({...base, proposal: {source: "import", contextVersion: null}, currentContextVersion: "fc1:new"}).status, "ok");
+});
+
+// --- Warnings on imported dishes (C3 + C5): shown, never applied -------------------------------
+test("an imported dish is checked against the profile and the culinary rules, and only warned about", () => {
+ const {importedDishWarnings} = require("../src/lib/importWarnings.ts");
+ const vegetarian = {dietaryRestrictions: ["vegetarian"], allergies: [], otherAllergies: "", dislikedFoods: []};
+ const conflict = importedDishWarnings("Lentejas con chorizo", vegetarian);
+ assert.equal(conflict.length, 1);
+ assert.equal(conflict[0].tone, "danger");
+ assert.match(conflict[0].text, /Vegetariano/);
+ assert.match(conflict[0].text, /Solo por el nombre/);
+
+ const vague = importedDishWarnings("Pollo con salsa especial", null);
+ assert.equal(vague.length, 1);
+ assert.equal(vague[0].tone, "warning");
+ assert.match(vague[0].text, /sin concretar/);
+ assert.match(importedDishWarnings("Pollo con salsa", null)[0].text, /salsa/);
+
+ assert.deepEqual(importedDishWarnings("Crema de calabaza", vegetarian), [], "nothing found by the name: no noise on every dish");
+ assert.deepEqual(importedDishWarnings("LIBRE", vegetarian), []);
+});
+
+// --- Crear menú: generate first, import as a disclosure (step 32) --------------------------------
+test("Crear menú has no tab list any more: generating is the main action and importing a disclosure that ?mode=import opens", () => {
+ const page = read("src/components/pages/CreateMenuPage.tsx");
+ const panel = read("src/components/features/ImportMenuPanel.tsx");
+ assert.ok(!page.includes('role="tablist"') && !page.includes('role="tab"') && !page.includes('role="tabpanel"'));
+ assert.match(page, /aria-expanded=\{/);
+ assert.match(page, /aria-controls=/);
+ assert.match(page, /¿Ya tienes un menú\? Pégalo/);
+ assert.match(page, /searchParams\.get\("mode"\)/);
+ assert.match(page, /Volver a Semana/);
+ assert.match(panel, /<label|aria-label=/);
+ for (const [file, source] of [["ImportMenuPanel", panel], ["CreateMenuPage", page]]) {
+  assert.equal(source.match(/text-\[0\.(?:[0-6]\d*|7[0-4]\d*)rem\]/g), null, file);
+  assert.equal(source.match(/\bmin-h-(?:9|10)\b/g), null, file);
+ }
+});
