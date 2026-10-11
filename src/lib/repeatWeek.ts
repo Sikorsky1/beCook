@@ -35,7 +35,10 @@ export type RepeatWeekResult = {
   // existing: the week already had a menu, nothing written · error: nothing saved, try again.
   status: "copied" | "pending" | "existing" | "error";
   message: string;
-  // keep: «Repetir» again resends the same attempt (same request key, never twice).
+  // keep: «Repetir» again resends the same attempt (same request key: the account applies it once).
+  // After «pending» the week is read again and shows the copy waiting on this device; its retry is
+  // SyncStatus «Reintentar» (the usual week write, new key), which cannot duplicate it because it is
+  // checked against the expected version.
   attempt: "keep" | "discard";
   // The week may have changed: read it again.
   reload: boolean;
@@ -44,8 +47,11 @@ export type RepeatWeekResult = {
 export const repeatWeekMessages = {
   account: (label: string) =>
     `Hemos copiado la semana ${label}. La lista de la compra se prepara cuando abras Compra.`,
+  // Guests: their week stays on this device and the shopping list needs an account.
   device: (label: string) =>
-    `Hemos copiado la semana ${label} en este dispositivo. La lista de la compra se prepara cuando abras Compra.`,
+    `Hemos copiado la semana ${label} en este dispositivo. Para la lista de la compra, inicia sesión.`,
+  duplicate: (label: string) =>
+    `La copia de la semana ${label} ya estaba guardada en tu cuenta. La lista de la compra se prepara cuando abras Compra.`,
   pending:
     "Solo en este dispositivo: tu cuenta no ha confirmado la copia. Pulsa «Reintentar» en el estado de guardado; no se duplica.",
   existing: "Esta semana ya tiene un menú guardado desde otro dispositivo o pestaña. No hemos cambiado nada.",
@@ -82,7 +88,12 @@ export async function repeatPreviousWeek({
 
     switch (outcome.menu) {
       case "account":
-        return { status: "copied", message: repeatWeekMessages.account(label), attempt: "discard", reload: true };
+        return {
+          status: "copied",
+          message: outcome.message === applyWeekMessages.duplicate ? repeatWeekMessages.duplicate(label) : repeatWeekMessages.account(label),
+          attempt: "discard",
+          reload: true,
+        };
       case "device":
         return { status: "copied", message: repeatWeekMessages.device(label), attempt: "discard", reload: true };
       case "pending":

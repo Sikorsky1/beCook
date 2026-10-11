@@ -10,6 +10,7 @@ const {createDevice, useDevice} = require("./helpers/fake-browser.cjs");
 const nav = require("../src/lib/navigation.ts");
 const repos = require("../src/lib/data/repositories.ts");
 const {RemoteConflictError} = require("../src/lib/data/sync.ts");
+const {readEnvelope} = require("../src/lib/storage/scoped-storage.ts");
 const {resolveApplyWeekAttempt} = require("../src/lib/applyWeek.ts");
 const {hasPlannedMeals, repeatPreviousWeek, repeatWeekDays, repeatWeekMessages} = require("../src/lib/repeatWeek.ts");
 
@@ -92,6 +93,11 @@ test("createMenuImportHref keeps only a well-formed week", () => {
   for (const bad of ["42", "2026-42", "2026-W4", "2026-W42&x=1", "//evil.example"]) {
     assert.equal(nav.createMenuImportHref(bad), "/create-menu?mode=import", bad);
   }
+  // Links from before B3.
+  assert.equal(nav.createMenuImportHref(undefined, {isoYear: "2026", isoWeek: "7"}), "/create-menu?mode=import&week=2026-W07");
+  assert.equal(nav.createMenuImportHref("2026-W42", {isoYear: "2025", isoWeek: "1"}), "/create-menu?mode=import&week=2026-W42");
+  assert.equal(nav.createMenuImportHref(undefined, {isoYear: "2026", isoWeek: "x"}), "/create-menu?mode=import");
+  assert.equal(nav.createMenuImportHref(undefined, {isoYear: "2026"}), "/create-menu?mode=import");
 });
 
 function loadTsx(file) {
@@ -119,6 +125,7 @@ test("/import redirects to Crear menú in import mode, keeping a valid week", as
   assert.equal(await redirectTarget({}), "/create-menu?mode=import");
   assert.equal(await redirectTarget({week: "2026-W42"}), "/create-menu?mode=import&week=2026-W42");
   assert.equal(await redirectTarget({week: "mañana"}), "/create-menu?mode=import");
+  assert.equal(await redirectTarget({isoYear: "2026", isoWeek: "42"}), "/create-menu?mode=import&week=2026-W42");
 });
 
 test("no route disappears: the old addresses still redirect", () => {
@@ -160,12 +167,23 @@ test("empty week: «Crear menú» first (accent-strong), «Repetir la semana N»
   assert.match(empty, /href=\{buildWeekHref\("\/create-menu", isoWeek\)\}\s+className="[^"]*bg-\[color:var\(--color-accent-strong\)\][^"]*text-white/);
   assert.ok(empty.includes("createMenuImportHref(getIsoWeekStorageId(isoWeek))"));
   assert.ok(empty.includes("La lista de la compra se prepara") && empty.includes("perfil actual"));
+  // Guests are not told about the profile or Compra preparing their list.
+  assert.match(empty, /isGuest \? "Se copia en este dispositivo\. Para la lista de la compra, inicia sesión\."/);
   assert.ok(empty.includes('aria-describedby="repeat-week-help"') && empty.includes("aria-busy={isRepeating}"));
+  // Busy, not dimmed or disabled (it keeps the focus).
+  assert.ok(empty.includes("aria-disabled={isRepeating}"));
+  assert.ok(!/\sdisabled=\{/.test(empty) && !empty.includes("disabled:opacity"));
   assert.equal((empty.match(/min-h-11/g) ?? []).length, 2, "primary link and the shared secondary class");
   assert.ok(!/\bmin-h-(?:9|10)\b/.test(empty) && !/text-\[0\.[0-6]\d*rem\]/.test(empty));
   // Shown to guests too: nothing in the empty state depends on being signed in.
   assert.ok(!empty.includes("isSignedIn") && !empty.includes("userId"));
-  assert.ok(source.includes('role="status"') && source.includes("visibleRepeatNotice.message"));
+  // The result takes the focus; it is not a second live region next to SyncStatus.
+  const notice = source.slice(source.indexOf("{visibleRepeatNotice ? ("), source.indexOf("visibleRepeatNotice.message"));
+  assert.ok(notice.includes("ref={repeatNoticeRef}") && notice.includes("tabIndex={-1}") && !notice.includes("role="));
+  assert.ok(source.includes("repeatNoticeRef.current?.focus()"));
+  // The empty state and the read of the previous week only follow a read of the selected week.
+  assert.ok(source.includes("loadedWeekKey === selectedLoadKey"));
+  assert.ok(source.includes("isLoading={isLoadingWeek || !isEmptyWeek}"));
 });
 
 // --- «Repetir la semana N» ----------------------------------------------------------------------
@@ -181,7 +199,8 @@ const previous = [
 ];
 
 function createAccount() {
-  const st = {weeks: new Map(), pushes: [], down: false};
+  // beforePush: something that happens between the read and the write (another device).
+  const st = {weeks: new Map(), pushes: [], down: false, loseNextAnswer: false, beforePush: null};
   const key = (userId, isoWeek) => `${userId}:${isoWeek.isoYear}-W${isoWeek.isoWeek}`;
   const week = (userId, isoWeek, options = {}) => ({
     checksVersion: true,
@@ -193,11 +212,16 @@ function createAccount() {
     },
     async push(data, {baseVersion, overwrite}) {
       st.pushes.push({week: isoWeek.isoWeek, generationRequestId: options.generationRequestId ?? null, requestKey: options.requestKey, overwrite});
+      if (st.beforePush) { const run = st.beforePush; st.beforePush = null; run(); }
       const row = st.weeks.get(key(userId, isoWeek));
+      // Like apply_week: a request key already applied is answered as a duplicate.
+      if (options.requestKey && row?.keys?.includes(options.requestKey)) return {version: String(row.version), duplicate: true};
       const current = row ? String(row.version) : null;
       if (!overwrite && current !== baseVersion) throw new RemoteConflictError();
-      st.weeks.set(key(userId, isoWeek), {days: structuredClone(data), version: (row?.version ?? 0) + 1});
-      return {version: String((row?.version ?? 0) + 1)};
+      const next = {days: structuredClone(data), version: (row?.version ?? 0) + 1, keys: [...(row?.keys ?? []), options.requestKey].filter(Boolean)};
+      st.weeks.set(key(userId, isoWeek), next);
+      if (st.loseNextAnswer) { st.loseNextAnswer = false; throw new TypeError("fetch failed"); }
+      return {version: String(next.version)};
     },
   });
   // Shopping must not be touched: Compra prepares the list when it is opened.
@@ -205,7 +229,7 @@ function createAccount() {
   return {
     st,
     remotes: {week, profile: unused, pantry: unused, shopping: unused, planningRequest: async () => null},
-    seed: (userId, isoWeek, days) => st.weeks.set(key(userId, isoWeek), {days, version: 1}),
+    seed: (userId, isoWeek, days) => st.weeks.set(key(userId, isoWeek), {days, version: 1, keys: []}),
     row: (userId, isoWeek) => st.weeks.get(key(userId, isoWeek)),
   };
 }
@@ -292,4 +316,44 @@ test("unreachable account: nothing saved, the same attempt is kept for «Repetir
   const retried = await repeat(asA, previous, resolveApplyWeekAttempt(attempt, previous, "2026-W42", () => "other-key"));
   assert.equal(retried.status, "copied");
   assert.equal(account.st.pushes.at(-1).requestKey, "fixed-key", "a retry reuses the request key");
+});
+
+test("race: the week was empty when read but another device saved it before the copy → «existing»", async () => {
+  account.st.beforePush = () => account.seed(A, W42, [{day: "Martes", date: "", lunch: "Paella", dinner: "LIBRE"}]);
+  const result = await repeat(asA);
+  assert.equal(result.status, "existing");
+  assert.equal(result.message, repeatWeekMessages.existing);
+  assert.ok(result.reload, "the page reads the week again and shows the other menu");
+  assert.equal(account.row(A, W42).days[0].lunch, "Paella", "nothing replaced");
+  assert.equal(repos.readCachedWeek(asA, W42)[0].lunch, "Paella", "the device adopts the account week");
+});
+
+test("pending: the account did not answer; the copy waits on this device and the page's retry does not duplicate it", async () => {
+  account.st.loseNextAnswer = true;
+  const result = await repeat(asA);
+  assert.equal(result.status, "pending");
+  assert.equal(result.message, repeatWeekMessages.pending);
+  assert.ok(result.reload);
+  assert.equal(readEnvelope(asA.scope, "week", "2026-W42").pending, true);
+  assert.equal(account.row(A, W42).version, 1, "the write did reach the account");
+
+  // SyncStatus «Reintentar»: the usual read, which resends the pending copy against its expected
+  // version; the account already has it, so it is adopted, not written again.
+  const reread = await repos.loadWeek(asA, W42);
+  assert.deepEqual(reread.data.map(day => day.lunch), ["Lentejas", "Merluza"]);
+  assert.equal(account.row(A, W42).version, 1, "written once");
+  assert.ok(!readEnvelope(asA.scope, "week", "2026-W42").pending, "no longer pending");
+});
+
+test("confirmed duplicate: resending the same attempt is applied once and reported as already saved", async () => {
+  const attempt = resolveApplyWeekAttempt(null, previous, "2026-W42", () => "same-key");
+  account.st.loseNextAnswer = true;
+  const first = await repeat(asA, previous, attempt);
+  assert.equal(first.status, "pending");
+  assert.equal(first.attempt, "keep");
+  const again = await repeat(asA, previous, resolveApplyWeekAttempt(attempt, previous, "2026-W42", () => "other-key"));
+  assert.equal(again.status, "copied");
+  assert.equal(again.message, repeatWeekMessages.duplicate("41"));
+  assert.equal(account.st.pushes.at(-1).requestKey, "same-key");
+  assert.equal(account.row(A, W42).version, 1, "applied once");
 });

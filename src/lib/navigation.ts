@@ -104,9 +104,21 @@ export function sectionAriaCurrent(section: AppSection, pathname: string | null 
   return normalizePath(pathname ?? "") === section.href ? "page" : "true";
 }
 
-// Crear menú opened on the import form (contract with C6: ?mode=import), for a week if it is valid.
-export function createMenuImportHref(week?: string | string[] | null) {
-  const value = Array.isArray(week) ? week[0] : week;
+type QueryValue = string | string[] | null | undefined;
+const firstValue = (value: QueryValue) => (Array.isArray(value) ? value[0] : value) ?? null;
+
+// Crear menú opened on the import form (contract with C6: ?mode=import), for a week if it is
+// well formed (Crear menú validates the week itself). Links from before B3 (?isoYear=&isoWeek=) are
+// understood too.
+export function createMenuImportHref(week?: QueryValue, legacy?: { isoYear?: QueryValue; isoWeek?: QueryValue }) {
+  let value = firstValue(week);
+  if (!value && legacy) {
+    const isoYear = firstValue(legacy.isoYear);
+    const isoWeek = firstValue(legacy.isoWeek);
+    if (isoYear && isoWeek && /^\d{4}$/.test(isoYear) && /^\d{1,2}$/.test(isoWeek)) {
+      value = `${isoYear}-W${isoWeek.padStart(2, "0")}`;
+    }
+  }
   return value && /^\d{4}-W\d{2}$/.test(value)
     ? `/create-menu?mode=import&week=${value}`
     : "/create-menu?mode=import";

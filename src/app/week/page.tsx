@@ -92,7 +92,11 @@ function WeekPageContent() {
   const [dishEditRequest, setDishEditRequest] = useState<{ day: string; meal: MealKey; key: number } | null>(null);
   // Step 32: the previous week, read only when this one is empty, for «Repetir la semana N».
   const [previousWeekEntry, setPreviousWeekEntry] = useState<{ key: string; days: WeekDay[] | null } | null>(null);
-  const [repeatNotice, setRepeatNotice] = useState<{ weekId: string; status: RepeatWeekResult["status"]; message: string } | null>(null);
+  const [repeatNotice, setRepeatNotice] = useState<{ id: number; weekId: string; status: RepeatWeekResult["status"]; message: string } | null>(null);
+  const repeatNoticeRef = useRef<HTMLParagraphElement | null>(null);
+  // Identity and week of the last completed read: the empty state (and the read of the previous
+  // week) only follow a read of the week that is selected now, never a stale one.
+  const [loadedWeekKey, setLoadedWeekKey] = useState<string | null>(null);
   const [isRepeating, setIsRepeating] = useState(false);
   const isRepeatingRef = useRef(false);
   const repeatAttemptRef = useRef<ApplyWeekAttempt<WeekDay[]> | null>(null);
@@ -211,6 +215,7 @@ function WeekPageContent() {
         discardedLocalChanges: result.discardedLocalChanges,
         pending: result.pending,
       });
+      setLoadedWeekKey(loadKey);
       setIsLoadingWeek(false);
     }
 
@@ -263,7 +268,10 @@ function WeekPageContent() {
     weekDays && foodContextEntry?.key === foodContextKey ? foodContextChangeNotice(foodContextEntry.status) : null;
 
   const previousIsoWeek = selectedIsoWeek ? addIsoWeeks(selectedIsoWeek, -1) : null;
-  const isEmptyWeek = Boolean(selectedIsoWeek) && !isLoadingWeek && !weekDays;
+  const selectedLoadKey = selectedIsoWeek
+    ? `${identity.scope}:${identity.epoch}:${getIsoWeekStorageId(selectedIsoWeek)}`
+    : null;
+  const isEmptyWeek = selectedLoadKey !== null && loadedWeekKey === selectedLoadKey && !isLoadingWeek && !weekDays;
   const previousWeekKey =
     isEmptyWeek && previousIsoWeek && identity.status === "ready"
       ? `${identity.scope}:${identity.epoch}:${getIsoWeekStorageId(previousIsoWeek)}`
@@ -290,6 +298,12 @@ function WeekPageContent() {
   const selectedWeekId = selectedIsoWeek ? getIsoWeekStorageId(selectedIsoWeek) : null;
   const visibleRepeatNotice = repeatNotice && repeatNotice.weekId === selectedWeekId ? repeatNotice : null;
 
+  useEffect(() => {
+    // The result of «Repetir» takes the focus (the button may disappear once the week is read
+    // again). It is not a live region, so it is not announced on top of SyncStatus.
+    if (repeatNotice) repeatNoticeRef.current?.focus();
+  }, [repeatNotice]);
+
   // «Repetir la semana N»: copies dishes and cards into this empty week; never replaces a menu.
   const handleRepeatPreviousWeek = async () => {
     if (!selectedIsoWeek || !previousIsoWeek || !previousWeekDays || isRepeatingRef.current) {
@@ -313,7 +327,7 @@ function WeekPageContent() {
     if (result.attempt === "discard") {
       repeatAttemptRef.current = null;
     }
-    setRepeatNotice({ weekId, status: result.status, message: result.message });
+    setRepeatNotice({ id: Date.now(), weekId, status: result.status, message: result.message });
     if (result.reload) {
       setReloadCount((count) => count + 1);
     }
@@ -545,7 +559,8 @@ function WeekPageContent() {
 
         {visibleRepeatNotice ? (
           <p
-            role="status"
+            ref={repeatNoticeRef}
+            tabIndex={-1}
             className={`rounded-[var(--radius-control)] border px-4 py-3 text-sm leading-6 ${
               visibleRepeatNotice.status === "copied"
                 ? "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)]"
@@ -660,10 +675,11 @@ function WeekPageContent() {
             </div>
           ) : (
             <EmptyWeekState
-              isLoading={isLoadingWeek}
+              isLoading={isLoadingWeek || !isEmptyWeek}
               isoWeek={selectedIsoWeek}
               previousIsoWeek={previousWeekDays ? previousIsoWeek : null}
               isRepeating={isRepeating}
+              isGuest={!isSignedIn}
               onRepeat={() => void handleRepeatPreviousWeek()}
             />
           )}
@@ -680,16 +696,18 @@ function EmptyWeekState({
   isoWeek,
   previousIsoWeek,
   isRepeating,
+  isGuest,
   onRepeat,
 }: {
   isLoading: boolean;
   isoWeek: IsoWeek | null;
   previousIsoWeek: IsoWeek | null;
   isRepeating: boolean;
+  isGuest: boolean;
   onRepeat: () => void;
 }) {
   const secondaryClass =
-    "inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-5 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto";
+    "inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-5 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)] sm:w-auto";
 
   return (
     <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] p-6 text-center">
@@ -709,7 +727,8 @@ function EmptyWeekState({
               <button
                 type="button"
                 onClick={onRepeat}
-                disabled={isRepeating}
+                // Busy, not disabled: it keeps the focus and is not dimmed; a second press is ignored.
+                aria-disabled={isRepeating}
                 aria-busy={isRepeating}
                 aria-describedby="repeat-week-help"
                 className={secondaryClass}
@@ -717,9 +736,10 @@ function EmptyWeekState({
                 {isRepeating ? "Copiando…" : `Repetir la semana ${previousIsoWeek.isoWeek}`}
               </button>
               <p id="repeat-week-help" className="max-w-sm text-sm leading-6 text-[color:var(--color-muted-foreground)]">
-                Copia los platos y sus fichas de esa semana ({formatIsoWeekTitle(previousIsoWeek)}). Se
-                guarda con tu perfil actual (raciones y restricciones de hoy). La lista de la compra se
-                prepara cuando abras Compra.
+                Copia los platos y sus fichas de esa semana ({formatIsoWeekTitle(previousIsoWeek)}).{" "}
+                {isGuest
+                  ? "Se copia en este dispositivo. Para la lista de la compra, inicia sesión."
+                  : "Se guarda con tu perfil actual (raciones y restricciones de hoy). La lista de la compra se prepara cuando abras Compra."}
               </p>
             </div>
           ) : null}
