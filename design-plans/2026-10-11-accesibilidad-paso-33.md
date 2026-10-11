@@ -5,7 +5,7 @@ Estado: **aprobado y aplicado (2026-10-11)**. Aprobado por Sergio tras validaci�
 con los ajustes que se detallan en «Aplicación» al final.
 
 Las pantallas y componentes de feature del paso 33 ya están corregidos en la rama (ver
-`docs/development/progress-a11y.md`). Este plan recoge lo que, según `AGENTS.md`, no se puede
+`PROGRESS.md`, sección del paso 33). Este plan recoge lo que, según `AGENTS.md`, no se puede
 tocar sin aprobación: `globals.css`, `src/components/ui/*`, `src/components/shadcn/ui/*`,
 `src/components/layout/*`, `src/app/layout.tsx`, `src/lib/ui.ts` y `AuthPageShell.tsx`.
 
