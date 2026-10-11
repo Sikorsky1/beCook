@@ -289,6 +289,15 @@ test("review 5: «tostada» as an adjective is not bread; flour and oats stay po
  assert.ok(has("Aguacate con tostadas", "gluten"));
 });
 
+test("ola 6: «cocido» as an adjective is not the stew («garbanzos cocidos» is vegetarian)", () => {
+ assert.deepEqual(groups("Garbanzos cocidos"), []);
+ assert.deepEqual(groups("Huevo cocido"), ["egg"]);
+ assert.ok(has("Cocido madrileño", "meat"));
+ assert.ok(has("Sopa de cocido", "pork"));
+ assert.ok(has("Garbanzos del cocido", "meat"));
+ assert.notEqual(checkDish({title: "Garbanzos con espinacas", card: card(["Garbanzos cocidos", "Espinacas"])}, profile({dietaryRestrictions: ["vegetarian"]})).status, "conflict");
+});
+
 test("review 6: quail and hen eggs are only egg; pepper flesh and tomato paste have no group", () => {
  for (const text of ["Huevos de codorniz", "Huevo de gallina", "Huevos de pato", "Huevo de oca"]) assert.deepEqual(groups(text), ["egg"], text);
  assert.deepEqual(groups("Carne de pimiento choricero"), []);

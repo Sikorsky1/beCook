@@ -329,8 +329,9 @@ export function groupNameAt(
 const termBoundaries = new Set(["con", "y", "e", "o", "a", "al", "sobre", "en", "mas", "sin", "libre", "apto", "apta", "aptos", "aptas"]);
 // Bread only as a noun: first word or after a connector («Tostadas de aguacate», «con tostadas»),
 // never after another food («almendras tostadas»).
-const nounOnlyEntries = new Set(["tostada"]);
-const nounContext = new Set(["con", "y", "e", "o", "una", "unas", "un", "la", "las", "sobre", "de"]);
+// «cocido» is the stew only as a noun: «garbanzos cocidos» or «huevo cocido» are not meat.
+const nounOnlyEntries = new Set(["tostada", "cocido"]);
+const nounContext = new Set(["con", "y", "e", "o", "una", "unas", "un", "el", "los", "la", "las", "sobre", "de", "del"]);
 
 export function analyzeFoodText(text: string): FoodAnalysis {
   const tokens = normalizeFood(text).split(" ").filter(Boolean);
