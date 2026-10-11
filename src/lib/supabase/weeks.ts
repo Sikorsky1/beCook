@@ -499,6 +499,36 @@ export async function getWeekFoodContextStatusFromSupabase({ isoYear, isoWeek }:
   return parseWeekFoodContextStatus(data);
 }
 
+// The generation request a week's frozen context came from (ola 4, D-1): weeks.generation_request_id,
+// but only while the frozen servings are that generation's. Null for an imported or catalogue menu,
+// or a week without a frozen context. «Deshacer» sends it back so the restored menu keeps its context.
+export async function getWeekPlanningRequestFromSupabase({ isoYear, isoWeek, userId }: { isoYear: number; isoWeek: number; userId: string }) {
+  const client = requireSupabase();
+  const { data: week, error } = await client
+    .from("weeks")
+    .select("id,generation_request_id")
+    .eq("user_id", userId)
+    .eq("iso_year", isoYear)
+    .eq("iso_week", isoWeek)
+    .maybeSingle<{ id: string; generation_request_id: string | null }>();
+
+  if (error) {
+    throw new Error(`Could not read the week generation request: ${error.message}`);
+  }
+  if (!week?.generation_request_id) return null;
+
+  const { data: context, error: contextError } = await client
+    .from("week_food_contexts")
+    .select("servings_source")
+    .eq("week_id", week.id)
+    .maybeSingle<{ servings_source: string }>();
+
+  if (contextError) {
+    throw new Error(`Could not read the week food context: ${contextError.message}`);
+  }
+  return context?.servings_source === "generation" ? week.generation_request_id : null;
+}
+
 // Servings and restrictions version a week's shopping list depends on (null: none frozen).
 export async function getWeekFoodContextFromSupabase(weekId: string) {
   const { data, error } = await requireSupabase()

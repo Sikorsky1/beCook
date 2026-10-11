@@ -27,7 +27,7 @@ const dishes = weekDays => weekDays.map(day => [day.day, day.lunch, day.dinner].
 
 // The account: weeks with version and the request keys already applied (like apply_week).
 function createAccount() {
- const st = {weeks: new Map(), down: false, loseNextAnswer: false, pushes: 0};
+ const st = {weeks: new Map(), down: false, loseNextAnswer: false, pushes: 0, generations: []};
  const offline = () => { if (st.down) throw new TypeError("fetch failed"); };
  const week = (userId, isoWeek, options = {}) => {
   const k = `${userId}:${isoWeek.isoYear}-W${isoWeek.isoWeek}`;
@@ -40,13 +40,15 @@ function createAccount() {
     return {data: row ? structuredClone(row.days) : null, version: row ? String(row.version) : null};
    },
    async push(data, {baseVersion, overwrite}) {
-    st.pushes++; offline();
+    st.pushes++; st.generations.push(options.generationRequestId ?? null); offline();
     const row = st.weeks.get(k);
     const key = options.requestKey ?? "random-" + Math.random();
     if (row?.keys.includes(key)) return {version: String(row.version), duplicate: true};
     const current = row ? String(row.version) : null;
     if (!overwrite && current !== baseVersion) throw new RemoteConflictError();
-    const next = {days: structuredClone(data), version: (row?.version ?? 0) + 1, keys: [...(row?.keys ?? []), key]};
+    // Like apply_week + freeze: the request the week's frozen servings come from.
+    const planning = options.generationRequestId ?? null;
+    const next = {days: structuredClone(data), version: (row?.version ?? 0) + 1, keys: [...(row?.keys ?? []), key], planning};
     st.weeks.set(k, next);
     if (st.loseNextAnswer) { st.loseNextAnswer = false; throw new TypeError("fetch failed"); }
     return {version: String(next.version)};
@@ -56,10 +58,11 @@ function createAccount() {
  const unused = () => { throw new Error("not used"); };
  return {
   st,
-  remotes: {week, profile: unused, pantry: unused, shopping: unused},
+  remotes: {week, profile: unused, pantry: unused, shopping: unused,
+   planningRequest: async (userId, isoWeek) => st.weeks.get(`${userId}:${isoWeek.isoYear}-W${isoWeek.isoWeek}`)?.planning ?? null},
   row: (userId, isoWeek) => st.weeks.get(`${userId}:${isoWeek.isoYear}-W${isoWeek.isoWeek}`),
-  seed: (userId, isoWeek, weekDays, version = 1) =>
-   st.weeks.set(`${userId}:${isoWeek.isoYear}-W${isoWeek.isoWeek}`, {days: weekDays, version, keys: []}),
+  seed: (userId, isoWeek, weekDays, version = 1, planning = null) =>
+   st.weeks.set(`${userId}:${isoWeek.isoYear}-W${isoWeek.isoWeek}`, {days: weekDays, version, keys: [], planning}),
  };
 }
 
@@ -173,6 +176,27 @@ test("undo restores every day of the replaced menu, checked against the version 
  assert.deepEqual(dishes(account.row(A, W41).days), dishes(days("Lentejas", "Crema de calabaza")));
  assert.equal(account.row(A, W41).version, 3);
  assert.equal(readEnvelope(asA.scope, "week", "2026-W41").pending, false);
+});
+
+test("undo gives the restored menu the food context of its own generation (ola 4, D-1)", async () => {
+ account.seed(A, W41, days("Lentejas"), 1, "gen-3-personas");
+ const result = await apply(asA, days("Garbanzos"), {generationRequestId: "gen-1-persona"});
+ assert.equal(result.replacedGenerationRequestId, "gen-3-personas");
+ assert.equal(account.row(A, W41).planning, "gen-1-persona");
+ await undoAppliedMenu(asA, W41, {previous: result.replaced, requestKey: newKey(), generationRequestId: result.replacedGenerationRequestId});
+ assert.equal(account.st.generations.at(-1), "gen-3-personas", "the restore is sent with the original generation");
+ assert.equal(account.row(A, W41).planning, "gen-3-personas");
+ assert.equal(account.row(A, W41).days[0].lunch, "Lentejas");
+
+ // An imported or catalogue menu has no generation: the restore freezes from the profile again.
+ const W43 = {isoYear: 2026, isoWeek: 43};
+ account.seed(A, W43, days("Importado"));
+ const attempt = resolveApplyWeekAttempt(null, "m43", "2026-W43", newKey);
+ const second = await applyMenuToWeek({
+  identity: asA, isoWeek: W43, weekDays: days("Generado"), attempt, generationRequestId: "gen-x",
+  confirmReplace: async () => true, prepareShopping: async () => ({status: "ready"}),
+ });
+ assert.equal(second.replacedGenerationRequestId, null);
 });
 
 test("undo after another device changed the week writes nothing and says so", async () => {

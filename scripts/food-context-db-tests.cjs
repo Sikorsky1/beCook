@@ -174,6 +174,37 @@ async function runFoodContextTests({ check, sql, id, api, createClient, supabase
       assert.equal(legacyStatus.frozen, null);
       assert.equal(legacyStatus.restrictionsChanged, false);
     });
+
+    // 10. Ola 4 (D-1): «Deshacer» a replacement gives the restored menu its own context back.
+    const newRequest = (people) => sql("INSERT INTO public.menu_generation_requests (user_id, profile_id, people_count, status, free_text_prompt) VALUES ('" +
+      userA + "','" + profileA + "'," + people + ",'generated','c1-db-test') RETURNING id;").trim().split("\n")[0];
+    const forThree = newRequest(3);
+    const forTwo = newRequest(2);
+    repos = freshRepos();
+    delete require.cache[require.resolve("../src/lib/applyWeek.ts")];
+    const { applyMenuToWeek, resolveApplyWeekAttempt, undoAppliedMenu } = require("../src/lib/applyWeek.ts");
+    const applyGenerated = (dish, generationRequestId) => applyMenuToWeek({
+      identity: asA, isoWeek: week(4), weekDays: fullWeek(dish), generationRequestId,
+      attempt: resolveApplyWeekAttempt(null, dish, YEAR + "-W04", () => require("node:crypto").randomUUID()),
+      confirmReplace: async () => true, prepareShopping: async () => ({ status: "ready" }),
+    });
+    await applyGenerated("Para tres", forThree);
+    const replacement = await applyGenerated("Para dos", forTwo);
+    const replacedContext = contextRow(4);
+    const undone = await undoAppliedMenu(asA, week(4), {
+      previous: replacement.replaced, requestKey: require("node:crypto").randomUUID(),
+      generationRequestId: replacement.replacedGenerationRequestId,
+    });
+    const restoredContext = contextRow(4);
+    const restoredRequest = sql("SELECT generation_request_id FROM public.weeks WHERE user_id='" + userA + "' AND iso_year=" + YEAR + " AND iso_week=4;").trim();
+    check("ola 4 D-1: undoing a replacement restores the original generation's servings and request", () => {
+      assert.equal(replacement.replacedGenerationRequestId, forThree);
+      assert.equal(replacedContext.servings, 2);
+      assert.equal(undone.status, "restored");
+      assert.equal(restoredContext.servings, 3);
+      assert.equal(restoredContext.servings_source, "generation");
+      assert.equal(restoredRequest, forThree, "weeks.generation_request_id points to the restored menu's request (M-4)");
+    });
   } finally {
     restoreProfile();
     cleanup();

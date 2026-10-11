@@ -9,7 +9,7 @@
 // it replaces. Right after a replacement the previous menu can be restored for a short time
 // (undoAppliedMenu): the same week write, checked against the version this attempt produced.
 import type { WeekDay } from "@/data/mockWeek";
-import { readCachedWeek, readRemoteWeek, saveWeek, type DataIdentity } from "@/lib/data/repositories";
+import { readCachedWeek, readRemoteWeek, readWeekPlanningRequest, saveWeek, type DataIdentity } from "@/lib/data/repositories";
 import type { SaveResult } from "@/lib/data/sync";
 import type { IsoWeek } from "@/lib/isoWeek";
 
@@ -26,6 +26,8 @@ export type ApplyWeekAttempt<Menu> = {
   // The menu this attempt replaces, once the user confirmed it. Kept in memory only: a proposal
   // recovered after a reload can be applied again, but not undone.
   replaced?: WeekDay[] | null;
+  // The generation request the replaced menu's food context came from (D-1), sent back on undo.
+  replacedGenerationRequestId?: string | null;
 };
 
 export function resolveApplyWeekAttempt<Menu>(
@@ -98,6 +100,8 @@ export type ApplyMenuResult = {
   // The menu the saved one replaced, which «Deshacer» can restore. Null when the week was empty
   // (there is no earlier menu to go back to) or nothing was saved.
   replaced: WeekDay[] | null;
+  // Generation request of the replaced menu's food context (null: imported, catalogue, unknown).
+  replacedGenerationRequestId: string | null;
 };
 
 export type ApplyMenuInput<Menu> = {
@@ -136,6 +140,7 @@ export async function applyMenuToWeek<Menu>({
         outcome: { status: "idle", menu: "cancelled", message: "", attempt: "discard", openWeek: false },
         shopping: skipped,
         replaced: null,
+        replacedGenerationRequestId: null,
       };
     }
     attempt.overwrite = Boolean(current?.length);
@@ -152,6 +157,7 @@ export async function applyMenuToWeek<Menu>({
         outcome: { status: "error", menu: "unchecked", message: applyWeekMessages.unchecked, attempt: "keep", openWeek: false },
         shopping: skipped,
         replaced: null,
+        replacedGenerationRequestId: null,
       };
     }
 
@@ -161,10 +167,13 @@ export async function applyMenuToWeek<Menu>({
         outcome: { status: "idle", menu: "cancelled", message: "", attempt: "discard", openWeek: false },
         shopping: skipped,
         replaced: null,
+        replacedGenerationRequestId: null,
       };
     }
     attempt.overwrite = Boolean(current.data?.length);
     attempt.replaced = current.data?.length ? current.data : null;
+    // Read before the replacement changes weeks.generation_request_id and the frozen context.
+    attempt.replacedGenerationRequestId = attempt.replaced ? await readWeekPlanningRequest(identity, isoWeek) : null;
   }
 
   // Overwrite only after «reemplazar»; otherwise the database refuses it if another device saved
@@ -191,7 +200,8 @@ export async function applyMenuToWeek<Menu>({
         ? holdShopping.then((go) => (go ? prepare() : "skipped"), () => prepare())
         : prepare();
 
-  return { outcome, shopping, replaced: outcome.openWeek ? (attempt.replaced ?? null) : null };
+  const replaced = outcome.openWeek ? (attempt.replaced ?? null) : null;
+  return { outcome, shopping, replaced, replacedGenerationRequestId: replaced ? (attempt.replacedGenerationRequestId ?? null) : null };
 }
 
 // --- «Deshacer» (step 26) --------------------------------------------------------------------
@@ -202,7 +212,10 @@ export async function applyMenuToWeek<Menu>({
 // prepared again yet (holdShopping), otherwise a list for the restored menu is prepared later.
 export const undoWindowMs = 10_000;
 
-export type UndoAttempt = { previous: WeekDay[]; requestKey: string };
+// generationRequestId: the request the previous menu's food context came from (D-1). Sent with the
+// restore so the week gets that context (and weeks.generation_request_id) back; without it the
+// context is frozen again from the saved profile, as for an imported menu.
+export type UndoAttempt = { previous: WeekDay[]; requestKey: string; generationRequestId?: string | null };
 
 export type UndoOutcome = {
   // restored: the account (or a guest's device) has the previous menu again · pending: sent but
@@ -220,7 +233,10 @@ export const undoMessages = {
 
 export async function undoAppliedMenu(identity: DataIdentity, isoWeek: IsoWeek, undo: UndoAttempt): Promise<UndoOutcome> {
   // No overwrite and no explicit base: the device copy carries the version of the replacement.
-  const result = await saveWeek(identity, isoWeek, undo.previous, { requestKey: undo.requestKey });
+  const result = await saveWeek(identity, isoWeek, undo.previous, {
+    requestKey: undo.requestKey,
+    generationRequestId: undo.generationRequestId ?? null,
+  });
   switch (result.status) {
     case "local":
       return { status: "restored", message: undoMessages.device };
