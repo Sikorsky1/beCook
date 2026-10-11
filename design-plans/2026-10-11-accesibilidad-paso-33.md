@@ -1,7 +1,8 @@
 # Plan de accesibilidad · paso 33 · componentes compartidos de alto riesgo
 
 Fecha: 2026-10-11 · Rama de trabajo: `audit/a11y` (desde `audit-opt` 02aa5b8)
-Estado: **propuesta pendiente de aprobación de Sergio**. Nada de este documento está aplicado.
+Estado: **aprobado y aplicado (2026-10-11)**. Aprobado por Sergio tras validación de un revisor,
+con los ajustes que se detallan en «Aplicación» al final.
 
 Las pantallas y componentes de feature del paso 33 ya están corregidos en la rama (ver
 `docs/development/progress-a11y.md`). Este plan recoge lo que, según `AGENTS.md`, no se puede
@@ -195,3 +196,39 @@ elaboración seleccionada en Crear menú y «Continuar» del aviso de onboarding
 2. `Button`, `CategoryPill`, `IconButton`, `StatusPill`, `TextInput`/`TextArea` (6-11).
 3. Tipografía (2-4, 16) y `layout.tsx` (14) con prueba en iPhone físico.
 4. `BottomNavigation` junto con el paso 32 (13); `ui.ts`/`DayCard` en el paso 34 (15).
+
+## Aplicación (2026-10-11)
+
+Aplicado en `audit/a11y` con estos ajustes del revisor sobre lo propuesto:
+
+1. `--focus-ring: var(--accent-hover)`, pero `--ring` **no** lo hereda: queda fijo en el valor
+   pálido anterior (`color-mix(in srgb, var(--accent) 48%, white)`) para que `ring-ring/50` de
+   shadcn no sume una banda naranja de ~6 px al outline global.
+2. `TextArea`: `md:text-base` (el `md:text-sm` del textarea de shadcn ganaba desde 768 px);
+   en Crear menú el textarea de importar lleva `md:text-lg` para conservar su tamaño.
+   `TextInput`: `text-base` sin `sm:text-[15px]` (iPad también hace zoom por debajo de 16 px).
+3. `ui/Button`: `h-auto whitespace-normal text-center` en la base en lugar de `size: null`
+   (tailwind-merge descarta el `h-9`/`whitespace-nowrap` de shadcn). `sm` pasa a `min-h-11`.
+4. `viewport-fit=cover` en `layout.tsx` en commit aparte, con áreas seguras laterales
+   (`pl-[max(1rem,env(safe-area-inset-left))]` / `pr-[…right…]`, y `1.5rem` desde `sm`) en
+   `pageShellClass`, `BottomNavigation` y `ProposalActionBar`.
+5. `.ui-eyebrow` eliminada; `AuthPageShell:43` usa `t-eyebrow`.
+6. `CategoryPill`, estado `isCompleted`: usa hex fijos (`#6b7f4a` borde, `#55633a` texto sobre
+   `--success-soft`, 5,75:1) que cumplen; no se han tocado.
+
+Además: `outline-none` retirado de `TextInput`, `TextArea`, shadcn `button` y `textarea`;
+`TextArea` mantiene borde de acento al enfocar; `StatusPill` 14 px; `CategoryPill` seleccionado
+sobre `--accent-strong` con meta 12 px blanca (4,87:1); `BottomNavigation` etiquetas `text-xs`
+(la reorganización a 3 destinos queda para el paso 32); `AuthPageShell` `FieldLabel` 14 px y
+aviso de invitado `t-meta`. Las pantallas que usaban `accent-hover` provisional («Editar menú»,
+celda de hoy, elaboración seleccionada, «Continuar» del aviso de onboarding) y los CTA «Crear
+cuenta»/«Crear menú» de onboarding pasan a `--accent-strong`.
+
+Sin aplicar: punto 15 (`ui.ts` `buttonPrimaryClass`/`inputClass` y `DayCard.tsx`, código muerto,
+para el paso 34) y la insignia «Hoy» y el CTA de semana vacía de la zona de C2.
+
+Observación para el paso 34: `pageShellClass` lleva `px-4` (ahora `pl/pr` con área segura) y las
+pantallas Semana, Perfil, Onboarding, Compra y Despensa le añaden `px-3`; en el CSS generado la
+utilidad de `pageShellClass` va después y gana, así que esas pantallas ya tenían 16 px, no 12 px
+(el `-mx-3 px-3` de la cabecera sticky de Semana deja 4 px sin cubrir). Se mantiene ese
+comportamiento; unificarlo es parte de la consolidación de cabeceras.

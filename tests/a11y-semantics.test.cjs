@@ -98,3 +98,25 @@ test("screens changed in step 33 keep no text below 12px and no touch target bel
     assert.equal(small, null, `${file}: ${small}`);
   }
 });
+
+test("approved plan: CTA token, focus ring, 44px shared controls and safe areas", () => {
+  const css = read("src/app/globals.css");
+  assert.match(css, /--accent-strong: #b8532a;/);
+  assert.match(css, /--focus-ring: var\(--accent-hover\);/);
+  // shadcn's ring stays pale so it does not add a second orange band to the global outline.
+  assert.match(css, /--ring: color-mix\(in srgb, var\(--accent\) 48%, white\);/);
+  assert.ok(!css.includes(".ui-eyebrow"));
+  assert.ok(!/font-size: 0\.6\d*rem/.test(css), "no type token below 12px");
+
+  const button = read("src/components/ui/Button.tsx");
+  assert.ok(button.includes("bg-[color:var(--color-accent-strong)] text-white"));
+  assert.ok(!button.includes("min-h-10"));
+  assert.ok(read("src/components/ui/IconButton.tsx").includes("h-11 w-11"));
+  assert.ok(read("src/components/ui/TextInput.tsx").split(/\s|"/).includes("text-base"));
+  assert.ok(read("src/components/ui/TextArea.tsx").includes("md:text-base"));
+
+  assert.match(read("src/app/layout.tsx"), /viewportFit: "cover"/);
+  assert.ok(!/maximumScale|userScalable/.test(read("src/app/layout.tsx")), "zoom must stay allowed");
+  assert.ok(read("src/lib/ui.ts").includes("env(safe-area-inset-left)"));
+  assert.ok(read("src/components/layout/BottomNavigation.tsx").includes("env(safe-area-inset-right)"));
+});

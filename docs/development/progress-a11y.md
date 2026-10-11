@@ -1,8 +1,8 @@
 # Paso 33 · Legibilidad, interacción táctil y accesibilidad (rama `audit/a11y`)
 
 Fecha: 2026-10-11 · Base: `audit-opt` 02aa5b8 · Sin push ni merge.
-Plan de componentes compartidos (pendiente de aprobación):
-`design-plans/2026-10-11-accesibilidad-paso-33.md`.
+Plan de componentes compartidos: `design-plans/2026-10-11-accesibilidad-paso-33.md`,
+**aprobado por Sergio y aplicado el 2026-10-11** con los ajustes del revisor (ver segunda ola).
 
 ## Qué se ha hecho (solo pantallas y componentes de feature)
 
@@ -29,10 +29,27 @@ Hallazgo transversal (detalle en el plan): la regla global `:focus-visible` est�
 gana a las utilidades de Tailwind, por lo que los `outline-none` no ocultan el foco; el problema
 real es su color (1,72:1). Los chips con input `sr-only` sí tenían el foco invisible y se han corregido.
 
+## Segunda ola: plan aprobado aplicado
+
+- Tokens: `--accent-strong` #b8532a (blanco 4,87:1) y `--accent-strong-hover` #a24822 (6,02:1);
+  `--focus-ring` = `--accent-hover` (3,9:1); `--ring` de shadcn fijo en el tono pálido.
+  `.t-micro` y `.t-eyebrow` a 12 px; `.ui-eyebrow` eliminada.
+- Compartidos: `Button` primario sobre `accent-strong`, `sm` a 44 px, `h-auto whitespace-normal
+  text-center`; `IconButton` 44 px; `TextInput` `text-base`; `TextArea` `md:text-base` y borde de
+  foco; sin `outline-none` en ui/shadcn; `CategoryPill` seleccionado en `accent-strong` con meta
+  12 px blanca; `StatusPill` 14 px; `BottomNavigation` etiquetas 12 px; `AuthPageShell` etiquetas
+  14 px, `t-eyebrow` y `t-meta`.
+- `layout.tsx` con `viewport` (`viewportFit: "cover"`, `themeColor`, sin bloquear zoom) y áreas
+  seguras laterales en `pageShellClass`, `BottomNavigation` y `ProposalActionBar` (commit aparte).
+- Pantallas: `accent-hover` provisional → `accent-strong`; CTA de onboarding sin cuenta / sin menú
+  también. «Pedir idea a la IA» ya no desborda a 320 px (`whitespace-normal px-3 leading-tight`).
+  En Crear menú, `aria-controls` solo en la pestaña activa (el panel inactivo no se renderiza).
+- Test: `a11y-semantics.test.cjs` añade una prueba de regresión del plan (9 en total).
+
 ## Comprobaciones
 
 - `npm run lint`, `npm run typecheck`: sin errores.
-- `npm test`: 287/287 (incluye `tests/a11y-semantics.test.cjs`, 8 pruebas nuevas). Las 5 pruebas
+- `npm test`: 288/288 (incluye `tests/a11y-semantics.test.cjs`, 9 pruebas nuevas). Las 5 pruebas
   de `secrets.test.cjs` necesitan Gitleaks: en este worktree se ejecutan con
   `GITLEAKS_BIN=/Users/sergio/projects/becook/.tools/gitleaks` (el binario verificado del clon
   principal); sin él fallan por entorno, no por código.
@@ -46,10 +63,10 @@ real es su color (1,72:1). Los chips con input `sr-only` sí tenían el foco inv
 
 ## Pendiente
 
-- Aprobación y aplicación del plan de `design-plans/` (tokens `--accent-strong`, `--focus-ring`,
-  Button/IconButton/TextInput/CategoryPill/StatusPill, tipografía micro, `viewport-fit=cover`,
-  BottomNavigation con el paso 32, AuthPageShell).
-- Al aprobar `--accent-strong`, sustituir los `accent-hover` provisionales de las pantallas.
-- Insignia «Hoy» de `week/page.tsx:519` y de `WeekDayCard.tsx` (zona de C2): 3,2:1.
-- `src/components/DayCard.tsx` no tiene consumidores (código muerto con `buttonPrimaryClass`/`inputClass`): retirar en el paso 34.
-- Recorrido manual: navegador a 320/390 px, teclado, VoiceOver y Safari en iPhone físico (otro agente / paso 36).
+- Insignia «Hoy» de `week/page.tsx:519`, CTA «Crear menú» de semana vacía (`week/page.tsx:561`) e
+  insignia «Hoy» de `WeekDayCard.tsx:247`: blanco sobre `--accent` (3,2:1), zona de C2. Cambio:
+  `bg-[color:var(--color-accent-strong)]`.
+- `src/components/DayCard.tsx` sin consumidores (con `buttonPrimaryClass`/`inputClass`): retirar en el paso 34.
+- `px-3` de las pantallas no gana a `pageShellClass` (16 px reales): unificar en el paso 34.
+- `BottomNavigation` a 3 destinos y quizá 13 px: paso 32.
+- Recorrido manual a 320/390 px, teclado, VoiceOver y Safari en iPhone físico (áreas seguras con `viewport-fit=cover`).
