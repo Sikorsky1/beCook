@@ -409,6 +409,17 @@ Pasos 26, 27 y 28 del roadmap (UX 05-08, 10; Backend H8-H10, §9-10). Rama `audi
 | No probado | Prueba manual en navegador del conjunto (resumen «Generado para…», «Otra idea» con el contexto del servidor, perfil sin guardar → 409 en Crear menú). CI (sin push). No se compara `foodContext.version` con el perfil actual al aplicar (observación de C1) |
 | Pendiente | Migración `20261011090000_week_food_context` en becook-preview y validación en la Preview; producción con OK y backup **antes** del merge a `main` (sin ella `/api/generate-menu` responde 503). Pruebas manuales de C1 y D3 |
 
+### Correcciones tras la prueba de la ola 4 ✅ local (2026-10-11, sin push)
+| Defecto | Arreglo |
+|---|---|
+| D-1 «Deshacer» congelaba el contexto del perfil (p. ej. 1 persona) en vez del de la generación del menú restaurado; M-4 `weeks.generation_request_id` seguía apuntando a la propuesta deshecha | Antes de reemplazar se lee la petición de la que salen las raciones congeladas (`weeks.generation_request_id`, solo si `servings_source = 'generation'`; `readWeekPlanningRequest`). «Deshacer» la reenvía en el `apply_week` de restauración: vuelven sus raciones y `generation_request_id`. Sin generación (importado, catálogo) se congela del perfil, como antes. Sin migración. Test unitario y escenario 10 en `scripts/food-context-db-tests.cjs` |
+| D-2 Tras el conflicto de «Deshacer», «Usar este menú» no respondía | La rama de conflicto libera `isApplyingWeekRef`, descarta el intento y deja la barra en error («Usar este menú» pide confirmar de nuevo) |
+| D-3 «Otra idea» del catálogo se repetía tras 10 descartes | `nextCatalogIdea` (Crear menú y Semana) usa la lista completa; el recorte a 10 queda solo para el cuerpo de la API. Test en `tests/dish-substitution.test.cjs` |
+| M-2 Diálogo de reemplazo | Foco explícito en «Mantener el actual» tras `showModal()`; solo el contenido se desplaza y las acciones quedan siempre visibles (320×640) |
+| M-3 409 sin perfil | Sin «Reintentar» ni «Puedes reintentarlo tal cual…», no cuenta para el límite de 3 y ofrece «Ir a Perfil». El resumen previo dice que hace falta guardar el perfil |
+| M-1 Borrador de sessionStorage | Las personas restauradas de un borrador ya no las sobrescribe el perfil cuando el efecto se repite |
+| Comprobaciones | lint, typecheck, test **281/281**, build (copia sin `.env*`). `test:db` **397/397** con la BD local compartida, que ya tenía la migración `20261012090000_recipe_cards` de `audit/c2-fichas` (se contó su expectativa solo para esa ejecución; sin `db:reset`). Sin prueba manual en navegador de D-2, M-1, M-2 ni M-3 |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
