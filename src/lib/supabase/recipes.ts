@@ -41,6 +41,25 @@ export async function getRecipeCardFromSupabase(versionId: string, client?: Supa
   return data ? recipeCardFromRow(data) : null;
 }
 
+// Several card versions in one read (C4: the shopping list of a week). Versions that are not found
+// or not readable by this session are simply absent from the map.
+export async function getRecipeCardsFromSupabase(versionIds: string[], client?: SupabaseClient | null): Promise<Map<string, RecipeCard>> {
+  const ids = [...new Set(versionIds.filter(isRecipeVersionId).map((id) => id.toLowerCase()))];
+  const cards = new Map<string, RecipeCard>();
+  if (ids.length === 0) return cards;
+  const { data, error } = await requireClient(client).from("recipe_versions").select(cardColumns).in("id", ids);
+
+  if (error) {
+    throw new Error(`Could not read the dish cards: ${error.message}`);
+  }
+
+  for (const row of data ?? []) {
+    const card = recipeCardFromRow(row);
+    if (card) cards.set(card.versionId, card);
+  }
+  return cards;
+}
+
 // Catalogue recipes that have a reviewed version, by title key → latest reviewed version.
 // Today the catalogue has identities only (no reviewed version yet): the map is empty.
 export async function getCatalogReviewedVersionsFromSupabase(client?: SupabaseClient | null) {

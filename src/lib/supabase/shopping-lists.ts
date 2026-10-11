@@ -1,4 +1,9 @@
-import { supermarketCategoryLabels } from "@/lib/shoppingList";
+import type { ReconcileOps, ReconcileSummary } from "@/lib/shopping/reconcile";
+import {
+  parseShoppingOrigins,
+  supermarketCategoryLabels,
+  type ShoppingOrigin,
+} from "@/lib/shoppingList";
 
 import { supabase } from "./client";
 
@@ -7,10 +12,18 @@ export type ShoppingItemCategory = (typeof supermarketCategoryLabels)[number];
 export type ShoppingItem = {
   id?: string;
   name: string;
-  quantity: number;
+  // null: «al gusto» (C4).
+  quantity: number | null;
   unit: string;
   category: ShoppingItemCategory;
   checked: boolean;
+  // C4 (20261013090000_shopping_item_origins). Absent or null on rows made before C4, and when the
+  // database does not have the columns yet.
+  itemKey?: string | null;
+  origins?: ShoppingOrigin[] | null;
+  checkedQuantity?: number | null;
+  needsReview?: boolean;
+  removedAt?: string | null;
 };
 
 export type ShoppingList = {
@@ -19,6 +32,8 @@ export type ShoppingList = {
   generatedAt: string;
   // Canonical week content the list was generated for (B6); null on lists created before B6.
   weekSignature: string | null;
+  // C4: 'mixed-v1' when the items have keys and origins; null on lists made from titles only.
+  ingredientBasis?: string | null;
   items: ShoppingItem[];
 };
 
@@ -27,6 +42,8 @@ type ShoppingListRow = {
   week_id: string | null;
   generated_at: string | null;
   week_signature?: string | null;
+  ingredient_basis?: string | null;
+  reconciled_at?: string | null;
 };
 
 type ShoppingItemRow = {
@@ -36,7 +53,19 @@ type ShoppingItemRow = {
   unit: string | null;
   category: string | null;
   checked: boolean | null;
+  item_key?: string | null;
+  origins?: unknown;
+  checked_quantity?: number | null;
+  needs_review?: boolean | null;
+  removed_at?: string | null;
 };
+
+const listColumns = "id,week_id,generated_at,week_signature,ingredient_basis,reconciled_at";
+const legacyListColumns = "id,week_id,generated_at,week_signature";
+const itemColumns = "id,name,quantity,unit,category,checked,item_key,origins,checked_quantity,needs_review,removed_at";
+const legacyItemColumns = "id,name,quantity,unit,category,checked";
+// Postgres «undefined column»: the C4 migration is not applied in this database yet.
+const undefinedColumn = (error: { code?: string } | null) => error?.code === "42703";
 
 const shoppingItemCategoryValues = new Set<ShoppingItemCategory>(
   supermarketCategoryLabels,
@@ -81,13 +110,23 @@ function parseShoppingItemCategory(
 }
 
 function rowToShoppingItem(row: ShoppingItemRow): ShoppingItem {
+  const unit = parseRequiredString(row.unit, "shopping_items.unit");
+  // C4: a NULL quantity is «al gusto» (only accepted by the database with that unit).
+  const quantity = row.quantity === null && unit.trim().toLowerCase() === "al gusto"
+    ? null
+    : parseRequiredNumber(row.quantity === null ? null : Number(row.quantity), "shopping_items.quantity");
   return {
     id: row.id,
     name: parseRequiredString(row.name, "shopping_items.name"),
-    quantity: parseRequiredNumber(row.quantity, "shopping_items.quantity"),
-    unit: parseRequiredString(row.unit, "shopping_items.unit"),
+    quantity,
+    unit,
     category: parseShoppingItemCategory(row.category),
     checked: parseRequiredBoolean(row.checked, "shopping_items.checked"),
+    itemKey: typeof row.item_key === "string" && row.item_key ? row.item_key : null,
+    origins: parseShoppingOrigins(row.origins),
+    checkedQuantity: row.checked_quantity === null || row.checked_quantity === undefined ? null : Number(row.checked_quantity),
+    needsReview: row.needs_review === true,
+    removedAt: typeof row.removed_at === "string" ? row.removed_at : null,
   };
 }
 
@@ -105,14 +144,18 @@ export async function getLatestShoppingListForWeekFromSupabase(
     throw new Error("Cannot read a shopping list without a week id.");
   }
 
-  const { data: latestShoppingList, error: shoppingListError } = await supabase
-    .from("shopping_lists")
-    .select("id,week_id,generated_at,week_signature")
-    .eq("week_id", weekId)
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(1)
-    .maybeSingle<ShoppingListRow>();
+  const client = supabase;
+  const readList = (columns: string) =>
+    client
+      .from("shopping_lists")
+      .select(columns)
+      .eq("week_id", weekId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle<ShoppingListRow>();
+  let { data: latestShoppingList, error: shoppingListError } = await readList(listColumns);
+  if (undefinedColumn(shoppingListError)) ({ data: latestShoppingList, error: shoppingListError } = await readList(legacyListColumns));
 
   if (shoppingListError) {
     throw new Error(
@@ -124,12 +167,16 @@ export async function getLatestShoppingListForWeekFromSupabase(
     return null;
   }
 
-  const { data: shoppingItems, error: shoppingItemsError } = await supabase
-    .from("shopping_items")
-    .select("id,name,quantity,unit,category,checked")
-    .eq("shopping_list_id", latestShoppingList.id)
-    .order("created_at", { ascending: true })
-    .order("id", { ascending: true });
+  const listId = latestShoppingList.id;
+  const readItems = (columns: string) =>
+    client
+      .from("shopping_items")
+      .select(columns)
+      .eq("shopping_list_id", listId)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+  let { data: shoppingItems, error: shoppingItemsError } = await readItems(itemColumns);
+  if (undefinedColumn(shoppingItemsError)) ({ data: shoppingItems, error: shoppingItemsError } = await readItems(legacyItemColumns));
 
   if (shoppingItemsError) {
     throw new Error(
@@ -148,7 +195,8 @@ export async function getLatestShoppingListForWeekFromSupabase(
       "shopping_lists.generated_at",
     ),
     weekSignature: latestShoppingList.week_signature ?? null,
-    items: ((shoppingItems ?? []) as ShoppingItemRow[]).map(rowToShoppingItem),
+    ingredientBasis: latestShoppingList.ingredient_basis ?? null,
+    items: ((shoppingItems ?? []) as unknown as ShoppingItemRow[]).map(rowToShoppingItem),
   };
 }
 
@@ -167,6 +215,7 @@ type ShoppingListJson = {
   week_id: string;
   generated_at: string;
   week_signature: string | null;
+  ingredient_basis?: string | null;
   items: ShoppingItemRow[];
 };
 
@@ -176,6 +225,7 @@ function parseShoppingListJson(value: ShoppingListJson): ShoppingList {
     weekId: parseRequiredString(value.week_id, "shopping_lists.week_id"),
     generatedAt: parseRequiredString(value.generated_at, "shopping_lists.generated_at"),
     weekSignature: value.week_signature ?? null,
+    ingredientBasis: value.ingredient_basis ?? null,
     items: value.items.map(rowToShoppingItem),
   };
 }
@@ -198,14 +248,21 @@ export async function saveShoppingListInSupabase({
   isoYear: number;
   isoWeek: number;
   weekSignature: string;
-  items: Omit<ShoppingItem, "id" | "checked">[];
+  items: Pick<ShoppingItem, "name" | "quantity" | "unit" | "category" | "itemKey" | "origins">[];
   expectedWeekVersion: number | null;
 }): Promise<SaveShoppingListResult> {
   const { data, error } = await requireSupabase().rpc("save_shopping_list", {
     p_iso_year: isoYear,
     p_iso_week: isoWeek,
     p_week_signature: weekSignature,
-    p_items: items.map(({ name, quantity, unit, category }) => ({ name, quantity, unit, category })),
+    // item_key / origins (C4) only when known: without them the list is saved as before C4.
+    p_items: items.map(({ name, quantity, unit, category, itemKey, origins }) => ({
+      name,
+      quantity,
+      unit,
+      category,
+      ...(itemKey ? { item_key: itemKey, origins: origins ?? [] } : {}),
+    })),
     p_expected_week_version: expectedWeekVersion,
   });
 
@@ -254,4 +311,79 @@ export async function setShoppingItemsCheckedInSupabase(
   }
 
   throw new Error("Unexpected set_shopping_items_checked result.");
+}
+
+export type ReconcileShoppingListResult =
+  | { status: "applied"; list: ShoppingList; weekVersion: number; summary: ReconcileSummary }
+  | { status: "existing"; list: ShoppingList; weekVersion: number }
+  | { status: "stale"; weekVersion: number | null }
+  | { status: "week_changed"; weekVersion: number | null }
+  | { status: "no_week" }
+  // The database does not have reconcile_shopping_list yet (C4 migration not applied).
+  | { status: "unavailable" };
+
+function parseSummary(value: unknown): ReconcileSummary {
+  const summary = (value ?? {}) as Record<string, unknown>;
+  const count = (key: string) => (Number.isInteger(summary[key]) ? (summary[key] as number) : 0);
+  return { added: count("added"), removed: count("removed"), keptBought: count("keptBought"), changed: count("changed"), review: count("review") };
+}
+
+// Updates the current list of the caller's week in place (reconcile_shopping_list, C4): only while
+// it is still `listId` with `fromSignature` and the week is at `expectedWeekVersion`.
+export async function reconcileShoppingListInSupabase({
+  isoYear,
+  isoWeek,
+  listId,
+  fromSignature,
+  toSignature,
+  ops,
+  expectedWeekVersion,
+}: {
+  isoYear: number;
+  isoWeek: number;
+  listId: string;
+  fromSignature: string | null;
+  toSignature: string;
+  ops: ReconcileOps;
+  expectedWeekVersion: number | null;
+}): Promise<ReconcileShoppingListResult> {
+  const { data, error } = await requireSupabase().rpc("reconcile_shopping_list", {
+    p_iso_year: isoYear,
+    p_iso_week: isoWeek,
+    p_list_id: listId,
+    p_from_signature: fromSignature,
+    p_to_signature: toSignature,
+    p_ops: ops,
+    p_expected_week_version: expectedWeekVersion,
+  });
+
+  if (error) {
+    // Only the function itself missing (migration not applied) means «unavailable»: PostgREST
+    // PGRST202, or an undefined-function error that names it. Anything else is an error (never a
+    // reason to make a new list).
+    if (error.code === "PGRST202" || (error.code === "42883" && /reconcile_shopping_list\s*\(/.test(error.message))) {
+      return { status: "unavailable" };
+    }
+    throw new Error(`Could not update shopping list: ${error.message}`);
+  }
+
+  const result = data as { status?: string; list?: ShoppingListJson | null; week_version?: number | null; summary?: unknown } | null;
+  const weekVersion = typeof result?.week_version === "number" ? result.week_version : null;
+
+  switch (result?.status) {
+    case "applied":
+      if (!result.list || weekVersion === null) break;
+      return { status: "applied", list: parseShoppingListJson(result.list), weekVersion, summary: parseSummary(result.summary) };
+    case "existing":
+      if (!result.list || weekVersion === null) break;
+      return { status: "existing", list: parseShoppingListJson(result.list), weekVersion };
+    case "stale":
+      return { status: "stale", weekVersion };
+    case "week_changed":
+      return { status: "week_changed", weekVersion };
+    case "no_week":
+      return { status: "no_week" };
+  }
+
+  throw new Error("Unexpected reconcile_shopping_list result.");
 }
