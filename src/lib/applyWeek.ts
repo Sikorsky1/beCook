@@ -8,8 +8,10 @@
 // D3 (step 26): replacing a menu is confirmed with the app's own dialog, which is shown the menu
 // it replaces. Right after a replacement the previous menu can be restored for a short time
 // (undoAppliedMenu): the same week write, checked against the version this attempt produced.
-import type { WeekDay } from "@/data/mockWeek";
-import { readCachedWeek, readRemoteWeek, saveWeek, type DataIdentity } from "@/lib/data/repositories";
+import type { WeekDay, WeekRecipeLink } from "@/data/mockWeek";
+import { loadCatalogRecipeIndex, readCachedWeek, readRemoteWeek, saveWeek, type DataIdentity } from "@/lib/data/repositories";
+import { recipeTitleKey } from "@/lib/recipes/card";
+import { recipeLinkKey } from "@/lib/weekStorage";
 import type { SaveResult } from "@/lib/data/sync";
 import type { IsoWeek } from "@/lib/isoWeek";
 
@@ -118,6 +120,22 @@ export type ApplyMenuInput<Menu> = {
 
 const skipped = Promise.resolve<ShoppingPreparation>("skipped");
 
+// C2: a planned dish whose title is exactly a catalogue recipe with a reviewed card points to that
+// card version. Any other dish has no card (only its title), never a guessed one. Links the menu
+// already carries are kept.
+export function linkCatalogRecipes(weekDays: WeekDay[], catalog: Map<string, WeekRecipeLink>): WeekDay[] {
+  if (catalog.size === 0) return weekDays;
+  return weekDays.map((day) => {
+    let next = day;
+    for (const meal of ["lunch", "dinner"] as const) {
+      const title = day[meal];
+      const link = title === "LIBRE" ? undefined : catalog.get(recipeTitleKey(title));
+      if (link && !day[recipeLinkKey[meal]]) next = { ...next, [recipeLinkKey[meal]]: link };
+    }
+    return next;
+  });
+}
+
 export async function applyMenuToWeek<Menu>({
   identity,
   isoWeek,
@@ -169,7 +187,8 @@ export async function applyMenuToWeek<Menu>({
 
   // Overwrite only after «reemplazar»; otherwise the database refuses it if another device saved
   // this week since it was read (conflict).
-  const result = await saveWeek(identity, isoWeek, weekDays, {
+  const linkedDays = linkCatalogRecipes(weekDays, await loadCatalogRecipeIndex());
+  const result = await saveWeek(identity, isoWeek, linkedDays, {
     generationRequestId,
     overwrite: attempt.overwrite === true,
     requestKey: attempt.requestKey,

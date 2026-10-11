@@ -1,11 +1,17 @@
 export type MealSlot = "LIBRE" | string;
 export type MealKey = "lunch" | "dinner";
 
+// C2: the dish card a planned meal points to (an immutable recipe version). Absent: no card,
+// only the title is known (menus before C2, free meals, or a title edited after linking).
+export type WeekRecipeLink = { versionId: string };
+
 export type WeekDay = {
   day: string;
   date: string;
   lunch: MealSlot;
   dinner: MealSlot;
+  lunchRecipe?: WeekRecipeLink;
+  dinnerRecipe?: WeekRecipeLink;
 };
 
 export type MockWeek = {

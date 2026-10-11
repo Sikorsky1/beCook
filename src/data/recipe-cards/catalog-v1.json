@@ -1,0 +1,1812 @@
+{
+  "status": "draft_unreviewed",
+  "notice": "BORRADOR SIN REVISAR. Fichas propuestas para las 27 recetas del catálogo (src/data/nutritionist-recipes.json), pendientes de revisión por Sergio o la nutricionista. No se cargan en la base de datos ni se muestran en la app: la migración 20261012090000_recipe_cards solo crea las identidades del catálogo, sin versión revisada. Para publicarlas hace falta una migración nueva con las fichas ya revisadas (review_status 'reviewed').",
+  "version": 1,
+  "source": "src/data/nutritionist-recipes.json",
+  "schema": "src/lib/recipes/card.ts (validateRecipeCardContent)",
+  "reviewChecklist": [
+    "Ingredientes y cantidades para baseServings",
+    "Tiempo total",
+    "Pasos",
+    "Posibles alérgenos (lista UE-14) según los ingredientes",
+    "Categoría de supermercado de cada ingrediente"
+  ],
+  "recipes": [
+    {
+      "catalogKey": "nutri-c10",
+      "title": "Filete de pollo plancha y acelgas rehogadas",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 25,
+        "ingredients": [
+          {
+            "name": "pechuga de pollo en filetes",
+            "quantity": 300,
+            "unit": "g",
+            "category": "carnicería",
+            "optional": false
+          },
+          {
+            "name": "acelgas",
+            "quantity": 500,
+            "unit": "g",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 2,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 2,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "pimienta negra",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          }
+        ],
+        "steps": [
+          "Lava las acelgas, separa pencas y hojas y córtalas.",
+          "Cuece las pencas 5 minutos en agua con sal, añade las hojas 3 minutos más y escurre.",
+          "Dora el ajo laminado en una sartén con aceite y rehoga las acelgas 3 minutos.",
+          "Salpimienta los filetes y hazlos a la plancha 3–4 minutos por cada lado.",
+          "Sirve el pollo con las acelgas."
+        ],
+        "possibleAllergens": []
+      }
+    },
+    {
+      "catalogKey": "nutri-c21",
+      "title": "Albóndigas de pollo y champiñón salteado",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 40,
+        "ingredients": [
+          {
+            "name": "carne picada de pollo",
+            "quantity": 400,
+            "unit": "g",
+            "category": "carnicería",
+            "optional": false
+          },
+          {
+            "name": "huevo",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "lácteos",
+            "optional": false
+          },
+          {
+            "name": "pan rallado",
+            "quantity": 30,
+            "unit": "g",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 2,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "perejil",
+            "quantity": null,
+            "unit": null,
+            "category": "frutería",
+            "optional": true
+          },
+          {
+            "name": "champiñones",
+            "quantity": 300,
+            "unit": "g",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 3,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "pimienta negra",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          }
+        ],
+        "steps": [
+          "Mezcla el pollo picado con el huevo, el pan rallado, un ajo picado, perejil, sal y pimienta.",
+          "Forma albóndigas pequeñas.",
+          "Dóralas en una sartén con aceite a fuego medio hasta que estén hechas por dentro, unos 12 minutos.",
+          "Lamina los champiñones y saltéalos con el otro ajo hasta que se doren.",
+          "Sirve las albóndigas con el champiñón."
+        ],
+        "possibleAllergens": [
+          "eggs",
+          "gluten"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-c22",
+      "title": "Pollo asado con batata",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 60,
+        "ingredients": [
+          {
+            "name": "muslos de pollo",
+            "quantity": 4,
+            "unit": "unidades",
+            "category": "carnicería",
+            "optional": false
+          },
+          {
+            "name": "batata",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "cebolla",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 3,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "tomillo seco",
+            "quantity": 1,
+            "unit": "cucharaditas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 3,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "pimienta negra",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          }
+        ],
+        "steps": [
+          "Precalienta el horno a 200 °C.",
+          "Pela la batata y la cebolla y córtalas en trozos; colócalas en una bandeja.",
+          "Coloca encima el pollo salpimentado, el ajo y el tomillo y riega con aceite.",
+          "Hornea unos 45–50 minutos, dando la vuelta al pollo a mitad, hasta que esté dorado y hecho."
+        ],
+        "possibleAllergens": []
+      }
+    },
+    {
+      "catalogKey": "nutri-c23",
+      "title": "Pollo al limón",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 30,
+        "ingredients": [
+          {
+            "name": "pechuga de pollo",
+            "quantity": 400,
+            "unit": "g",
+            "category": "carnicería",
+            "optional": false
+          },
+          {
+            "name": "limón",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 2,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "caldo de pollo",
+            "quantity": 150,
+            "unit": "ml",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "harina de trigo",
+            "quantity": 1,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "perejil",
+            "quantity": null,
+            "unit": null,
+            "category": "frutería",
+            "optional": true
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 2,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "pimienta negra",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          }
+        ],
+        "steps": [
+          "Corta el pollo en tiras, salpimiéntalo y pásalo por la harina.",
+          "Dóralo en una sartén con aceite y resérvalo.",
+          "En la misma sartén sofríe el ajo picado, añade el zumo de los limones y el caldo y deja reducir 3 minutos.",
+          "Vuelve a poner el pollo y cocina 5 minutos más. Sirve con perejil picado."
+        ],
+        "possibleAllergens": [
+          "gluten",
+          "celery"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-c24",
+      "title": "Paletilla de cordero al horno con patatas",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 120,
+        "ingredients": [
+          {
+            "name": "paletilla de cordero",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "carnicería",
+            "optional": false
+          },
+          {
+            "name": "patatas",
+            "quantity": 600,
+            "unit": "g",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "cebolla",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 4,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "vino blanco",
+            "quantity": 150,
+            "unit": "ml",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "romero",
+            "quantity": null,
+            "unit": null,
+            "category": "frutería",
+            "optional": true
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 3,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Precalienta el horno a 180 °C.",
+          "Corta las patatas y la cebolla en rodajas y colócalas en la bandeja con aceite y sal.",
+          "Pon encima la paletilla salada, el ajo y el romero, y añade el vino y un vaso de agua.",
+          "Hornea unas 2 horas, dando la vuelta a la paletilla a mitad y añadiendo agua si se seca.",
+          "Sube a 210 °C los últimos 15 minutos para dorar."
+        ],
+        "possibleAllergens": [
+          "sulphites"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-c34",
+      "title": "Lentejas estofadas",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 60,
+        "ingredients": [
+          {
+            "name": "lentejas",
+            "quantity": 200,
+            "unit": "g",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "zanahoria",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "cebolla",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "pimiento verde",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 2,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "tomate triturado",
+            "quantity": 100,
+            "unit": "g",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "pimentón dulce",
+            "quantity": 1,
+            "unit": "cucharaditas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "hoja de laurel",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 2,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Pon las lentejas en remojo si lo indica el envase.",
+          "Sofríe la cebolla, el pimiento y el ajo picados en aceite.",
+          "Añade el tomate y el pimentón y rehoga 2 minutos.",
+          "Incorpora las lentejas, la zanahoria en rodajas, el laurel y agua que las cubra.",
+          "Cuece a fuego suave 40–45 minutos hasta que estén tiernas y sala al final."
+        ],
+        "possibleAllergens": []
+      }
+    },
+    {
+      "catalogKey": "nutri-c36",
+      "title": "Espaguetis a la boloñesa",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 40,
+        "ingredients": [
+          {
+            "name": "espaguetis",
+            "quantity": 200,
+            "unit": "g",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "carne picada de ternera",
+            "quantity": 250,
+            "unit": "g",
+            "category": "carnicería",
+            "optional": false
+          },
+          {
+            "name": "tomate triturado",
+            "quantity": 400,
+            "unit": "g",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "cebolla",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "zanahoria",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 1,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "orégano",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          },
+          {
+            "name": "queso parmesano rallado",
+            "quantity": 20,
+            "unit": "g",
+            "category": "lácteos",
+            "optional": true
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 2,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Sofríe la cebolla, la zanahoria y el ajo picados en aceite.",
+          "Añade la carne y dórala.",
+          "Incorpora el tomate y el orégano y cuece a fuego suave 20 minutos.",
+          "Cuece los espaguetis en agua con sal según el envase y escúrrelos.",
+          "Mezcla la pasta con la salsa y sirve con parmesano si quieres."
+        ],
+        "possibleAllergens": [
+          "gluten",
+          "milk",
+          "eggs"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-c37",
+      "title": "Espaguetis con gambas y chirlas",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 30,
+        "ingredients": [
+          {
+            "name": "espaguetis",
+            "quantity": 200,
+            "unit": "g",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "gambas peladas",
+            "quantity": 200,
+            "unit": "g",
+            "category": "pescadería",
+            "optional": false
+          },
+          {
+            "name": "chirlas",
+            "quantity": 300,
+            "unit": "g",
+            "category": "pescadería",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 3,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "guindilla",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "despensa",
+            "optional": true
+          },
+          {
+            "name": "vino blanco",
+            "quantity": 100,
+            "unit": "ml",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "perejil",
+            "quantity": null,
+            "unit": null,
+            "category": "frutería",
+            "optional": true
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 3,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Deja las chirlas en agua con sal 30 minutos para que suelten la arena.",
+          "Cuece los espaguetis en agua con sal según el envase.",
+          "Dora el ajo laminado y la guindilla en aceite, añade las chirlas y el vino y tapa hasta que se abran.",
+          "Añade las gambas y cocina 2 minutos.",
+          "Mezcla con la pasta escurrida y el perejil."
+        ],
+        "possibleAllergens": [
+          "gluten",
+          "crustaceans",
+          "molluscs",
+          "sulphites",
+          "eggs"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-c38",
+      "title": "Espaguetis con brócoli",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 25,
+        "ingredients": [
+          {
+            "name": "espaguetis",
+            "quantity": 200,
+            "unit": "g",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "brócoli",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 2,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "guindilla",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 3,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "pimienta negra",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          }
+        ],
+        "steps": [
+          "Separa el brócoli en ramilletes.",
+          "Cuece los espaguetis en agua con sal y añade el brócoli los últimos 4 minutos.",
+          "Dora el ajo laminado (y la guindilla) en aceite.",
+          "Escurre pasta y brócoli, saltéalos con el ajo y salpimienta."
+        ],
+        "possibleAllergens": [
+          "gluten",
+          "eggs"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-c39",
+      "title": "Espaguetis al pesto",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 20,
+        "ingredients": [
+          {
+            "name": "espaguetis",
+            "quantity": 200,
+            "unit": "g",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "albahaca fresca",
+            "quantity": 40,
+            "unit": "g",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "piñones",
+            "quantity": 25,
+            "unit": "g",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "queso parmesano",
+            "quantity": 40,
+            "unit": "g",
+            "category": "lácteos",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 1,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 80,
+            "unit": "ml",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Cuece los espaguetis en agua con sal según el envase.",
+          "Tritura la albahaca, los piñones, el parmesano, el ajo, el aceite y una pizca de sal.",
+          "Escurre la pasta reservando un poco de agua de cocción.",
+          "Mezcla la pasta con el pesto, aligerando con el agua si hace falta."
+        ],
+        "possibleAllergens": [
+          "gluten",
+          "milk",
+          "nuts",
+          "eggs"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-c52",
+      "title": "Judias verdes con patata y huevo duro",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 35,
+        "ingredients": [
+          {
+            "name": "judías verdes",
+            "quantity": 400,
+            "unit": "g",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "patatas",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "huevo",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "lácteos",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 2,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 2,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Cuece los huevos 10 minutos, enfríalos y pélalos.",
+          "Cuece las patatas en trozos y las judías troceadas en agua con sal unos 15–20 minutos.",
+          "Escurre y rehoga con ajo laminado dorado en aceite.",
+          "Sirve con el huevo duro en cuartos."
+        ],
+        "possibleAllergens": [
+          "eggs"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e5",
+      "title": "Filete de pollo plancha y ensalada (canónigos y tomate)",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 15,
+        "ingredients": [
+          {
+            "name": "pechuga de pollo en filetes",
+            "quantity": 300,
+            "unit": "g",
+            "category": "carnicería",
+            "optional": false
+          },
+          {
+            "name": "canónigos",
+            "quantity": 100,
+            "unit": "g",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "tomate",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "vinagre",
+            "quantity": 1,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 3,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "pimienta negra",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          }
+        ],
+        "steps": [
+          "Salpimienta los filetes y hazlos a la plancha 3–4 minutos por cada lado.",
+          "Lava los canónigos y corta el tomate.",
+          "Aliña la ensalada con aceite, vinagre y sal.",
+          "Sirve el pollo con la ensalada."
+        ],
+        "possibleAllergens": [
+          "sulphites"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e6",
+      "title": "Filete de pavo plancha y ensalada (canónigos y tomate)",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 15,
+        "ingredients": [
+          {
+            "name": "filetes de pavo",
+            "quantity": 300,
+            "unit": "g",
+            "category": "carnicería",
+            "optional": false
+          },
+          {
+            "name": "canónigos",
+            "quantity": 100,
+            "unit": "g",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "tomate",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "vinagre",
+            "quantity": 1,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 3,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "pimienta negra",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          }
+        ],
+        "steps": [
+          "Salpimienta los filetes y hazlos a la plancha 2–3 minutos por cada lado.",
+          "Lava los canónigos y corta el tomate.",
+          "Aliña la ensalada con aceite, vinagre y sal.",
+          "Sirve el pavo con la ensalada."
+        ],
+        "possibleAllergens": [
+          "sulphites"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e12",
+      "title": "Tosta de Jamón y aguacate",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 10,
+        "ingredients": [
+          {
+            "name": "pan",
+            "quantity": 4,
+            "unit": "rebanadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "aguacate",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "jamón serrano",
+            "quantity": 80,
+            "unit": "g",
+            "category": "carnicería",
+            "optional": false
+          },
+          {
+            "name": "tomate",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": true
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 1,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Tuesta las rebanadas de pan.",
+          "Machaca el aguacate con una pizca de sal y un hilo de aceite.",
+          "Unta el pan con el aguacate y cubre con el jamón (y tomate en rodajas si quieres)."
+        ],
+        "possibleAllergens": [
+          "gluten"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e13",
+      "title": "Tosta de Salmón ahumado",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 10,
+        "ingredients": [
+          {
+            "name": "pan",
+            "quantity": 4,
+            "unit": "rebanadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "salmón ahumado",
+            "quantity": 100,
+            "unit": "g",
+            "category": "pescadería",
+            "optional": false
+          },
+          {
+            "name": "queso crema",
+            "quantity": 60,
+            "unit": "g",
+            "category": "lácteos",
+            "optional": true
+          },
+          {
+            "name": "eneldo",
+            "quantity": null,
+            "unit": null,
+            "category": "frutería",
+            "optional": true
+          },
+          {
+            "name": "limón",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": true
+          }
+        ],
+        "steps": [
+          "Tuesta las rebanadas de pan.",
+          "Unta una capa fina de queso crema si quieres.",
+          "Cubre con el salmón ahumado y termina con eneldo y unas gotas de limón."
+        ],
+        "possibleAllergens": [
+          "gluten",
+          "fish",
+          "milk"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e15",
+      "title": "Tosta de Ventresca con tomate",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 10,
+        "ingredients": [
+          {
+            "name": "pan",
+            "quantity": 4,
+            "unit": "rebanadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "ventresca de atún en aceite",
+            "quantity": 110,
+            "unit": "g",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "tomate",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 1,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Tuesta las rebanadas de pan.",
+          "Ralla el tomate o córtalo en rodajas y ponlo sobre el pan con sal y un hilo de aceite.",
+          "Coloca la ventresca escurrida por encima."
+        ],
+        "possibleAllergens": [
+          "gluten",
+          "fish"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e18",
+      "title": "Salmón a la plancha",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 15,
+        "ingredients": [
+          {
+            "name": "lomos de salmón",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "pescadería",
+            "optional": false
+          },
+          {
+            "name": "limón",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": true
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 1,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "pimienta negra",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          }
+        ],
+        "steps": [
+          "Seca los lomos y salpimiéntalos.",
+          "Hazlos en una plancha caliente con unas gotas de aceite, 3–4 minutos por la piel y 2 minutos por el otro lado.",
+          "Sirve con limón si quieres."
+        ],
+        "possibleAllergens": [
+          "fish"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e21",
+      "title": "Bacalao plancha con ajos fritos",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 20,
+        "ingredients": [
+          {
+            "name": "lomos de bacalao desalado",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "pescadería",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 4,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "guindilla",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          },
+          {
+            "name": "perejil",
+            "quantity": null,
+            "unit": null,
+            "category": "frutería",
+            "optional": true
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 4,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Seca bien los lomos de bacalao.",
+          "Hazlos a la plancha con un poco de aceite, 4 minutos por la piel y 2 por el otro lado.",
+          "Fríe el ajo laminado (y la guindilla) en el resto del aceite sin que se queme.",
+          "Vierte el aceite con los ajos sobre el bacalao y añade perejil."
+        ],
+        "possibleAllergens": [
+          "fish"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e22",
+      "title": "Merluza plancha con ajos fritos",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 20,
+        "ingredients": [
+          {
+            "name": "filetes de merluza",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "pescadería",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 4,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "guindilla",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          },
+          {
+            "name": "perejil",
+            "quantity": null,
+            "unit": null,
+            "category": "frutería",
+            "optional": true
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 4,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Seca y sala los filetes de merluza.",
+          "Hazlos a la plancha con un poco de aceite, 3 minutos por la piel y 2 por el otro lado.",
+          "Fríe el ajo laminado (y la guindilla) en el resto del aceite sin que se queme.",
+          "Vierte el aceite con los ajos sobre la merluza y añade perejil."
+        ],
+        "possibleAllergens": [
+          "fish"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e24",
+      "title": "Pata de pulpo a la plancha con puré de patata",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 30,
+        "ingredients": [
+          {
+            "name": "patas de pulpo cocido",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "pescadería",
+            "optional": false
+          },
+          {
+            "name": "patatas",
+            "quantity": 400,
+            "unit": "g",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "leche",
+            "quantity": 100,
+            "unit": "ml",
+            "category": "lácteos",
+            "optional": false
+          },
+          {
+            "name": "mantequilla",
+            "quantity": 20,
+            "unit": "g",
+            "category": "lácteos",
+            "optional": false
+          },
+          {
+            "name": "pimentón",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 2,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Cuece las patatas peladas en agua con sal 20 minutos y escúrrelas.",
+          "Aplástalas con la leche caliente, la mantequilla y sal hasta tener un puré.",
+          "Marca las patas de pulpo en una plancha muy caliente con aceite, 2–3 minutos por lado.",
+          "Sirve el pulpo sobre el puré con pimentón y un hilo de aceite."
+        ],
+        "possibleAllergens": [
+          "molluscs",
+          "milk"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e27",
+      "title": "Ensalada de tomates, zanahoria, aguacate y anchoas",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 15,
+        "ingredients": [
+          {
+            "name": "tomates",
+            "quantity": 3,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "zanahoria",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "aguacate",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "anchoas en aceite",
+            "quantity": 8,
+            "unit": "unidades",
+            "category": "pescadería",
+            "optional": false
+          },
+          {
+            "name": "vinagre",
+            "quantity": 1,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 2,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Corta los tomates y el aguacate en trozos y ralla la zanahoria.",
+          "Colócalos en una fuente y añade las anchoas.",
+          "Aliña con aceite, vinagre y poca sal (las anchoas ya son saladas)."
+        ],
+        "possibleAllergens": [
+          "fish",
+          "sulphites"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e29",
+      "title": "Espárragos, berenjena, calabacín y zanahoria plancha",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 25,
+        "ingredients": [
+          {
+            "name": "espárragos verdes",
+            "quantity": 1,
+            "unit": "manojos",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "berenjena",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "calabacín",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "zanahoria",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 3,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Lava las verduras; corta la berenjena y el calabacín en rodajas y la zanahoria en láminas finas.",
+          "Quita la parte dura de los espárragos.",
+          "Haz las verduras a la plancha con un poco de aceite hasta que estén tiernas y doradas.",
+          "Sala al servir."
+        ],
+        "possibleAllergens": []
+      }
+    },
+    {
+      "catalogKey": "nutri-e32",
+      "title": "Ensalada de tomate y queso fresco",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 10,
+        "ingredients": [
+          {
+            "name": "tomates",
+            "quantity": 3,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "queso fresco",
+            "quantity": 200,
+            "unit": "g",
+            "category": "lácteos",
+            "optional": false
+          },
+          {
+            "name": "orégano",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": true
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 2,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Corta los tomates y el queso fresco en rodajas o dados.",
+          "Colócalos en un plato, sala el tomate y aliña con aceite y orégano."
+        ],
+        "possibleAllergens": [
+          "milk"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e33",
+      "title": "Alcachofas con jamón",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 30,
+        "ingredients": [
+          {
+            "name": "alcachofas",
+            "quantity": 6,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "jamón serrano en taquitos",
+            "quantity": 80,
+            "unit": "g",
+            "category": "carnicería",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 2,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "limón",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 2,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Limpia las alcachofas, córtalas en cuartos y frótalas con limón.",
+          "Cuécelas en agua con sal 15 minutos y escúrrelas.",
+          "Dora el ajo laminado en aceite, añade el jamón y después las alcachofas y saltea 3–4 minutos."
+        ],
+        "possibleAllergens": []
+      }
+    },
+    {
+      "catalogKey": "nutri-e34",
+      "title": "Escalibada",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 60,
+        "ingredients": [
+          {
+            "name": "berenjenas",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "pimientos rojos",
+            "quantity": 2,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "cebolla",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "ajo",
+            "quantity": 1,
+            "unit": "dientes",
+            "category": "frutería",
+            "optional": true
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 4,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Precalienta el horno a 200 °C.",
+          "Asa las berenjenas, los pimientos y la cebolla enteros con un poco de aceite unos 45–50 minutos, dándoles la vuelta.",
+          "Tápalos 10 minutos, pélalos y córtalos en tiras.",
+          "Aliña con aceite, sal y ajo picado si quieres."
+        ],
+        "possibleAllergens": []
+      }
+    },
+    {
+      "catalogKey": "nutri-e38",
+      "title": "Revuelto de champiñón, espárragos y jamón",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 15,
+        "ingredients": [
+          {
+            "name": "huevos",
+            "quantity": 4,
+            "unit": "unidades",
+            "category": "lácteos",
+            "optional": false
+          },
+          {
+            "name": "champiñones",
+            "quantity": 200,
+            "unit": "g",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "espárragos trigueros",
+            "quantity": 1,
+            "unit": "manojos",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "jamón serrano en taquitos",
+            "quantity": 60,
+            "unit": "g",
+            "category": "carnicería",
+            "optional": false
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 2,
+            "unit": "cucharadas",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Corta los espárragos en trozos y lamina los champiñones.",
+          "Saltéalos en una sartén con aceite hasta que estén tiernos; añade el jamón.",
+          "Bate los huevos con poca sal, échalos en la sartén y remueve a fuego bajo hasta que cuajen jugosos."
+        ],
+        "possibleAllergens": [
+          "eggs"
+        ]
+      }
+    },
+    {
+      "catalogKey": "nutri-e41",
+      "title": "Tortilla de patata",
+      "card": {
+        "baseServings": 2,
+        "totalMinutes": 40,
+        "ingredients": [
+          {
+            "name": "patatas",
+            "quantity": 500,
+            "unit": "g",
+            "category": "frutería",
+            "optional": false
+          },
+          {
+            "name": "huevos",
+            "quantity": 5,
+            "unit": "unidades",
+            "category": "lácteos",
+            "optional": false
+          },
+          {
+            "name": "cebolla",
+            "quantity": 1,
+            "unit": "unidades",
+            "category": "frutería",
+            "optional": true
+          },
+          {
+            "name": "aceite de oliva virgen extra",
+            "quantity": 250,
+            "unit": "ml",
+            "category": "despensa",
+            "optional": false
+          },
+          {
+            "name": "sal",
+            "quantity": null,
+            "unit": null,
+            "category": "despensa",
+            "optional": false
+          }
+        ],
+        "steps": [
+          "Pela las patatas (y la cebolla) y córtalas en láminas finas.",
+          "Confítalas en abundante aceite a fuego medio unos 20 minutos, sin que se doren mucho, y escúrrelas.",
+          "Bate los huevos con sal y mezcla con las patatas.",
+          "Cuaja la tortilla en una sartén con un poco de aceite, dale la vuelta con un plato y termina de cuajar al gusto."
+        ],
+        "possibleAllergens": [
+          "eggs"
+        ]
+      }
+    }
+  ]
+}
