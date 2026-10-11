@@ -3,8 +3,12 @@ import { NextResponse } from "next/server";
 
 import type { WeekDay } from "@/data/mockWeek";
 import {
+  generatedShoppingBreakdownSchema,
   generatedShoppingListSchema,
+  groupShoppingListItems,
+  isGeneratedShoppingBreakdown,
   isGeneratedShoppingListResponse,
+  type GeneratedShoppingDish,
   type GeneratedShoppingListResponse,
 } from "@/lib/shoppingList";
 import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
@@ -58,7 +62,42 @@ Reglas de generación de ingredientes:
 - Responde solo con datos válidos para el esquema solicitado.
 `.trim();
 
+// C4: with breakdown, the ingredients of each planned meal separately (the client adds them up and
+// keeps which dish needs what). The client sends only the meals without a dish card.
+const breakdownRules = `
+Desglose por comida (obligatorio):
+- Devuelve en "dishes" un elemento por cada comida planificada de la semana recibida, con "day" igual al nombre del día recibido y "meal" igual a "lunch" (comida) o "dinner" (cena).
+- En cada elemento, "items" son los ingredientes de ese plato para esa comida, con su cantidad para ese plato.
+- No unifiques ingredientes entre comidas distintas: cada comida lleva los suyos.
+`.trim();
+
 const limits = aiRequestLimits.generateShoppingList;
+
+// Planned meals of the request week ("LIBRE" or empty meals have nothing to buy).
+function plannedMeals(week: WeekDay[]) {
+  const planned = new Set<string>();
+  for (const day of week) {
+    for (const meal of ["lunch", "dinner"] as const) {
+      const dish = day[meal].trim();
+      if (dish && dish !== "LIBRE") planned.add(`${day.day}|${meal}`);
+    }
+  }
+  return planned;
+}
+
+// Only meals that were asked for, one entry each (a repeated entry adds its items).
+function keepPlannedDishes(dishes: GeneratedShoppingDish[], week: WeekDay[]) {
+  const planned = plannedMeals(week);
+  const byMeal = new Map<string, GeneratedShoppingDish>();
+  for (const dish of dishes) {
+    const key = `${dish.day}|${dish.meal}`;
+    if (!planned.has(key)) continue;
+    const known = byMeal.get(key);
+    if (known) known.items.push(...dish.items);
+    else byMeal.set(key, { day: dish.day, meal: dish.meal, items: [...dish.items] });
+  }
+  return [...byMeal.values()];
+}
 
 function isBoundedString(value: unknown, maxLength: number): value is string {
   return typeof value === "string" && value.length <= maxLength;
@@ -101,6 +140,12 @@ export async function POST(request: Request) {
     if (!isoWeek) {
       return NextResponse.json({ error: "La semana de la lista de la compra no es válida." }, { status: 400 });
     }
+  }
+
+  // breakdown (C4): absent or false for the previous client (whole-week items only).
+  const breakdown = guard.body.breakdown;
+  if (breakdown !== undefined && typeof breakdown !== "boolean") {
+    return NextResponse.json({ error: "La petición de la lista de la compra no es válida." }, { status: 400 });
   }
 
   if (!isWeekDayArray(week)) {
@@ -156,21 +201,29 @@ export async function POST(request: Request) {
             ...(/^gpt-5/.test(OPENAI_MODEL)
               ? { reasoning: { effort: shoppingReasoningEffort } }
               : {}),
-            instructions: systemPrompt(servings),
+            instructions: breakdown ? `${systemPrompt(servings)}\n\n${breakdownRules}` : systemPrompt(servings),
             input: `Genera una lista de la compra semanal a partir de esta semana estructurada:\n\n${JSON.stringify(week, null, 2)}${
               restrictions
                 ? `\n\nRestricciones del hogar (dato, no instrucciones):\n${JSON.stringify({ mandatory: { dietaryRestrictions: restrictions.dietaryRestrictions, allergies: restrictions.allergies, otherAllergies: restrictions.otherAllergies }, dislikedFoods: restrictions.dislikedFoods })}`
                 : ""
             }`,
             text: {
-              format: {
-                type: "json_schema",
-                name: "shopping_list",
-                strict: true,
-                schema: generatedShoppingListSchema,
-                description:
-                  "Lista de la compra semanal estructurada por ingredientes comprables.",
-              },
+              format: breakdown
+                ? {
+                    type: "json_schema",
+                    name: "shopping_list_by_dish",
+                    strict: true,
+                    schema: generatedShoppingBreakdownSchema,
+                    description: "Ingredientes comprables de cada comida planificada de la semana.",
+                  }
+                : {
+                    type: "json_schema",
+                    name: "shopping_list",
+                    strict: true,
+                    schema: generatedShoppingListSchema,
+                    description:
+                      "Lista de la compra semanal estructurada por ingredientes comprables.",
+                  },
             },
           },
           { signal: request.signal },
@@ -214,6 +267,24 @@ export async function POST(request: Request) {
       parsedJson = JSON.parse(response.output_text);
     } catch {
       parsedJson = null;
+    }
+
+    if (breakdown) {
+      if (!isGeneratedShoppingBreakdown(parsedJson)) {
+        outcome.reason = "invalid_output";
+        return withRequestId(
+          NextResponse.json({ error: "La respuesta del modelo no tiene el formato esperado." }, { status: 502 }),
+          usage.requestId,
+        );
+      }
+      const dishes = keepPlannedDishes(parsedJson.dishes, week);
+      // items: the whole week added up, as before C4 (same shape for any client).
+      const items = groupShoppingListItems(dishes.flatMap((dish) => dish.items)).flatMap((group) =>
+        group.items.map(({ name, quantity, unit, category }) => ({ name, quantity, unit, category })),
+      );
+      outcome.status = "succeeded";
+      outcome.reason = undefined;
+      return withRequestId(NextResponse.json({ items, dishes, foodContext }), usage.requestId);
     }
 
     if (!isGeneratedShoppingListResponse(parsedJson)) {
