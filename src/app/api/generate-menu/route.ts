@@ -2,11 +2,13 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import type { GeneratedMenuApiResponse, OpenAIMenuGenerationTelemetry } from "@/lib/importMenu";
 import { estimateOpenAICostUsd } from "@/lib/openai/cost";
+import { menuProfileFromContext, verifiedFoodContext, type VerifiedFoodContext } from "@/lib/menu-generation/food-context";
 import { buildMenuInput } from "@/lib/menu-generation/prompt";
 import { selectionToMenu } from "@/lib/menu-generation/validation";
 import { createMenuCompletion, menuReasoningEffort, menuTimeoutMs, type MenuAttempt } from "@/lib/menu-generation/runtime";
 import { aiRequestLimits } from "@/lib/server/ai-limits";
 import { guardAiRequest } from "@/lib/server/ai-request";
+import { readProfileFoodContext } from "@/lib/server/food-context";
 import { beginAiUsage, withRequestId } from "@/lib/server/ai-usage";
 
 export const runtime = "nodejs";
@@ -21,10 +23,14 @@ export async function POST(request: Request) {
   let outcome = "error";
   const guard = await guardAiRequest(request, aiRequestLimits.generateMenu);
   if (!guard.ok) return guard.response;
+  // Restrictions and preferences come from the saved profile (C1); a profile in the body is ignored.
+  const context = await readProfileFoodContext(guard.accessToken);
+  if (!context.ok) return context.response;
   let input: ReturnType<typeof buildMenuInput>;
-  try { input = buildMenuInput(guard.body); } catch {
-    return NextResponse.json({error: "Revisa el número de personas (1–6) y los datos de restricciones del perfil."}, {status: 400});
+  try { input = buildMenuInput(guard.body, menuProfileFromContext(context.value)); } catch {
+    return NextResponse.json({error: "Revisa el número de personas (1–6)."}, {status: 400});
   }
+  const foodContext: VerifiedFoodContext = verifiedFoodContext(context.value, input.peopleCount);
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({error: "Falta configurar OpenAI en el servidor."}, {status: 500});
   const begin = await beginAiUsage(request, {userId: guard.user.id, flow: "menu"});
@@ -61,7 +67,8 @@ export async function POST(request: Request) {
     parseMs = Math.round(performance.now() - parseStartedAt);
     outcome = "success";
     const totalMs = Math.round(performance.now() - startedAt);
-    const response: GeneratedMenuApiResponse = {...menu, openaiTelemetry: {...telemetry, preparationMs, parseMs, totalMs}};
+    // foodContext (added in C1): servings and restrictions this menu was planned with.
+    const response: GeneratedMenuApiResponse & {foodContext: VerifiedFoodContext} = {...menu, openaiTelemetry: {...telemetry, preparationMs, parseMs, totalMs}, foodContext};
     return withRequestId(NextResponse.json(response, {headers: {"Server-Timing": `prepare;dur=${preparationMs}, openai;dur=${telemetry.responseTimeMs}, parse;dur=${parseMs}, total;dur=${totalMs}`}}), aiUsage.requestId);
   } catch (error) {
     failureReason = request.signal.aborted ? "client_aborted" : error instanceof OpenAI.APIConnectionTimeoutError ? "timeout" : error instanceof OpenAI.APIError ? `openai_${error.status ?? "error"}` : "error";

@@ -2,6 +2,8 @@
 // Pages call these instead of touching localStorage or Supabase directly.
 import type { WeekDay } from "@/data/mockWeek";
 import { getIsoWeekStorageId, parseIsoWeek, type IsoWeek } from "@/lib/isoWeek";
+import type { WeekFoodContextStatus } from "@/lib/menu-generation/food-context";
+import type { ShoppingFoodContext } from "@/lib/shoppingListStorage";
 import type { GeneratedShoppingListItem } from "@/lib/shoppingList";
 import {
   loadEntity,
@@ -69,8 +71,9 @@ export function weekWriteToPush(result: WeekWriteResult): PushResult {
 
 // The account side of one calendar week's shopping (B6): the week as it is now and its current list.
 export type RemoteShoppingState = {
-  // null: the account has no such week.
-  week: { days: WeekDay[]; version: number | null; updatedAt: string | null } | null;
+  // null: the account has no such week. foodContext (C1): its frozen servings and restrictions
+  // version; null (or absent) for weeks applied before C1.
+  week: { days: WeekDay[]; version: number | null; updatedAt: string | null; foodContext?: ShoppingFoodContext | null } | null;
   list: ShoppingList | null;
 };
 
@@ -98,7 +101,23 @@ export type Remotes = {
   week: (userId: string, isoWeek: IsoWeek, options?: WeekPushOptions) => EntityRemote<WeekDay[]>;
   pantry: (userId: string) => PantryRemote;
   shopping: (userId: string, isoWeek: IsoWeek) => ShoppingRemote;
+  // C1: the week's frozen food context next to the current profile.
+  foodContext?: (userId: string, isoWeek: IsoWeek) => Promise<WeekFoodContextStatus>;
+  // D-1: the generation request the week's frozen servings came from (null: none).
+  planningRequest?: (userId: string, isoWeek: IsoWeek) => Promise<string | null>;
 };
+
+// C1: right after a whole-week write, the week keeps the food context it was planned with (saved
+// profile and the generation's servings), read by the database, never sent from here. Best effort:
+// the menu is already saved; without a context the week behaves as one applied before C1.
+async function freezeFoodContext(isoWeek: IsoWeek, requestKey: string, generationRequestId: string | null | undefined) {
+  try {
+    const { freezeWeekFoodContextInSupabase } = await import("@/lib/supabase/weeks");
+    await freezeWeekFoodContextInSupabase({ isoYear: isoWeek.isoYear, isoWeek: isoWeek.isoWeek, requestKey, generationRequestId });
+  } catch (error: unknown) {
+    console.warn("No se pudo registrar el contexto alimentario de la semana:", error instanceof Error ? error.message : error);
+  }
+}
 
 const supabaseRemotes: Remotes = {
   profile(userId) {
@@ -149,7 +168,7 @@ const supabaseRemotes: Remotes = {
             requestKey,
           }));
         }
-        return weekWriteToPush(await applyWeekInSupabase({
+        const result = await applyWeekInSupabase({
           isoYear: isoWeek.isoYear,
           isoWeek: isoWeek.isoWeek,
           week: weekDaysToSupabaseWeek(weekDays),
@@ -157,7 +176,10 @@ const supabaseRemotes: Remotes = {
           expectedVersion,
           overwrite,
           generationRequestId: options.generationRequestId,
-        }));
+        });
+        // duplicate too: the first answer (and its freeze) may have been lost; freezing is idempotent.
+        if (result.status !== "conflict") await freezeFoodContext(isoWeek, requestKey, options.generationRequestId);
+        return weekWriteToPush(result);
       },
     };
   },
@@ -188,9 +210,14 @@ const supabaseRemotes: Remotes = {
         const week = await getWeekFromSupabaseByIsoWeek({ isoYear: isoWeek.isoYear, isoWeek: isoWeek.isoWeek, userId });
         if (!week?.id) return { week: null, list: null };
         const { getLatestShoppingListForWeekFromSupabase } = await import("@/lib/supabase/shopping-lists");
+        const { getWeekFoodContextFromSupabase } = await import("@/lib/supabase/weeks");
+        const [list, foodContext] = await Promise.all([
+          getLatestShoppingListForWeekFromSupabase(week.id),
+          getWeekFoodContextFromSupabase(week.id),
+        ]);
         return {
-          week: { days: supabaseWeekToWeekDays(week, isoWeek), version: week.version ?? null, updatedAt: week.updatedAt ?? null },
-          list: await getLatestShoppingListForWeekFromSupabase(week.id),
+          week: { days: supabaseWeekToWeekDays(week, isoWeek), version: week.version ?? null, updatedAt: week.updatedAt ?? null, foodContext },
+          list,
         };
       },
       async save({ signature, items, expectedWeekVersion }) {
@@ -209,6 +236,16 @@ const supabaseRemotes: Remotes = {
       },
     };
   },
+};
+
+supabaseRemotes.foodContext = async (_userId, isoWeek) => {
+  const { getWeekFoodContextStatusFromSupabase } = await import("@/lib/supabase/weeks");
+  return getWeekFoodContextStatusFromSupabase({ isoYear: isoWeek.isoYear, isoWeek: isoWeek.isoWeek });
+};
+
+supabaseRemotes.planningRequest = async (userId, isoWeek) => {
+  const { getWeekPlanningRequestFromSupabase } = await import("@/lib/supabase/weeks");
+  return getWeekPlanningRequestFromSupabase({ isoYear: isoWeek.isoYear, isoWeek: isoWeek.isoWeek, userId });
 };
 
 let remotes: Remotes = supabaseRemotes;
@@ -265,6 +302,18 @@ export async function readRemoteWeek(identity: DataIdentity, isoWeek: IsoWeek) {
   return identity.userId ? remotes.week(identity.userId, isoWeek).fetch() : { data: null, version: null };
 }
 
+// D-1: the generation request a replaced week was planned with, so «Deshacer» restores its food
+// context too. Best effort: null for a guest or when it cannot be read (the context then comes from
+// the saved profile, as for an imported menu).
+export async function readWeekPlanningRequest(identity: DataIdentity, isoWeek: IsoWeek): Promise<string | null> {
+  if (!identity.userId || !remotes.planningRequest) return null;
+  try {
+    return await remotes.planningRequest(identity.userId, isoWeek);
+  } catch {
+    return null;
+  }
+}
+
 // Dish edit: only that meal is written, if the account week is still the one this copy is based on.
 export function saveWeekSlot(
   identity: DataIdentity,
@@ -277,6 +326,17 @@ export function saveWeekSlot(
     weekDays,
     identity.userId ? remotes.week(identity.userId, isoWeek, { slot }) : null,
   );
+}
+
+// Food context the week was planned with, compared with the profile now (C1). null: guest, or the
+// account could not be read (nothing is claimed then).
+export async function loadWeekFoodContext(identity: DataIdentity, isoWeek: IsoWeek): Promise<WeekFoodContextStatus | null> {
+  if (!identity.userId || !remotes.foodContext) return null;
+  try {
+    return await remotes.foodContext(identity.userId, isoWeek);
+  } catch {
+    return null;
+  }
 }
 
 // --- Pantry (item by item, see @/lib/data/pantry) ------------------------

@@ -449,3 +449,97 @@ export async function getLatestWeekFromSupabase(): Promise<SupabaseWeek | null> 
     days: await readWeekDays(latestWeek.id),
   };
 }
+
+// --- Food context of a week (C1, roadmap step 16) -----------------------------------------------
+
+// Freezes the caller's saved profile (restrictions, household) and the servings of the applied
+// generation request as this week's food context. Called right after apply_week with the same
+// request key; repeating it is a no-op. Never changes weeks.version.
+export async function freezeWeekFoodContextInSupabase({
+  isoYear,
+  isoWeek,
+  requestKey,
+  generationRequestId,
+}: {
+  isoYear: number;
+  isoWeek: number;
+  requestKey: string;
+  generationRequestId?: string | null;
+}) {
+  const { data, error } = await requireSupabase().rpc("freeze_week_food_context", {
+    p_iso_year: isoYear,
+    p_iso_week: isoWeek,
+    p_request_key: requestKey,
+    p_generation_request_id: generationRequestId ?? null,
+  });
+
+  if (error) {
+    throw new Error(`Could not freeze the week food context: ${error.message}`);
+  }
+
+  const status = (data as { status?: unknown } | null)?.status;
+  if (status !== "frozen" && status !== "duplicate" && status !== "superseded" && status !== "not_applied") {
+    throw new Error("Unexpected food context result.");
+  }
+  return status;
+}
+
+// The week's frozen context next to the current profile, compared in the database.
+export async function getWeekFoodContextStatusFromSupabase({ isoYear, isoWeek }: { isoYear: number; isoWeek: number }) {
+  const { parseWeekFoodContextStatus } = await import("@/lib/menu-generation/food-context");
+  const { data, error } = await requireSupabase().rpc("week_food_context_status", {
+    p_iso_year: isoYear,
+    p_iso_week: isoWeek,
+  });
+
+  if (error) {
+    throw new Error(`Could not read the week food context: ${error.message}`);
+  }
+
+  return parseWeekFoodContextStatus(data);
+}
+
+// The generation request a week's frozen context came from (ola 4, D-1): weeks.generation_request_id,
+// but only while the frozen servings are that generation's. Null for an imported or catalogue menu,
+// or a week without a frozen context. «Deshacer» sends it back so the restored menu keeps its context.
+export async function getWeekPlanningRequestFromSupabase({ isoYear, isoWeek, userId }: { isoYear: number; isoWeek: number; userId: string }) {
+  const client = requireSupabase();
+  const { data: week, error } = await client
+    .from("weeks")
+    .select("id,generation_request_id")
+    .eq("user_id", userId)
+    .eq("iso_year", isoYear)
+    .eq("iso_week", isoWeek)
+    .maybeSingle<{ id: string; generation_request_id: string | null }>();
+
+  if (error) {
+    throw new Error(`Could not read the week generation request: ${error.message}`);
+  }
+  if (!week?.generation_request_id) return null;
+
+  const { data: context, error: contextError } = await client
+    .from("week_food_contexts")
+    .select("servings_source")
+    .eq("week_id", week.id)
+    .maybeSingle<{ servings_source: string }>();
+
+  if (contextError) {
+    throw new Error(`Could not read the week food context: ${contextError.message}`);
+  }
+  return context?.servings_source === "generation" ? week.generation_request_id : null;
+}
+
+// Servings and restrictions version a week's shopping list depends on (null: none frozen).
+export async function getWeekFoodContextFromSupabase(weekId: string) {
+  const { data, error } = await requireSupabase()
+    .from("week_food_contexts")
+    .select("servings,context_version")
+    .eq("week_id", weekId)
+    .maybeSingle<{ servings: number; context_version: string }>();
+
+  if (error) {
+    throw new Error(`Could not read the week food context: ${error.message}`);
+  }
+
+  return data ? { servings: data.servings, version: data.context_version } : null;
+}

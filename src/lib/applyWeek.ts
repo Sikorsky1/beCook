@@ -5,8 +5,11 @@
 // - «Guardado en tu cuenta» only after the account confirmed it. A menu the account did not
 //   accept stays on this device as pending, and «Reintentar guardado» resends only that write
 //   (same request key, no new AI call).
+// D3 (step 26): replacing a menu is confirmed with the app's own dialog, which is shown the menu
+// it replaces. Right after a replacement the previous menu can be restored for a short time
+// (undoAppliedMenu): the same week write, checked against the version this attempt produced.
 import type { WeekDay } from "@/data/mockWeek";
-import { readRemoteWeek, saveWeek, type DataIdentity } from "@/lib/data/repositories";
+import { readCachedWeek, readRemoteWeek, readWeekPlanningRequest, saveWeek, type DataIdentity } from "@/lib/data/repositories";
 import type { SaveResult } from "@/lib/data/sync";
 import type { IsoWeek } from "@/lib/isoWeek";
 
@@ -20,6 +23,11 @@ export type ApplyWeekAttempt<Menu> = {
   overwrite: boolean | null;
   // Account version read when the attempt started (undefined: not read, e.g. guest).
   baseVersion?: string | null;
+  // The menu this attempt replaces, once the user confirmed it. Kept in memory only: a proposal
+  // recovered after a reload can be applied again, but not undone.
+  replaced?: WeekDay[] | null;
+  // The generation request the replaced menu's food context came from (D-1), sent back on undo.
+  replacedGenerationRequestId?: string | null;
 };
 
 export function resolveApplyWeekAttempt<Menu>(
@@ -89,6 +97,11 @@ export type ApplyMenuResult = {
   outcome: ApplyWeekOutcome;
   // Resolves on its own; nothing waits for it before opening the week.
   shopping: Promise<ShoppingPreparation>;
+  // The menu the saved one replaced, which «Deshacer» can restore. Null when the week was empty
+  // (there is no earlier menu to go back to) or nothing was saved.
+  replaced: WeekDay[] | null;
+  // Generation request of the replaced menu's food context (null: imported, catalogue, unknown).
+  replacedGenerationRequestId: string | null;
 };
 
 export type ApplyMenuInput<Menu> = {
@@ -97,10 +110,14 @@ export type ApplyMenuInput<Menu> = {
   weekDays: WeekDay[];
   attempt: ApplyWeekAttempt<Menu>;
   generationRequestId?: string | null;
-  // Asked once per attempt when the account already has a menu for this week.
-  confirmReplace: () => boolean;
+  // Asked once per attempt when the week already has a menu (the account's, or this device's for
+  // a guest). It receives that menu so the confirmation can show what is replaced.
+  confirmReplace: (current: WeekDay[]) => boolean | Promise<boolean>;
   // Prepares the list (B6 ensureShoppingList). Called only once the account confirmed the menu.
   prepareShopping: (identity: DataIdentity, isoWeek: IsoWeek, weekDays: WeekDay[]) => Promise<{ status: string }>;
+  // While the replacement can be undone the current list is left alone: undoing then needs no new
+  // list and keeps its marks. Resolves true to prepare it, false when the menu was undone.
+  holdShopping?: Promise<boolean>;
 };
 
 const skipped = Promise.resolve<ShoppingPreparation>("skipped");
@@ -113,7 +130,23 @@ export async function applyMenuToWeek<Menu>({
   generationRequestId,
   confirmReplace,
   prepareShopping,
+  holdShopping,
 }: ApplyMenuInput<Menu>): Promise<ApplyMenuResult> {
+  if (!identity.userId && attempt.overwrite === null) {
+    // A guest's week lives on this device: replacing it is confirmed the same way.
+    const current = readCachedWeek(identity, isoWeek);
+    if (current?.length && !(await confirmReplace(current))) {
+      return {
+        outcome: { status: "idle", menu: "cancelled", message: "", attempt: "discard", openWeek: false },
+        shopping: skipped,
+        replaced: null,
+        replacedGenerationRequestId: null,
+      };
+    }
+    attempt.overwrite = Boolean(current?.length);
+    attempt.replaced = current?.length ? current : null;
+  }
+
   if (identity.userId && attempt.overwrite === null) {
     // The account week as it is now: the save is checked against this version.
     let current: Awaited<ReturnType<typeof readRemoteWeek>>;
@@ -123,17 +156,24 @@ export async function applyMenuToWeek<Menu>({
       return {
         outcome: { status: "error", menu: "unchecked", message: applyWeekMessages.unchecked, attempt: "keep", openWeek: false },
         shopping: skipped,
+        replaced: null,
+        replacedGenerationRequestId: null,
       };
     }
 
     attempt.baseVersion = current.version;
-    if (current.data?.length && !confirmReplace()) {
+    if (current.data?.length && !(await confirmReplace(current.data))) {
       return {
         outcome: { status: "idle", menu: "cancelled", message: "", attempt: "discard", openWeek: false },
         shopping: skipped,
+        replaced: null,
+        replacedGenerationRequestId: null,
       };
     }
     attempt.overwrite = Boolean(current.data?.length);
+    attempt.replaced = current.data?.length ? current.data : null;
+    // Read before the replacement changes weeks.generation_request_id and the frozen context.
+    attempt.replacedGenerationRequestId = attempt.replaced ? await readWeekPlanningRequest(identity, isoWeek) : null;
   }
 
   // Overwrite only after «reemplazar»; otherwise the database refuses it if another device saved
@@ -148,13 +188,63 @@ export async function applyMenuToWeek<Menu>({
 
   // Only a menu the account has gets its list now: a pending menu could still be refused, and a
   // guest cannot call the AI. Kept if its dishes did not change, otherwise generated once (B6).
+  const prepare = () =>
+    prepareShopping(identity, isoWeek, weekDays).then(
+      (loaded): ShoppingPreparation => (loaded.status === "ready" ? "ready" : "failed"),
+      (): ShoppingPreparation => "failed",
+    );
   const shopping: Promise<ShoppingPreparation> =
-    outcome.menu === "account"
-      ? prepareShopping(identity, isoWeek, weekDays).then(
-          (loaded) => (loaded.status === "ready" ? "ready" : "failed"),
-          () => "failed",
-        )
-      : skipped;
+    outcome.menu !== "account"
+      ? skipped
+      : holdShopping
+        ? holdShopping.then((go) => (go ? prepare() : "skipped"), () => prepare())
+        : prepare();
 
-  return { outcome, shopping };
+  const replaced = outcome.openWeek ? (attempt.replaced ?? null) : null;
+  return { outcome, shopping, replaced, replacedGenerationRequestId: replaced ? (attempt.replacedGenerationRequestId ?? null) : null };
+}
+
+// --- «Deshacer» (step 26) --------------------------------------------------------------------
+// Offered for a short time after a replacement, and only while this page knows the replaced
+// menu. It writes that menu back with the usual week write, checked against the version the
+// replacement produced: if the week changed since (another device, another tab), nothing is
+// written. Restores the dishes of every day; the shopping list stays as it was if it had not been
+// prepared again yet (holdShopping), otherwise a list for the restored menu is prepared later.
+export const undoWindowMs = 10_000;
+
+// generationRequestId: the request the previous menu's food context came from (D-1). Sent with the
+// restore so the week gets that context (and weeks.generation_request_id) back; without it the
+// context is frozen again from the saved profile, as for an imported menu.
+export type UndoAttempt = { previous: WeekDay[]; requestKey: string; generationRequestId?: string | null };
+
+export type UndoOutcome = {
+  // restored: the account (or a guest's device) has the previous menu again · pending: sent but
+  // not confirmed, retry with the same key · conflict: the week changed, nothing was undone.
+  status: "restored" | "pending" | "conflict";
+  message: string;
+};
+
+export const undoMessages = {
+  restored: "Hemos vuelto a tu menú anterior.",
+  device: "Hemos vuelto a tu menú anterior en este dispositivo.",
+  pending: "Tu cuenta no ha confirmado la vuelta al menú anterior. Pulsa «Deshacer» otra vez; no se repite el cambio.",
+  conflict: "No se ha deshecho: la semana ha cambiado desde otro dispositivo o pestaña. Revisa la semana antes de cambiar nada.",
+} as const;
+
+export async function undoAppliedMenu(identity: DataIdentity, isoWeek: IsoWeek, undo: UndoAttempt): Promise<UndoOutcome> {
+  // No overwrite and no explicit base: the device copy carries the version of the replacement.
+  const result = await saveWeek(identity, isoWeek, undo.previous, {
+    requestKey: undo.requestKey,
+    generationRequestId: undo.generationRequestId ?? null,
+  });
+  switch (result.status) {
+    case "local":
+      return { status: "restored", message: undoMessages.device };
+    case "synced":
+      return { status: "restored", message: undoMessages.restored };
+    case "pending":
+      return { status: "pending", message: undoMessages.pending };
+    case "conflict":
+      return { status: "conflict", message: undoMessages.conflict };
+  }
 }

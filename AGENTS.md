@@ -58,3 +58,25 @@ visibles en las pruebas hasta una corrección autorizada.
 - Antes del merge a `main`, producción necesita: migración `ai_usage_quotas` aplicada en becook,
   `SUPABASE_SERVICE_ROLE_KEY` de becook y un `AI_IP_HASH_SALT` propio (solo Production).
   Sin ellos la IA de producción responde 503.
+
+## Skills de diseño
+- web-design-guidelines: usa la copia local
+  `.claude/skills/web-design-guidelines/guidelines.md`; no hagas WebFetch.
+- improve-ui y create-design-md: solo lectura sobre el código; escriben
+  únicamente en `design-plans/` y `DESIGN.md`.
+- frontend-design: solo propone direcciones visuales; no edita sin mi OK.
+- shadcn: pide confirmación antes de cualquier `npx shadcn add/apply`;
+  nunca `apply` de un preset sin mi OK (reescribe globals.css).
+- Componentes: la app usa `src/components/ui/*` (capa propia sobre
+  shadcn). Las pantallas importan de ahí, no de `components/shadcn`.
+- Ninguna skill añade dependencias, cambia lógica ni toca componentes
+  compartidos de alto riesgo sin plan aprobado.
+- Las skills proponen; este CLAUDE.md manda. Si chocan, aplica
+  CLAUDE.md y señálame la discrepancia.
+
+### Reglas durante el rediseño
+- Cambios visuales solo con clases de Tailwind (tokens de `@theme` en
+  `src/app/globals.css`): sin CSS nuevo, estilos inline ni librerías de estilos.
+- Componentes compartidos de alto riesgo (`src/components/ui/*`,
+  `src/components/shadcn/ui/*`, navegación inferior y layouts, `globals.css`):
+  no se tocan sin un plan aprobado por Sergio en `design-plans/`.
