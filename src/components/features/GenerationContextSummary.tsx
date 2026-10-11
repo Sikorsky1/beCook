@@ -89,7 +89,7 @@ export function GenerationContextSummary(props: GenerationContextSummaryProps) {
     <SummaryFrame title={generating ? "Generando para…" : "Se creará para…"} rows={rows}>
       {profile
         ? "Según tu perfil. Comprobamos las restricciones por el nombre de cada plato, no por su receta: revisa la propuesta."
-        : "Sin perfil, el menú no tiene en cuenta restricciones ni alergias."}{" "}
+        : "Para crear un menú hace falta guardar tu perfil (comensales, restricciones y alergias)."}{" "}
       <Link href="/profile" className="font-semibold underline underline-offset-2">
         {profile ? "Revisar perfil" : "Completar perfil"}
       </Link>

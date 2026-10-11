@@ -49,7 +49,8 @@ const GENERATION_MARKER_KEY = "becook-create-menu-generating";
 
 export type GenerationResult =
   | { status: "proposal" }
-  | { status: "error"; message: string; limit: boolean }
+  // profileRequired: 409 without a saved profile (ola 4, M-3): not a failure, nothing to retry.
+  | { status: "error"; message: string; limit: boolean; profileRequired?: boolean }
   | { status: "cancelled" }
   | { status: "login_required" };
 

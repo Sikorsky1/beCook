@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Eraser, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -166,6 +167,8 @@ export default function CreateMenuPage() {
   const [errorMessage, setErrorMessage] = useState("");
   // Quota and budget responses (429/503): retrying or tweaking preferences will not help.
   const [errorIsLimit, setErrorIsLimit] = useState(false);
+  // 409 without a saved profile: retrying will not help, saving the profile will (not a failure).
+  const [errorNeedsProfile, setErrorNeedsProfile] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
   const identity = useIdentity();
   const [activePantryItemNames, setActivePantryItemNames] = useState<string[]>([]);
@@ -365,7 +368,8 @@ export default function CreateMenuPage() {
             setFailureCount(0);
             restoreProposal(true);
           } else if (result.status === "error") {
-            setFailureCount((count) => count + 1);
+            if (!result.profileRequired) setFailureCount((count) => count + 1);
+            setErrorNeedsProfile(Boolean(result.profileRequired));
             setErrorIsLimit(result.limit);
             setErrorMessage(result.message);
           } else if (result.status === "cancelled") {
@@ -524,6 +528,7 @@ export default function CreateMenuPage() {
     setLoadingMode("import");
     setErrorMessage("");
     setErrorIsLimit(false);
+    setErrorNeedsProfile(false);
     setUseWeekStatus("idle");
     setUseWeekMessage("");
     const previousRequestId = generationRequestId;
@@ -592,6 +597,7 @@ export default function CreateMenuPage() {
     setLoadingMode("generate");
     setErrorMessage("");
     setErrorIsLimit(false);
+    setErrorNeedsProfile(false);
     setUseWeekStatus("idle");
     setUseWeekMessage("");
     const previousRequestId = generationRequestId;
@@ -695,9 +701,12 @@ export default function CreateMenuPage() {
 
         const fallbackMessage = "No se pudo crear el menú semanal.";
         const message = "error" in data ? data.error ?? fallbackMessage : fallbackMessage;
+        const profileRequired =
+          response.status === 409 && (data as { reason?: unknown }).reason === "profile_required";
         setErrorMessage(message);
-        setFailureCount((count) => count + 1);
-        finish({ status: "error", message, limit: isLimit });
+        setErrorNeedsProfile(profileRequired);
+        if (!profileRequired) setFailureCount((count) => count + 1);
+        finish({ status: "error", message, limit: isLimit, ...(profileRequired ? { profileRequired } : {}) });
         return;
       }
 
@@ -1334,7 +1343,14 @@ export default function CreateMenuPage() {
             variant="error"
           >
             <p>{errorMessage}</p>
-            {errorIsLimit ? null : failureCount >= maxConsecutiveFailures ? (
+            {errorNeedsProfile ? (
+              <Link
+                href="/profile"
+                className="mt-2 inline-flex min-h-10 items-center font-semibold underline underline-offset-2"
+              >
+                Ir a Perfil
+              </Link>
+            ) : errorIsLimit ? null : failureCount >= maxConsecutiveFailures ? (
               <p className="mt-1">
                 Ha fallado {failureCount} veces seguidas. Prueba de nuevo dentro de un rato.
               </p>
