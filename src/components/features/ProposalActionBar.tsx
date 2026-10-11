@@ -25,7 +25,7 @@ export function ProposalActionBar({ summary, weekLabel, status, menu, message, o
   const isError = status === "error";
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(6.5rem+env(safe-area-inset-bottom))] z-40 flex justify-center px-4">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(6.5rem+env(safe-area-inset-bottom))] z-40 flex justify-center pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
       <div
         role="region"
         aria-label="Usar la propuesta"
