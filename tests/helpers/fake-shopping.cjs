@@ -2,12 +2,18 @@
 // updated_at, frozen context), lists with their rows, dish cards, and the semantics of
 // save_shopping_list, set_shopping_items_checked (+ trigger shopping_items_check_state) and
 // reconcile_shopping_list of supabase/migrations/20261013090000_shopping_item_origins.sql.
+// D5: edit_shopping_items and the trigger shopping_items_guard_manual of
+// supabase/migrations/20261014090000_shopping_manual_items.sql (manual rows, item_key 'manual|…',
+// are never removed or changed by a reconciliation; only edit_shopping_items removes them).
+// guardManual: false simulates the database before D5 (no trigger).
 const key = (w) => `${w.isoYear}-W${w.isoWeek}`;
 const factors = { kg: 1000, kilo: 1000, kilos: 1000, kilogramo: 1000, kilogramos: 1000, l: 1000, litro: 1000, litros: 1000, cl: 10 };
 const base = (quantity, unit) => (quantity === null ? null : quantity * (factors[String(unit ?? "").trim().toLowerCase()] ?? 1));
 
 function createShoppingAccount() {
-  const st = { weeks: new Map(), lists: [], cards: new Map(), down: false, seq: 0, forceStale: 0, calls: { fetch: 0, save: 0, setChecked: 0, reconcile: 0, cards: 0 } };
+  const st = { weeks: new Map(), lists: [], cards: new Map(), down: false, seq: 0, forceStale: 0, calls: { fetch: 0, save: 0, setChecked: 0, reconcile: 0, edit: 0, cards: 0 }, guardManual: true, loseEditReplies: 0 };
+  const isManual = (item) => typeof item.itemKey === "string" && item.itemKey.startsWith("manual|");
+  const guarded = (item) => st.guardManual && isManual(item);
   const tick = () => ++st.seq;
   const current = (k) => st.lists.filter((l) => l.week === k).sort((x, y) => y.at - x.at)[0] ?? null;
   const asList = (l) => ({
@@ -16,7 +22,7 @@ function createShoppingAccount() {
   });
   const offline = () => { if (st.down) throw new TypeError("fetch failed"); };
   const row = (item) => ({
-    id: "row-" + tick(), name: item.name.trim(), quantity: item.quantity, unit: item.unit.trim(), category: item.category, checked: false,
+    id: item.id ?? "row-" + tick(), name: item.name.trim(), quantity: item.quantity, unit: item.unit.trim(), category: item.category, checked: false,
     itemKey: item.itemKey ?? item.item_key ?? null, origins: item.origins ?? null, checkedQuantity: null, needsReview: false, removedAt: null,
   });
   const remote = (_userId, isoWeek) => {
@@ -72,11 +78,14 @@ function createShoppingAccount() {
         const snapshot = structuredClone(list.items);
         for (const { id } of ops.remove) {
           const item = list.items.find((i) => i.id === id);
+          // shopping_items_guard_manual: a reconciliation never removes a manual row.
+          if (guarded(item)) continue;
           if (item.checked) { if (!item.removedAt) { item.removedAt = "now"; item.needsReview = false; summary.keptBought++; } }
           else { list.items = list.items.filter((i) => i !== item); summary.removed++; }
         }
         for (const op of ops.update) {
           const item = list.items.find((i) => i.id === op.id);
+          if (guarded(item)) continue;
           let review = false;
           const bought = item.checked ? item.checkedQuantity ?? base(item.quantity, item.unit) : null;
           if (item.checked) {
@@ -92,6 +101,41 @@ function createShoppingAccount() {
         if (new Set(active).size !== active.length) { list.items = snapshot; return { status: "stale", weekVersion: week.version }; }
         Object.assign(list, { signature: toSignature, basis: "mixed-v1" });
         return { status: "applied", list: asList(list), weekVersion: week.version, summary };
+      },
+      // edit_shopping_items: add (client id; resend → duplicate; active key → existing),
+      // set_quantity (any active row; manual rows keep origins [{kind:"manual"}]; other rows keep
+      // their unit), remove (manual rows only). Signature and basis never change.
+      async edit({ listId, ops }) {
+        st.calls.edit++; offline();
+        const week = st.weeks.get(k);
+        if (!week) return { status: "no_week" };
+        const list = current(k);
+        if (!list || list.id !== listId) return { status: "stale", currentListId: list?.id ?? null };
+        const results = [];
+        let wrote = false;
+        for (const op of ops.add ?? []) {
+          if (st.lists.some((l) => l.items.some((i) => i.id === op.id))) { results.push({ id: op.id, result: "duplicate" }); continue; }
+          if (list.items.some((i) => i.itemKey === op.item_key && !i.removedAt)) { results.push({ id: op.id, result: "existing" }); continue; }
+          list.items.push(row({ ...op, origins: [{ kind: "manual", quantity: op.quantity }] }));
+          results.push({ id: op.id, result: "created" }); wrote = true;
+        }
+        for (const op of ops.set_quantity ?? []) {
+          const item = list.items.find((i) => i.id === op.id && !i.removedAt);
+          if (!item) { results.push({ id: op.id, result: "missing" }); continue; }
+          if (isManual(item)) Object.assign(item, { quantity: op.quantity, unit: op.unit.trim(), origins: [{ kind: "manual", quantity: op.quantity }] });
+          else Object.assign(item, { quantity: op.quantity, origins: op.origins });
+          results.push({ id: op.id, result: "applied" }); wrote = true;
+        }
+        for (const op of ops.remove ?? []) {
+          const item = list.items.find((i) => i.id === op.id);
+          if (!item) { results.push({ id: op.id, result: "missing" }); continue; }
+          if (!isManual(item)) { results.push({ id: op.id, result: "not_manual" }); continue; }
+          list.items = list.items.filter((i) => i !== item);
+          results.push({ id: op.id, result: "applied" }); wrote = true;
+        }
+        const status = wrote ? "applied" : results.some((r) => r.result === "existing") ? "existing" : "duplicate";
+        if (st.loseEditReplies > 0) { st.loseEditReplies--; throw new TypeError("connection lost after the write"); }
+        return { status, list: asList(list), results };
       },
     };
   };

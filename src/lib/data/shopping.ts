@@ -9,6 +9,11 @@
 // - Marking an item writes only that item (set, never toggle), one write at a time per week.
 // - A list generated or marked while the account could not be reached stays on the device and is
 //   saved on the next load, without calling the AI again.
+// - D5: the user can add items by hand (key «manual|…», id chosen here) and change quantities
+//   (edit_shopping_items). Edits are kept on this device until the account accepts them and go in
+//   the same queue as the marks (a mark of an item added offline waits for the item). A reconciliation
+//   never touches manual items; a quantity adjusted on an item of the dishes is kept while those
+//   dishes stay the same, and is dropped (and reported) when they change.
 import type { WeekDay } from "@/data/mockWeek";
 import {
   loadRecipeCards,
@@ -20,6 +25,7 @@ import {
   type DataIdentity,
   type RemoteShoppingState,
   type ShoppingCache,
+  type ShoppingEdit,
 } from "@/lib/data/repositories";
 import { getDayPosition, getIsoWeekStorageId, type IsoWeek } from "@/lib/isoWeek";
 import {
@@ -32,12 +38,16 @@ import {
   type DishIngredient,
   type PlannedDish,
 } from "@/lib/shopping/build";
-import { diffShoppingList, type ExistingShoppingRow, type ReconcileSummary } from "@/lib/shopping/reconcile";
+import { diffShoppingList, discardedAdjustments, type ExistingShoppingRow, type ReconcileSummary } from "@/lib/shopping/reconcile";
+import { isManualKey, manualItemKey } from "@/lib/shopping/units";
 import {
+  dishOriginsOf,
   getShoppingItemId,
+  isCardOrigin,
   supermarketCategoryLabels,
   type GeneratedShoppingListItem,
   type ShoppingViewItem,
+  type SupermarketCategory,
 } from "@/lib/shoppingList";
 import {
   generateShoppingBreakdownForWeek,
@@ -47,7 +57,7 @@ import {
   ShoppingListApiError,
   type ShoppingFoodContext,
 } from "@/lib/shoppingListStorage";
-import type { ShoppingList } from "@/lib/supabase/shopping-lists";
+import type { ShoppingEditOps, ShoppingList } from "@/lib/supabase/shopping-lists";
 
 // A planned dish whose ingredients are not in the list yet (C4).
 export type PendingDish = Pick<PlannedDish, "day" | "meal" | "title">;
@@ -71,6 +81,10 @@ export type ShoppingView = {
   aiError: string | null;
   // The list is still the one of an earlier menu: it could not be updated now (aiError says why).
   notUpdated: boolean;
+  // D5: items whose adjusted quantity the last update dropped (their dishes changed). servings: the
+  // week's frozen servings when the account told (null: unknown here).
+  discardedAdjustments: string[];
+  servings: number | null;
 };
 
 export type ShoppingLoad =
@@ -86,22 +100,38 @@ export type ShoppingLoad =
 
 const categoryOrder = (category: string) => supermarketCategoryLabels.indexOf(category as (typeof supermarketCategoryLabels)[number]);
 
-// One line per ingredient, unit and visible category (frozen food is shown under «otros»).
-function visibleItems(items: CachedShoppingItem[]): ShoppingViewItem[] {
+const visibleCategory = (category: SupermarketCategory) => (category === "congelados" ? "otros" : category);
+
+// Visible line of an item: one per ingredient, unit and visible category (frozen food is shown under
+// «otros»); an item added by hand is always its own line.
+export function shoppingLineId(item: Pick<CachedShoppingItem, "name" | "unit" | "category" | "itemKey">) {
+  if (isManualKey(item.itemKey)) return item.itemKey!.replace("|", "-");
+  return getShoppingItemId({ name: item.name, unit: item.unit, category: visibleCategory(item.category) });
+}
+
+const isAdjustedItem = (item: Pick<CachedShoppingItem, "origins">) => Boolean(item.origins?.some((origin) => origin.kind === "user_adjust"));
+
+// One line per ingredient, unit and visible category. editable: one item with an amount, and (signed
+// in) its account row is known.
+function visibleItems(items: CachedShoppingItem[], rowOf: (id: string, item: CachedShoppingItem) => string | null): ShoppingViewItem[] {
   const lines = new Map<string, ShoppingViewItem>();
+  const counts = new Map<string, number>();
   for (const item of items) {
     const name = item.name.trim().replace(/\s+/g, " ");
     const unit = item.unit.trim().replace(/\s+/g, " ");
     if (!name || !unit) continue;
     if (item.quantity !== null && (typeof item.quantity !== "number" || !Number.isFinite(item.quantity) || item.quantity <= 0)) continue;
-    const category = item.category === "congelados" ? "otros" : item.category;
-    const id = getShoppingItemId({ name, unit, category });
+    const category = visibleCategory(item.category);
+    const id = shoppingLineId({ ...item, name, unit });
+    counts.set(id, (counts.get(id) ?? 0) + 1);
     const line = lines.get(id);
     if (line) {
       line.quantity = line.quantity === null ? item.quantity : item.quantity === null ? line.quantity : line.quantity + item.quantity;
       line.origins = [...line.origins, ...(item.origins ?? [])];
       line.needsReview ||= Boolean(item.needsReview);
       line.removed &&= Boolean(item.removed);
+      line.adjusted ||= isAdjustedItem(item);
+      line.editable = false;
       continue;
     }
     lines.set(id, {
@@ -113,6 +143,9 @@ function visibleItems(items: CachedShoppingItem[]): ShoppingViewItem[] {
       origins: item.origins ?? [],
       needsReview: Boolean(item.needsReview),
       removed: Boolean(item.removed),
+      manual: isManualKey(item.itemKey),
+      adjusted: isAdjustedItem(item),
+      editable: item.quantity !== null && !item.removed && rowOf(id, item) !== null,
     });
   }
   return [...lines.values()].sort(
@@ -123,39 +156,53 @@ function visibleItems(items: CachedShoppingItem[]): ShoppingViewItem[] {
 // A row no longer needed that was unmarked afterwards is neither needed nor bought: not shown.
 const shownRows = (list: ShoppingList) => list.items.filter((row) => !row.removedAt || row.checked);
 
+// Account rows of each visible line: from the items' rows, or (copies written before D5) itemIds.
+function indexRows(items: CachedShoppingItem[], previous: Record<string, string[]> = {}) {
+  const itemIds: Record<string, string[]> = {};
+  const withoutRow = new Set<string>();
+  for (const item of items) {
+    const id = shoppingLineId(item);
+    if (item.rowId) (itemIds[id] ??= []).push(item.rowId);
+    else withoutRow.add(id);
+  }
+  for (const id of withoutRow) if (!itemIds[id] && previous[id]) itemIds[id] = previous[id];
+  return itemIds;
+}
+
 function listToCache(list: ShoppingList, signature: string): ShoppingCache {
   const rows = shownRows(list);
-  const itemIds: Record<string, string[]> = {};
   const checked = new Set<string>();
-
-  for (const row of rows) {
-    if (!row.id) continue;
-    const id = getShoppingItemId({ ...row, category: row.category === "congelados" ? "otros" : row.category });
-    (itemIds[id] ??= []).push(row.id);
-    if (row.checked) checked.add(id);
-  }
+  const items: CachedShoppingItem[] = rows.map((row) => ({
+    name: row.name,
+    quantity: row.quantity,
+    unit: row.unit,
+    category: row.category,
+    itemKey: row.itemKey ?? null,
+    origins: row.origins ?? null,
+    needsReview: Boolean(row.needsReview && row.checked),
+    removed: Boolean(row.removedAt),
+    ...(row.id ? { rowId: row.id } : {}),
+  }));
+  for (const row of rows) if (row.id && row.checked) checked.add(shoppingLineId(row));
 
   return {
     weekSignature: signature,
-    items: rows.map((row) => ({
-      name: row.name,
-      quantity: row.quantity,
-      unit: row.unit,
-      category: row.category,
-      itemKey: row.itemKey ?? null,
-      origins: row.origins ?? null,
-      needsReview: Boolean(row.needsReview && row.checked),
-      removed: Boolean(row.removedAt),
-    })),
+    items,
     checkedItemIds: [...checked],
     listId: list.id,
-    itemIds,
+    itemIds: indexRows(items),
     pendingChecks: {},
     ingredientBasis: list.ingredientBasis ?? null,
   };
 }
 
-type ViewExtras = { change?: ReconcileSummary | null; aiError?: string | null; notUpdated?: boolean };
+type ViewExtras = {
+  change?: ReconcileSummary | null;
+  aiError?: string | null;
+  notUpdated?: boolean;
+  discardedAdjustments?: string[];
+  servings?: number | null;
+};
 
 function cacheToView(
   cache: ShoppingCache,
@@ -165,9 +212,9 @@ function cacheToView(
   discardedLocalChanges = false,
   extras: ViewExtras = {},
 ): ShoppingView {
-  const items = visibleItems(cache.items);
-  const ids = new Set(items.map((item) => item.id));
   const signedIn = source !== "local";
+  const items = visibleItems(cache.items, (id, item) => (signedIn ? item.rowId ?? (cache.itemIds?.[id]?.length === 1 ? cache.itemIds[id][0] : null) : id));
+  const ids = new Set(items.map((item) => item.id));
   const withOrigins = cache.ingredientBasis === "mixed-v1";
 
   return {
@@ -175,15 +222,19 @@ function cacheToView(
     checkedItemIds: cache.checkedItemIds.filter((id) => ids.has(id)),
     source,
     offline,
-    pending: signedIn && (!cache.listId || Object.keys(cache.pendingChecks ?? {}).length > 0),
+    pending: signedIn && (!cache.listId || Object.keys(cache.pendingChecks ?? {}).length > 0 || (cache.pendingEdits?.length ?? 0) > 0),
     discardedLocalChanges,
     pendingDishes: withOrigins
       ? pendingDishesOf(cache.items.filter((item) => !item.removed), plannedDishes(days)).map(({ day, meal, title }) => ({ day, meal, title }))
       : [],
-    fromCards: cache.items.some((item) => !item.removed && item.origins?.some((origin) => origin.kind !== "ai_title")),
+    // Only the dish cards' origins (an item added by hand, an adjusted quantity or a kind this
+    // client does not know is not a card).
+    fromCards: cache.items.some((item) => !item.removed && Boolean(item.origins?.some(isCardOrigin))),
     change: extras.change ?? null,
     aiError: extras.aiError ?? null,
     notUpdated: extras.notUpdated ?? false,
+    discardedAdjustments: extras.discardedAdjustments ?? [],
+    servings: extras.servings ?? null,
   };
 }
 
@@ -245,6 +296,240 @@ async function pushPendingChecks(
   return { cache: { ...cache, checkedItemIds: [...checked], pendingChecks: remaining }, discarded };
 }
 
+// --- Edits of the user (D5) --------------------------------------------------------------------
+
+// One edit applied to this device's copy (the account applies the same with edit_shopping_items).
+function applyEdit(cache: ShoppingCache, edit: ShoppingEdit): ShoppingCache {
+  let items = cache.items;
+  let checkedItemIds = cache.checkedItemIds;
+  let pendingChecks = cache.pendingChecks;
+  if (edit.op === "add") {
+    if (!items.some((item) => item.rowId === edit.id)) {
+      items = [...items, {
+        name: edit.name,
+        quantity: edit.quantity,
+        unit: edit.unit,
+        category: edit.category,
+        itemKey: edit.itemKey,
+        origins: [{ kind: "manual", quantity: edit.quantity }],
+        rowId: edit.id,
+      }];
+    }
+  } else if (edit.op === "set_quantity") {
+    items = items.map((item) => {
+      if (item.rowId !== edit.id) return item;
+      return isManualKey(item.itemKey)
+        ? { ...item, quantity: edit.quantity, unit: edit.unit, origins: [{ kind: "manual", quantity: edit.quantity }] }
+        : { ...item, quantity: edit.quantity, origins: edit.origins };
+    });
+  } else {
+    const gone = items.find((item) => item.rowId === edit.id);
+    if (gone) {
+      const line = shoppingLineId(gone);
+      items = items.filter((item) => item !== gone);
+      checkedItemIds = checkedItemIds.filter((id) => id !== line);
+      pendingChecks = Object.fromEntries(Object.entries(pendingChecks ?? {}).filter(([id]) => id !== line));
+    }
+  }
+  return { ...cache, items, checkedItemIds, pendingChecks, itemIds: indexRows(items, cache.itemIds) };
+}
+
+const withEdits = (cache: ShoppingCache, edits: ShoppingEdit[]): ShoppingCache => ({
+  ...edits.reduce(applyEdit, cache),
+  pendingEdits: edits,
+});
+
+// Queue of edits: the last quantity of a row wins, and a removed row needs no quantity. An add is
+// always kept (sent again it is a «duplicate»), so add + remove works even if the add arrived
+// without an answer.
+function queueEdit(edits: ShoppingEdit[], edit: ShoppingEdit) {
+  const others = edit.op === "add" ? edits : edits.filter((queued) => !(queued.op === "set_quantity" && queued.id === edit.id));
+  return [...others, edit];
+}
+
+function toOps(edits: ShoppingEdit[]): ShoppingEditOps {
+  const ops: ShoppingEditOps = { add: [], set_quantity: [], remove: [] };
+  for (const edit of edits) {
+    if (edit.op === "add") ops.add.push({ id: edit.id, name: edit.name, quantity: edit.quantity, unit: edit.unit, category: edit.category, item_key: edit.itemKey });
+    else if (edit.op === "set_quantity") ops.set_quantity.push({ id: edit.id, quantity: edit.quantity, unit: edit.unit, origins: edit.origins });
+    else ops.remove.push({ id: edit.id });
+  }
+  return ops;
+}
+
+// At most 50 of each kind per call (the database's limit): 50 edits at a time, in order.
+const EDIT_BATCH = 50;
+
+type EditsOutcome = {
+  // none: nothing to send · synced: accepted · pending: kept here (no connection, or the database
+  // cannot take edits yet) · stale: the list was replaced or the week is gone; the edits were dropped.
+  status: "none" | "synced" | "pending" | "stale";
+  // Adds the account refused because the same item was already in the list.
+  existing: string[];
+  // The list as the account returned it after the last accepted edits.
+  list?: ShoppingList;
+};
+
+// Sends this device's edits of its list, in the marks' queue. The device copy becomes the account
+// list plus the edits made meanwhile.
+function pushPendingEdits(identity: DataIdentity, isoWeek: IsoWeek): Promise<EditsOutcome> {
+  return enqueue(queueKey(identity, isoWeek), async (): Promise<EditsOutcome> => {
+    const remote = shoppingRemote(identity, isoWeek);
+    const existing: string[] = [];
+    let list: ShoppingList | undefined;
+    for (;;) {
+      const cache = readShoppingCache(identity, isoWeek);
+      const edits = cache?.pendingEdits ?? [];
+      if (!cache || !edits.length) return { status: list ? "synced" : "none", existing, list };
+      if (!cache.listId || !remote?.edit) return { status: "pending", existing };
+      const batch = edits.slice(0, EDIT_BATCH);
+      let result;
+      try {
+        result = await remote.edit({ listId: cache.listId, ops: toOps(batch) });
+      } catch {
+        return { status: "pending", existing };
+      }
+      if (result.status === "unavailable") return { status: "pending", existing };
+      const current = readShoppingCache(identity, isoWeek);
+      const sent = new Set(batch.map((edit) => edit.change));
+      const remaining = (current?.pendingEdits ?? []).filter((edit) => !sent.has(edit.change));
+      if (result.status === "stale" || result.status === "no_week") {
+        if (current) writeShoppingCache(identity, isoWeek, { ...current, pendingEdits: [] });
+        return { status: "stale", existing };
+      }
+      for (const entry of result.results) if (entry.result === "existing") existing.push(entry.id);
+      list = result.list;
+      const next = withEdits(listToCache(result.list, current?.weekSignature ?? cache.weekSignature), remaining);
+      // Marks not accepted yet stay as this device has them.
+      const checked = new Set(next.checkedItemIds);
+      for (const [id, value] of Object.entries(current?.pendingChecks ?? {})) {
+        if (value) checked.add(id);
+        else checked.delete(id);
+      }
+      writeShoppingCache(identity, isoWeek, { ...next, checkedItemIds: [...checked], pendingChecks: current?.pendingChecks ?? {} });
+    }
+  });
+}
+
+// The account list with this device's edits of it: sent first when there are any (the marks that
+// follow may be of an item added here). Edits for another list are dropped.
+async function settleEdits(identity: DataIdentity, isoWeek: IsoWeek, list: ShoppingList) {
+  const cache = readShoppingCache(identity, isoWeek);
+  if (!cache?.pendingEdits?.length) return { list, edits: [] as ShoppingEdit[], discarded: false };
+  if (cache.listId !== list.id) return { list, edits: [] as ShoppingEdit[], discarded: true };
+  const outcome = await pushPendingEdits(identity, isoWeek);
+  if (outcome.status === "stale") return { list, edits: [] as ShoppingEdit[], discarded: true };
+  if (outcome.status === "pending") return { list, edits: readShoppingCache(identity, isoWeek)?.pendingEdits ?? [], discarded: false };
+  return { list: outcome.list ?? list, edits: readShoppingCache(identity, isoWeek)?.pendingEdits ?? [], discarded: false };
+}
+
+export type EditResult = {
+  // local: guest (this device only) · synced: in the account · pending: kept on this device and sent
+  // later · stale: the account replaced the list; nothing was written · existing: that item is
+  // already in the list · no_list: the week has no list yet · refused: not possible on this line.
+  status: "local" | "synced" | "pending" | "stale" | "existing" | "no_list" | "refused";
+  view: ShoppingView | null;
+};
+
+const viewOf = (identity: DataIdentity, isoWeek: IsoWeek, days: WeekDay[]) => {
+  const cache = readShoppingCache(identity, isoWeek);
+  return cache ? cacheToView(cache, identity.userId ? "remote" : "local", false, days) : null;
+};
+
+// The device copy as it is now (after an edit, a mark or a pantry change), for the page.
+export function readShoppingView(identity: DataIdentity, isoWeek: IsoWeek, days: WeekDay[]) {
+  return viewOf(identity, isoWeek, days);
+}
+
+type EditPlan = ShoppingEdit | { local: (cache: ShoppingCache) => ShoppingCache } | EditResult["status"];
+
+async function runEdit(identity: DataIdentity, isoWeek: IsoWeek, days: WeekDay[], plan: (cache: ShoppingCache, signedIn: boolean) => EditPlan): Promise<EditResult> {
+  const cache = readShoppingCache(identity, isoWeek);
+  if (!cache?.items.length) return { status: "no_list", view: null };
+  const remote = shoppingRemote(identity, isoWeek);
+  const edit = plan(cache, Boolean(remote));
+  if (typeof edit === "string") return { status: edit, view: viewOf(identity, isoWeek, days) };
+  if ("local" in edit) {
+    writeShoppingCache(identity, isoWeek, edit.local(cache));
+    return { status: "local", view: viewOf(identity, isoWeek, days) };
+  }
+  writeShoppingCache(identity, isoWeek, { ...applyEdit(cache, edit), pendingEdits: queueEdit(cache.pendingEdits ?? [], edit) });
+  const outcome = await pushPendingEdits(identity, isoWeek);
+  const status = outcome.status === "stale" ? "stale"
+    : outcome.status === "pending" ? "pending"
+      : edit.op === "add" && outcome.existing.includes(edit.id) ? "existing"
+        : "synced";
+  return { status, view: viewOf(identity, isoWeek, days) };
+}
+
+const cleanText = (text: string) => text.normalize("NFC").trim().replace(/\s+/g, " ");
+const validAmount = (quantity: number | null) => quantity === null || (Number.isFinite(quantity) && quantity > 0 && quantity <= 100000);
+
+export type ManualItemInput = { name: string; quantity: number | null; unit: string; category: SupermarketCategory };
+
+// Adds an item by hand to the week's list (only when the week has one). quantity null: «al gusto».
+export function addManualShoppingItem(identity: DataIdentity, isoWeek: IsoWeek, input: ManualItemInput, days: WeekDay[]) {
+  return runEdit(identity, isoWeek, days, (cache, signedIn): EditPlan => {
+    const name = cleanText(input.name).slice(0, 120);
+    const unit = input.quantity === null ? "al gusto" : cleanText(input.unit || "ud").slice(0, 40);
+    if (!name || !unit || !validAmount(input.quantity) || !supermarketCategoryLabels.includes(input.category)) return "refused";
+    const itemKey = manualItemKey(name);
+    if (cache.items.some((item) => item.itemKey === itemKey && !item.removed)) return "existing";
+    const edit: ShoppingEdit = { op: "add", id: crypto.randomUUID(), change: crypto.randomUUID(), name, quantity: input.quantity, unit, category: input.category, itemKey };
+    return signedIn ? edit : { local: (current) => ({ ...applyEdit(current, edit), itemIds: current.itemIds }) };
+  });
+}
+
+// The only item of a visible line (several rows of an old list cannot be edited one by one).
+function onlyItem(cache: ShoppingCache, lineId: string) {
+  const items = cache.items.filter((item) => shoppingLineId(item) === lineId);
+  return items.length === 1 ? items[0] : null;
+}
+
+const rowIdOf = (cache: ShoppingCache, lineId: string, item: CachedShoppingItem) =>
+  item.rowId ?? (cache.itemIds?.[lineId]?.length === 1 ? cache.itemIds[lineId][0] : null);
+
+// Changes the quantity of one line. An item added by hand may change its unit too; an item of the
+// dishes keeps its unit and records the user's amount (origin user_adjust) next to its dishes.
+export function setShoppingItemQuantity(identity: DataIdentity, isoWeek: IsoWeek, lineId: string, quantity: number, days: WeekDay[], unit?: string) {
+  return runEdit(identity, isoWeek, days, (cache, signedIn): EditPlan => {
+    const item = onlyItem(cache, lineId);
+    if (!item || item.quantity === null || item.removed || !validAmount(quantity)) return "refused";
+    const manual = isManualKey(item.itemKey);
+    const nextUnit = manual && unit !== undefined ? cleanText(unit).slice(0, 40) : item.unit;
+    if (!nextUnit || nextUnit.toLowerCase() === "al gusto") return "refused";
+    const origins = manual
+      ? [{ kind: "manual" as const, quantity }]
+      : [...dishOriginsOf(item.origins), { kind: "user_adjust" as const, quantity }];
+    if (!signedIn) {
+      return { local: (current) => ({ ...current, items: current.items.map((entry) => (entry === item || (shoppingLineId(entry) === lineId) ? { ...entry, quantity, unit: nextUnit, origins } : entry)) }) };
+    }
+    const rowId = rowIdOf(cache, lineId, item);
+    if (!rowId) return "refused";
+    return { op: "set_quantity", id: rowId, change: crypto.randomUUID(), quantity, unit: nextUnit, origins };
+  });
+}
+
+// Removes an item added by hand (the items of the dishes follow the menu).
+export function removeManualShoppingItem(identity: DataIdentity, isoWeek: IsoWeek, lineId: string, days: WeekDay[]) {
+  return runEdit(identity, isoWeek, days, (cache, signedIn): EditPlan => {
+    const item = onlyItem(cache, lineId);
+    if (!item || !isManualKey(item.itemKey)) return "refused";
+    if (!signedIn) {
+      return {
+        local: (current) => ({
+          ...current,
+          items: current.items.filter((entry) => shoppingLineId(entry) !== lineId),
+          checkedItemIds: current.checkedItemIds.filter((id) => id !== lineId),
+        }),
+      };
+    }
+    const rowId = rowIdOf(cache, lineId, item);
+    if (!rowId) return "refused";
+    return { op: "remove", id: rowId, change: crypto.randomUUID() };
+  });
+}
+
 const basisOf = (items: CachedShoppingItem[]) => (items.length > 0 && items.every((item) => item.itemKey) ? "mixed-v1" : null);
 
 // Saves a list that the account does not have yet, checked against the week version it was made
@@ -259,16 +544,23 @@ async function storeList(
   days: WeekDay[],
   checkedItemIds: string[] = [],
   extras: ViewExtras = {},
+  // D5: edits made on this device before the list reached the account (items added by hand).
+  pendingEdits: ShoppingEdit[] = [],
 ): Promise<ShoppingLoad> {
   const remote = shoppingRemote(identity, isoWeek);
-  const toSave = items.filter((item) => !item.removed).map(({ name, quantity, unit, category, itemKey, origins }) => ({
+  // Items added by hand are sent as edits after the list is saved (with their own ids).
+  const saved = remote ? items.filter((item) => !isManualKey(item.itemKey)) : items;
+  const toSave = saved.filter((item) => !item.removed).map(({ name, quantity, unit, category, itemKey, origins }) => ({
     name,
     quantity,
     unit,
     category,
     ...(itemKey ? { itemKey, origins: origins ?? [] } : {}),
   }));
-  const deviceCopy: ShoppingCache = { weekSignature: signature, items: toSave, checkedItemIds, listId: null, ingredientBasis: basisOf(toSave) };
+  const deviceCopy: ShoppingCache = withEdits(
+    { weekSignature: signature, items: toSave, checkedItemIds, listId: null, ingredientBasis: basisOf(toSave) },
+    remote ? pendingEdits : [],
+  );
   writeShoppingCache(identity, isoWeek, deviceCopy);
   if (!remote) return { status: "ready", view: cacheToView(deviceCopy, "local", false, days, false, extras) };
 
@@ -293,6 +585,11 @@ async function storeList(
 
     // created, or existing: this content already had a list (another device, a second tab).
     let cache = listToCache(result.list, signature);
+    if (pendingEdits.length) {
+      writeShoppingCache(identity, isoWeek, withEdits(cache, pendingEdits));
+      await pushPendingEdits(identity, isoWeek);
+      cache = readShoppingCache(identity, isoWeek) ?? cache;
+    }
     if (result.status === "created" && checkedItemIds.length) {
       const pending = Object.fromEntries(checkedItemIds.map((id) => [id, true]));
       cache = (await pushPendingChecks(identity, isoWeek, cache, pending)).cache;
@@ -343,23 +640,27 @@ export async function loadShoppingList(
   const context = weekContext(state.week);
   const signature = getShoppingSignature(isoWeek, state.week.days, context);
 
+  const extras: ViewExtras = { servings: context?.servings ?? null };
   if (state.list && isCurrentList(state.list, state.week, signature)) {
-    let next = listToCache(state.list, signature);
+    // D5: this device's edits of the list first (a mark may be of an item added here).
+    const settled = await settleEdits(identity, isoWeek, state.list);
+    let next = withEdits(listToCache(settled.list, signature), settled.edits);
     const devicePending = Object.keys(cache?.pendingChecks ?? {}).length > 0;
-    let discarded = devicePending && cache?.listId !== state.list.id;
-    if (devicePending && !discarded) {
+    let discarded = settled.discarded || (devicePending && cache?.listId !== state.list.id);
+    if (devicePending && cache?.listId === state.list.id) {
       const pushed = await pushPendingChecks(identity, isoWeek, next, cache!.pendingChecks!);
       next = pushed.cache;
-      discarded = pushed.discarded;
+      discarded ||= pushed.discarded;
     }
     writeShoppingCache(identity, isoWeek, next);
-    return { status: "ready", view: cacheToView(next, "remote", false, state.week.days, discarded) };
+    return { status: "ready", view: cacheToView(next, "remote", false, state.week.days, discarded, extras) };
   }
 
   // This device has the list for this content but the account does not (generated while offline,
   // or replaced elsewhere and then changed back): save it, without calling the AI.
   if (deviceListMatches(state.week.days, context)) {
-    return storeList(identity, isoWeek, signature, cache!.items, state.week.version, state.week.days, cache!.checkedItemIds);
+    return storeList(identity, isoWeek, signature, cache!.items, state.week.version, state.week.days, cache!.checkedItemIds, extras,
+      cache!.listId === null ? cache!.pendingEdits ?? [] : []);
   }
 
   // C4: the week's list was made for other dishes: it is updated in place, never replaced.
@@ -551,6 +852,7 @@ export async function reconcileShoppingList(
   const task = (async (): Promise<ShoppingLoad> => {
     const memo = newAiMemo();
     let pushedMarks = false;
+    let pushedEdits = false;
     let lastSeen: { list: ShoppingList; days: WeekDay[] } | null = null;
     // The list as the account has it, signed with its own signature (never with the new one: this
     // device must not take it for the list of the new dishes).
@@ -575,8 +877,16 @@ export async function reconcileShoppingList(
       if (!list) return generateShoppingList(identity, isoWeek, days);
       lastSeen = { list, days };
 
-      // Marks this device made offline on this same list are sent first: they decide what is bought.
+      // D5: edits this device made on this same list go first (items added by hand, quantities).
       const cache = readShoppingCache(identity, isoWeek);
+      if (!pushedEdits && cache?.pendingEdits?.length) {
+        pushedEdits = true;
+        if (cache.listId === list.id) await pushPendingEdits(identity, isoWeek);
+        else writeShoppingCache(identity, isoWeek, { ...cache, pendingEdits: [] });
+        attempt--;
+        continue;
+      }
+      // Marks this device made offline on this same list are sent first: they decide what is bought.
       if (!pushedMarks && cache?.listId === list.id && Object.keys(cache.pendingChecks ?? {}).length > 0) {
         pushedMarks = true;
         const pushed = await pushPendingChecks(identity, isoWeek, listToCache(list, cache.weekSignature), cache.pendingChecks!);
@@ -588,10 +898,11 @@ export async function reconcileShoppingList(
       const current = isCurrentList(list, state.week, signature);
       const withOrigins = list.ingredientBasis === "mixed-v1";
       const activeRows = list.items.filter((row) => !row.removedAt);
+      const servings = context?.servings ?? null;
       const shown = (extras: ViewExtras = {}): ShoppingLoad => {
         const next = listToCache(list, signature);
         writeShoppingCache(identity, isoWeek, next);
-        return { status: "ready", view: cacheToView(next, "remote", false, days, false, extras) };
+        return { status: "ready", view: cacheToView(next, "remote", false, days, false, { servings, ...extras }) };
       };
       if (current && (!userAsked || !withOrigins || pendingDishesOf(activeRows, plannedDishes(days)).length === 0)) {
         return shown();
@@ -630,10 +941,12 @@ export async function reconcileShoppingList(
       if (failed) {
         // Never remove what a pending dish may still need.
         const pending = new Set(computed.pending.map(pendingKey));
-        const needed = new Set(list.items.filter((row) => row.origins?.some((origin) => pending.has(pendingKey(origin)))).map((row) => row.id));
+        const needed = new Set(list.items.filter((row) => dishOriginsOf(row.origins).some((origin) => pending.has(pendingKey(origin)))).map((row) => row.id));
         ops.remove = ops.remove.filter((op) => !needed.has(op.id));
       }
 
+      // D5: adjusted quantities this update recomputes (their dishes changed), to tell the user.
+      const dropped = discardedAdjustments(toExistingRows(list), ops);
       const result = await remote.reconcile({
         listId: list.id,
         fromSignature: list.weekSignature,
@@ -656,6 +969,8 @@ export async function reconcileShoppingList(
         view: cacheToView(next, "remote", false, days, false, {
           change: result.status === "applied" ? result.summary : null,
           aiError,
+          servings,
+          discardedAdjustments: result.status === "applied" ? dropped : [],
         }),
       };
     }
@@ -684,9 +999,6 @@ export type CheckResult =
   // longer in it (updated elsewhere): nothing was written.
   | { status: "stale" };
 
-const visibleIdOf = (item: CachedShoppingItem) =>
-  getShoppingItemId({ ...item, category: item.category === "congelados" ? "otros" : item.category });
-
 // Marks or unmarks one visible item. The device copy changes at once; in the account only that
 // item's rows change, and only while this list is still the week's current list.
 export async function setShoppingItemChecked(
@@ -705,7 +1017,7 @@ export async function setShoppingItemChecked(
   writeShoppingCache(identity, isoWeek, {
     ...cache,
     // A new mark settles a review (the database does the same).
-    items: cache.items.map((item) => (item.needsReview && visibleIdOf(item) === itemId ? { ...item, needsReview: false } : item)),
+    items: cache.items.map((item) => (item.needsReview && shoppingLineId(item) === itemId ? { ...item, needsReview: false } : item)),
     checkedItemIds: [...ids],
     ...(remote ? { pendingChecks: { ...cache.pendingChecks, [itemId]: checked } } : {}),
   });

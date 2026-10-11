@@ -4,7 +4,7 @@ import type { WeekDay } from "@/data/mockWeek";
 import { getIsoWeekStorageId, parseIsoWeek, type IsoWeek } from "@/lib/isoWeek";
 import type { WeekFoodContextStatus } from "@/lib/menu-generation/food-context";
 import type { ShoppingFoodContext } from "@/lib/shoppingListStorage";
-import type { StoredShoppingItem } from "@/lib/shoppingList";
+import type { ShoppingRowOrigin, StoredShoppingItem, SupermarketCategory } from "@/lib/shoppingList";
 import type { ReconcileOps } from "@/lib/shopping/reconcile";
 import {
   loadEntity,
@@ -31,8 +31,10 @@ import type {
 } from "@/lib/supabase/pantry";
 import type { UserProfile } from "@/lib/supabase/profiles";
 import type {
+  EditShoppingItemsResult,
   ReconcileShoppingListResult,
   SaveShoppingListResult,
+  ShoppingEditOps,
   SetShoppingItemsCheckedResult,
   ShoppingList,
 } from "@/lib/supabase/shopping-lists";
@@ -110,6 +112,9 @@ export type ShoppingRemote = {
     ops: ReconcileOps;
     expectedWeekVersion: number | null;
   }) => Promise<ReconcileShoppingListResult>;
+  // D5: the user's edits of the current list (edit_shopping_items). Absent: not supported (edits
+  // stay on this device).
+  edit?: (input: { listId: string; ops: ShoppingEditOps }) => Promise<EditShoppingItemsResult>;
 };
 
 // The account side of the pantry (B7): its rows, and writes of one item at a time.
@@ -310,6 +315,10 @@ const supabaseRemotes: Remotes = {
           expectedWeekVersion,
         });
       },
+      async edit({ listId, ops }) {
+        const { editShoppingItemsInSupabase } = await import("@/lib/supabase/shopping-lists");
+        return editShoppingItemsInSupabase({ isoYear: isoWeek.isoYear, isoWeek: isoWeek.isoWeek, listId, ops });
+      },
     };
   },
 };
@@ -506,7 +515,18 @@ export function writeSelectedWeek(identity: DataIdentity, isoWeek: IsoWeek) {
 // --- Shopping (per week; the account list is read first, see @/lib/data/shopping) ---
 // C4: needsReview / removed are the account state of a row (bought, now needs more / no longer
 // needed). Copies written before C4 have neither, nor keys or origins.
-export type CachedShoppingItem = StoredShoppingItem & { needsReview?: boolean; removed?: boolean };
+// D5: rowId is the account row of the item (or the id chosen here for an item added by hand that
+// the account has not accepted yet). Copies written before D5 have none (itemIds below is used).
+export type CachedShoppingItem = StoredShoppingItem & { needsReview?: boolean; removed?: boolean; rowId?: string };
+
+// D5: an edit made on this device and not yet accepted by the account, sent in order with the marks.
+// id: the account row (for add, the id chosen here); change: token of this edit, so an answer that
+// arrives after newer edits only clears the ones it carried.
+export type ShoppingEdit = { change: string } & (
+  | { op: "add"; id: string; name: string; quantity: number | null; unit: string; category: SupermarketCategory; itemKey: string }
+  | { op: "set_quantity"; id: string; quantity: number | null; unit: string; origins: ShoppingRowOrigin[] }
+  | { op: "remove"; id: string }
+);
 
 export type ShoppingCache = {
   weekSignature: string;
@@ -519,6 +539,8 @@ export type ShoppingCache = {
   pendingChecks?: Record<string, boolean>;
   // C4: 'mixed-v1' when the items have keys and origins (see shopping_lists.ingredient_basis).
   ingredientBasis?: string | null;
+  // D5: edits not accepted by the account yet (signed in), in the order they were made.
+  pendingEdits?: ShoppingEdit[];
 };
 
 export function readShoppingCache(identity: DataIdentity, isoWeek: IsoWeek) {
@@ -528,7 +550,7 @@ export function readShoppingCache(identity: DataIdentity, isoWeek: IsoWeek) {
 // Pending (B5): a list not saved in the account yet, or marks it has not accepted. Counted by the
 // sign-out warning like any other change not saved.
 export function writeShoppingCache(identity: DataIdentity, isoWeek: IsoWeek, cache: ShoppingCache) {
-  const pending = cache.listId === null || Object.keys(cache.pendingChecks ?? {}).length > 0;
+  const pending = cache.listId === null || Object.keys(cache.pendingChecks ?? {}).length > 0 || (cache.pendingEdits?.length ?? 0) > 0;
   writeScoped(identity.scope, "shopping", cache, { week: weekKey(isoWeek), pending });
 }
 
