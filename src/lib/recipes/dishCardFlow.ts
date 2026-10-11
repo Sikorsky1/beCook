@@ -136,3 +136,26 @@ export async function requestEstimatedCard(
   if (data?.link === "conflict") return { status: "linked", days, card, message: dishCardMessages.cardNotLinked };
   return { status: "linked", days, card };
 }
+
+// The card the dialog shows: one just estimated or linked (before the week is read again) only
+// for exactly the same meal and dish, and only if the slot points to that version or to none yet;
+// otherwise the card read for the slot. Never the card of another dish («Pollo» ≠ «Pollo al limón»).
+export function cardToShow(
+  shown: { key: string; card: RecipeCard } | null,
+  slotKey: string,
+  title: string,
+  linkVersionId: string | null,
+  viewCard: RecipeCard | null,
+): RecipeCard | null {
+  if (
+    shown &&
+    shown.key === slotKey &&
+    sameDishTitle(shown.card.title, title) &&
+    (linkVersionId === null || linkVersionId === shown.card.versionId)
+  ) {
+    return shown.card;
+  }
+  return viewCard;
+}
+
+export const dishCardSlotKey = (slot: { day: string; meal: MealKey }, title: string) => JSON.stringify([slot.day, slot.meal, title]);

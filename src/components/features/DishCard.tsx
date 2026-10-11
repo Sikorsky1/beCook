@@ -11,6 +11,8 @@ import type { IsoWeek } from "@/lib/isoWeek";
 import { loginHrefFor } from "@/lib/navigation";
 import { formatIngredientAmount, recipeAllergenLabels, type RecipeCard } from "@/lib/recipes/card";
 import {
+  cardToShow,
+  dishCardSlotKey,
   linkCatalogCard,
   loadDishCardView,
   requestEstimatedCard,
@@ -142,7 +144,7 @@ export function DishCard({
   const title = day && slot ? day[slot.meal] : "";
   const open = Boolean(slot && day && title && title !== "LIBRE");
   const link = day && slot ? mealRecipeLink(day, slot.meal) : null;
-  const viewKey = open && slot ? `${slot.day}|${slot.meal}|${title}|${link?.versionId ?? ""}` : null;
+  const viewKey = open && slot ? JSON.stringify([slot.day, slot.meal, title, link?.versionId ?? null]) : null;
 
   const [viewEntry, setViewEntry] = useState<{ key: string; view: DishCardView } | null>(null);
   // A card just estimated or linked is shown at once, before the week is read again.
@@ -182,8 +184,8 @@ export function DishCard({
   };
 
   const view = viewEntry && viewEntry.key === viewKey ? viewEntry.view : null;
-  const card = shownCard && viewKey?.startsWith(shownCard.key) ? shownCard.card : view?.kind === "card" ? view.card : null;
-  const slotKey = slot ? `${slot.day}|${slot.meal}|${title}` : "";
+  const slotKey = slot ? dishCardSlotKey(slot, title) : "";
+  const card = cardToShow(shownCard, slotKey, title, link?.versionId ?? null, view?.kind === "card" ? view.card : null);
   const currentNotice = notice && notice.key === slotKey ? notice : null;
 
   const settle = (action: DishCardAction) => {
