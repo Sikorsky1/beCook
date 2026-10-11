@@ -119,8 +119,8 @@ function CardBody({ card, weekServings }: { card: RecipeCard; weekServings: numb
       </dl>
       {weekServings ? (
         <p className="t-meta">
-          Esta semana está planificada para {weekServings} {weekServings === 1 ? "ración" : "raciones"}. Las cantidades
-          de la ficha no se ajustan automáticamente.
+          Esta semana está planificada para {weekServings} {weekServings === 1 ? "ración" : "raciones"}. La lista de la
+          compra ajusta las cantidades de esta ficha a esas raciones.
         </p>
       ) : null}
 
