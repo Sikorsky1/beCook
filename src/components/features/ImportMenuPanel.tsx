@@ -13,7 +13,8 @@ import { TextArea } from "@/components/ui/TextArea";
 // Pasted menus in a clear format are ordered on this device, without the AI, for guests too; only
 // what the device cannot read goes to the AI, and that needs a session.
 type ImportMenuPanelProps = {
-  id: string;
+  // Prefix of the ids inside (the page puts the disclosure's target id on its wrapper).
+  idPrefix: string;
   hasMounted: boolean;
   value: string;
   onChange: (value: string) => void;
@@ -32,7 +33,7 @@ const placeholder = "Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMarte
 const textAreaClass = "min-h-[16rem] resize-y border-0 pr-16 shadow-none sm:min-h-[20rem]";
 
 export function ImportMenuPanel({
-  id,
+  idPrefix,
   hasMounted,
   value,
   onChange,
@@ -43,11 +44,11 @@ export function ImportMenuPanel({
   loginReturnPath,
   onBeforeLogin,
 }: ImportMenuPanelProps) {
-  const textId = `${id}-text`;
-  const helpId = `${id}-help`;
+  const textId = `${idPrefix}-text`;
+  const helpId = `${idPrefix}-help`;
 
   return (
-    <Card id={id} className="space-y-3 p-3.5 sm:p-5">
+    <Card className="space-y-3 p-3.5 sm:p-5">
       <div>
         <label htmlFor={textId} className="t-body-strong text-[color:var(--color-foreground)]">
           Pega tu menú de la semana

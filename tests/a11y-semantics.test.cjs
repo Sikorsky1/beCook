@@ -5,7 +5,6 @@ const {test} = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const {nextTabIndex, tabIds} = require("../src/lib/rovingTabs.ts");
 
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
@@ -17,30 +16,6 @@ function sourceFiles(dir) {
     return entry.name.endsWith(".tsx") ? [relative] : [];
   });
 }
-
-test("arrow keys move between tabs and wrap around; Inicio/Fin go to the ends", () => {
-  assert.equal(nextTabIndex("ArrowRight", 0, 2), 1);
-  assert.equal(nextTabIndex("ArrowRight", 1, 2), 0);
-  assert.equal(nextTabIndex("ArrowLeft", 0, 2), 1);
-  assert.equal(nextTabIndex("ArrowLeft", 2, 3), 1);
-  assert.equal(nextTabIndex("Home", 2, 3), 0);
-  assert.equal(nextTabIndex("End", 0, 3), 2);
-});
-
-test("other keys keep their default action (Tab leaves the tab list, Enter/Space click)", () => {
-  for (const key of ["Tab", "Enter", " ", "ArrowDown", "ArrowUp", "a"]) {
-    assert.equal(nextTabIndex(key, 0, 2), null, key);
-  }
-  assert.equal(nextTabIndex("ArrowRight", 0, 0), null);
-});
-
-test("each tab and its panel share stable, distinct ids", () => {
-  assert.deepEqual(tabIds("create-menu", "import"), {
-    tab: "create-menu-tab-import",
-    panel: "create-menu-panel-import",
-  });
-  assert.notEqual(tabIds("create-menu", "import").panel, tabIds("create-menu", "generate").panel);
-});
 
 test("every role=tablist is a complete tab pattern: tabs, panels, aria-controls and roving tabindex", () => {
   const withTablist = sourceFiles("src").filter(file => read(file).includes('role="tablist"'));

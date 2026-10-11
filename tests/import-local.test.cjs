@@ -49,9 +49,38 @@ test("three-column rows (tabs, pipes or wide spaces) with an optional DÍA|COMID
  const piped = importMenu.parseMenuTextLocally("| Día | Comida | Cena |\n| Jueves | Garbanzos con espinacas | Revuelto de setas |");
  assert.equal(piped.kind, "parsed");
  assert.equal(piped.days[0].dayName, "Jueves");
- const spaced = importMenu.parseMenuTextLocally("Viernes    Paella de pollo    Libre");
+ // Columns by spaces only as an aligned fixed-width table of two or more rows.
+ const spaced = importMenu.parseMenuTextLocally("Viernes    Paella de pollo    Libre\nSábado     Lentejas           Sopa de ajo");
  assert.equal(spaced.kind, "parsed");
  assert.equal(spaced.days[0].dinner.status, "free");
+ assert.equal(spaced.days[1].lunch.dishName, "Lentejas");
+});
+
+test("review: one separator per line; spaces split columns only in an aligned table, never one loose line", () => {
+ const tab = importMenu.parseMenuTextLocally("Lunes\tLentejas con  chorizo\tSopa");
+ assert.equal(tab.kind, "parsed");
+ assert.equal(tab.days[0].lunch.dishName, "Lentejas con  chorizo", "inside a tab row, spaces belong to the dish");
+ const pipe = importMenu.parseMenuTextLocally("Lunes | Lentejas  con chorizo | Sopa");
+ assert.equal(pipe.days[0].lunch.dishName, "Lentejas  con chorizo");
+ assert.deepEqual(importMenu.parseMenuTextLocally("Lunes  Lentejas con  chorizo"), {kind: "ambiguous", reason: "unaligned_columns"});
+ assert.deepEqual(importMenu.parseMenuTextLocally("Lunes  Lentejas  Sopa\nMartes    Pollo  Tortilla"), {kind: "ambiguous", reason: "unaligned_columns"});
+ assert.deepEqual(importMenu.parseMenuTextLocally("Lunes  Lentejas  Sopa  Postre\nMartes  Pollo  Tortilla  Fruta"), {kind: "ambiguous", reason: "unrecognized_line"});
+});
+
+test("review: «Comida: X; Cena: Y» in one line is ambiguous; cells keep their own label and free markers", () => {
+ assert.deepEqual(importMenu.parseMenuTextLocally("Lunes\nComida: Lentejas; Cena: Pollo"), {kind: "ambiguous", reason: "several_meals_in_line"});
+ const labelled = importMenu.parseMenuTextLocally("Lunes\tComida: Lentejas\tCena: Sopa");
+ assert.equal(labelled.kind, "parsed");
+ assert.deepEqual([labelled.days[0].lunch.dishName, labelled.days[0].dinner.dishName], ["Lentejas", "Sopa"]);
+ assert.deepEqual(importMenu.parseMenuTextLocally("Lunes\tCena: Sopa\tComida: Lentejas"), {kind: "ambiguous", reason: "label_mismatch"});
+ assert.deepEqual(importMenu.parseMenuTextLocally("Lunes\tLentejas; cena: sopa\tLIBRE"), {kind: "ambiguous", reason: "label_mismatch"});
+ for (const free of ["-", "–", "—", "·", "x", "X", "/", "Libre.", "LIBRE"]) {
+  const result = importMenu.parseMenuTextLocally(`Lunes\tLentejas\t${free}`);
+  assert.equal(result.days[0].dinner.status, "free", free);
+ }
+ const empty = importMenu.parseMenuTextLocally("Lunes\t\tSopa");
+ assert.equal(empty.days[0].lunch.status, "free");
+ assert.match(empty.warnings[0], /Lunes: la comida está vacía/);
 });
 
 test("a day without one of its meals is parsed with that meal free, and the user is told", () => {
@@ -83,6 +112,19 @@ test("a menu is only recognisable if some day of the week is named (accents and 
  assert.equal(importMenu.mentionsAnyDayName("MIERCOLES: arroz"), true);
  assert.equal(importMenu.mentionsAnyDayName("sábado"), true);
  assert.equal(importMenu.mentionsAnyDayName("Lista de la compra: tomates, lunetas de chocolate"), false);
+ // Review: abbreviations, «X» at the start of a line and English names (only to decide on the AI).
+ for (const text of ["Lun: lentejas", "mié. arroz", "Sáb pollo", "X: crema de calabaza", "Monday: soup", "wed - pasta"]) {
+  assert.equal(importMenu.mentionsAnyDayName(text), true, text);
+ }
+ assert.equal(importMenu.mentionsAnyDayName("2 x 3 tomates y pan"), false);
+});
+
+test("review: the browser's text limits are the route's, and client code never imports @/lib/server", () => {
+ const {aiRequestLimits} = require("../src/lib/server/ai-limits.ts");
+ assert.equal(importMenu.importTextLimits.maxTextLength, aiRequestLimits.importMenu.maxTextLength);
+ assert.equal(importMenu.importTextLimits.maxLines, aiRequestLimits.importMenu.maxLines);
+ const clientFiles = ["src/components/pages/CreateMenuPage.tsx", "src/components/features/ImportMenuPanel.tsx", "src/lib/importMenu.ts", "src/lib/importWarnings.ts"];
+ for (const file of clientFiles) assert.ok(!read(file).includes("@/lib/server/"), file);
 });
 
 test("pasted text limits: empty, over 8000 characters or over 80 lines, each with its reason", () => {
@@ -178,7 +220,9 @@ test("route: the AI finds no planned dish -> 422 empty_menu, recorded as failed 
  aiDays = [{dayName: "Lunes", lunch: {status: "free", dishName: ""}, dinner: {status: "free", dishName: ""}}];
  const response = await POST(post(prose));
  assert.equal(response.status, 422);
- assert.equal((await response.json()).reason, "empty_menu");
+ const body = await response.json();
+ assert.equal(body.reason, "empty_menu");
+ assert.match(body.error, /cuenta como una de tus importaciones/);
  assert.equal(fakes.finish[0].p_status, "failed");
  assert.equal(fakes.finish[0].p_reason, "empty_menu");
  assert.ok(fakes.finish[0].p_prompt_tokens > 0);
@@ -245,6 +289,11 @@ test("drafts and proposals of past weeks are removed when Crear menú loads; thi
  assert.ok(readMenuProposal(asA, W41));
  assert.ok(readMenuProposal(asA, W42));
  assert.deepEqual(readMenuFormDraft(asB, W40), draft, "another identity's data is not touched");
+
+ // Review: a past week chosen with ?week= is the one on screen: never pruned.
+ writeMenuFormDraft(asA, W40, draft);
+ pruneStaleMenuDrafts(asA, W41, W40);
+ assert.deepEqual(readMenuFormDraft(asA, W40), draft);
 });
 
 test("a proposal keeps where it came from, how it was parsed, its food context version and when it was made", () => {
@@ -317,8 +366,35 @@ test("Crear menú has no tab list any more: generating is the main action and im
  assert.match(page, /searchParams\.get\("mode"\)/);
  assert.match(page, /Volver a Semana/);
  assert.match(panel, /<label|aria-label=/);
+ // The disclosure's target always exists (hidden when closed).
+ assert.match(page, /<div id=\{importPanelId\} hidden=\{mode !== "import"\}>/);
+ assert.ok(!fs.existsSync(path.join(root, "src/lib/rovingTabs.ts")), "no tabs left: the roving tab helper is gone");
  for (const [file, source] of [["ImportMenuPanel", panel], ["CreateMenuPage", page]]) {
   assert.equal(source.match(/text-\[0\.(?:[0-6]\d*|7[0-4]\d*)rem\]/g), null, file);
   assert.equal(source.match(/\bmin-h-(?:9|10)\b/g), null, file);
  }
+});
+
+// --- Review: state that must not break -------------------------------------------------------------
+test("review: generating or processing is refused and disabled while «Usar este menú» saves or can be undone", () => {
+ const page = read("src/components/pages/CreateMenuPage.tsx");
+ const handler = name => page.slice(page.indexOf(`const ${name} = async`), page.indexOf(`const ${name} = async`) + 400);
+ for (const name of ["handleProcessMenu", "handleGenerateMenu"]) {
+  assert.match(handler(name), /if \(isLoading \|\| proposalBusy\(\)\) \{\s*return;/, name);
+ }
+ assert.match(page, /isApplyingWeekRef\.current \|\| useWeekStatus === "applying" \|\| useWeekStatus === "success"/);
+ assert.equal(page.match(/disabled=\{isLoading \|\| proposalLocked\}/g)?.length, 2, "both «Procesar menú» and «Crear menú semanal»");
+});
+
+test("review: a change of identity without reloading starts Crear menú again", () => {
+ const page = read("src/components/pages/CreateMenuPage.tsx");
+ assert.match(page, /export default function CreateMenuPage\(\) \{\s*const identity = useIdentity\(\);\s*return <CreateMenuPageContent key=\{identity\.scope\} \/>;/);
+});
+
+test("review: the profile-change question takes the focus and «Ahora no» gives it back", () => {
+ const bar = read("src/components/features/ProposalActionBar.tsx");
+ assert.match(bar, /confirmRef\.current\?\.focus\(\)/);
+ assert.match(bar, /useButtonRef\.current\?\.focus\(\)/);
+ assert.match(bar, /ref=\{confirmRef\}/);
+ assert.match(bar, /ref=\{useButtonRef\}/);
 });

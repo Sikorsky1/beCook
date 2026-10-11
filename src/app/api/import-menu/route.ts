@@ -190,7 +190,7 @@ export async function POST(request: Request) {
     if (!hasPlannedDish(completedMenu.days)) {
       outcome.reason = "empty_menu";
       return withRequestId(
-        importError(422, "empty_menu", importErrorMessage("empty_menu", "", limits)),
+        importError(422, "empty_menu", importErrorMessage("empty_menu_ai", "", limits)),
         usage.requestId,
       );
     }

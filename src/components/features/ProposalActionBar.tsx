@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, LoaderCircle, Undo2 } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
 import type { MenuSaveState } from "@/lib/applyWeek";
@@ -37,6 +38,19 @@ export function ProposalActionBar({
 }: ProposalActionBarProps) {
   const isError = status === "error";
   const askContext = contextWarning !== null && status !== "applying" && status !== "success";
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  const useButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef(false);
+
+  // The question takes the focus when it appears; «Ahora no» gives it back to «Usar este menú».
+  useEffect(() => {
+    if (askContext) {
+      confirmRef.current?.focus();
+    } else if (returnFocusRef.current) {
+      returnFocusRef.current = false;
+      useButtonRef.current?.focus();
+    }
+  }, [askContext]);
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-[calc(6.5rem+env(safe-area-inset-bottom))] z-40 flex justify-center pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
@@ -70,10 +84,16 @@ export function ProposalActionBar({
               platos se eligieron con tus alergias, restricciones y gustos anteriores. ¿La usas igualmente?
             </p>
             <div className="flex gap-2">
-              <TertiaryButton onClick={contextWarning.onCancel} className="flex-1">
+              <TertiaryButton
+                onClick={() => {
+                  returnFocusRef.current = true;
+                  contextWarning.onCancel();
+                }}
+                className="flex-1"
+              >
                 Ahora no
               </TertiaryButton>
-              <PrimaryButton onClick={contextWarning.onConfirm} className="flex-1">
+              <PrimaryButton ref={confirmRef} onClick={contextWarning.onConfirm} className="flex-1">
                 Usar igualmente
               </PrimaryButton>
             </div>
@@ -97,6 +117,7 @@ export function ProposalActionBar({
           </div>
         ) : (
           <PrimaryButton
+            ref={useButtonRef}
             onClick={onUse}
             disabled={status === "applying"}
             size="lg"

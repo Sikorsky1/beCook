@@ -46,6 +46,7 @@ import { registerBeforeLoginSaver } from "@/lib/session/login-return";
 import {
   hasPlannedDish,
   importErrorMessage,
+  importTextLimits,
   importedMenuToWeekDays,
   localMenuResponse,
   mentionsAnyDayName,
@@ -57,7 +58,6 @@ import {
   type MenuGenerationApiErrorResponse,
 } from "@/lib/importMenu";
 import { importedDishWarnings, importWarningProfile } from "@/lib/importWarnings";
-import { aiRequestLimits } from "@/lib/server/ai-limits";
 import {
   formatIsoWeekTitle,
   getCurrentIsoWeek,
@@ -162,7 +162,14 @@ function serializeMenuGenerationContext(
   return `${getMenuStylesForGeneration(menuStyles).join(",")}|elaboration_level=${elaborationLevel}`;
 }
 
+// C6 review: a change of identity without a reload (sign-in, sign-out in another tab) starts the
+// page again, so no form, proposal, error or «Usar este menú» state of the previous identity stays.
 export default function CreateMenuPage() {
+  const identity = useIdentity();
+  return <CreateMenuPageContent key={identity.scope} />;
+}
+
+function CreateMenuPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const weekParam = searchParams.get("week");
@@ -294,7 +301,7 @@ export default function CreateMenuPage() {
     setTargetIsoWeek(weekForMenu);
     writeSelectedWeek(dataIdentity, weekForMenu);
     // C6, decision 10: drafts and unapplied proposals of past weeks are dropped.
-    pruneStaleMenuDrafts(dataIdentity, getCurrentIsoWeek());
+    pruneStaleMenuDrafts(dataIdentity, getCurrentIsoWeek(), weekForMenu);
 
     let isCancelled = false;
     // A generation cut by a reload or a closed tab: its form comes back and the user is told.
@@ -623,6 +630,11 @@ export default function CreateMenuPage() {
     runRef.current?.controller.abort();
   };
 
+  // «Usar este menú» is saving, or saved with «Deshacer» still possible.
+  const proposalBusy = () =>
+    isApplyingWeekRef.current || useWeekStatus === "applying" || useWeekStatus === "success";
+  const proposalLocked = useWeekStatus === "applying" || useWeekStatus === "success";
+
   const requireSession = async () => {
     if (await getAccessToken()) {
       return true;
@@ -642,7 +654,9 @@ export default function CreateMenuPage() {
   };
 
   const handleProcessMenu = async () => {
-    if (isLoading) {
+    // C6 review: never while the proposal is being saved or can still be undone (a new proposal
+    // would replace the one being applied and break its state).
+    if (isLoading || proposalBusy()) {
       return;
     }
 
@@ -655,7 +669,7 @@ export default function CreateMenuPage() {
     setCancelledNotice(false);
     setInterruptedNotice(false);
 
-    const checked = validateImportText(menuText, aiRequestLimits.importMenu);
+    const checked = validateImportText(menuText, importTextLimits);
 
     if (!checked.ok) {
       showImportProblem(checked.reason);
@@ -717,7 +731,9 @@ export default function CreateMenuPage() {
         const serverMessage = "error" in data ? data.error : undefined;
         const reason = "reason" in data ? data.reason : undefined;
         const fallbackMessage = serverMessage ?? "No se pudo procesar el menú.";
-        const message = isLimit ? fallbackMessage : importErrorMessage(reason, fallbackMessage);
+        // The server's text first (an empty menu read by the AI says it counted); the reason only
+        // fills in for a response without one.
+        const message = serverMessage ?? importErrorMessage(reason, fallbackMessage);
 
         if (fixText) {
           // The proposal on screen (if any) stays: only the pasted text has to change.
@@ -765,6 +781,10 @@ export default function CreateMenuPage() {
   };
 
   const handleGenerateMenu = async () => {
+    if (isLoading || proposalBusy()) {
+      return;
+    }
+
     if (!(await requireSession())) {
       return;
     }
@@ -1317,9 +1337,10 @@ export default function CreateMenuPage() {
             />
           </button>
 
-          {mode === "import" ? (
+          {/* Always in the DOM (hidden when closed), so aria-controls points to an existing element. */}
+          <div id={importPanelId} hidden={mode !== "import"}>
             <ImportMenuPanel
-              id={importPanelId}
+              idPrefix={importPanelId}
               hasMounted={hasMounted}
               value={menuText}
               onChange={(value) => {
@@ -1329,12 +1350,12 @@ export default function CreateMenuPage() {
               }}
               onProcess={() => void handleProcessMenu()}
               processing={isLoading && loadingMode === "import"}
-              disabled={isLoading}
+              disabled={isLoading || proposalLocked}
               needsLogin={importNeedsLogin}
               loginReturnPath={createMenuReturnPath}
               onBeforeLogin={saveDraftForLogin}
             />
-          ) : null}
+          </div>
         </div>
 
         <Card aria-labelledby="create-menu-generate-title" className="space-y-4 p-3.5 sm:p-5">
@@ -1489,7 +1510,7 @@ export default function CreateMenuPage() {
           ) : (
             <PrimaryButton
               onClick={handleGenerateMenu}
-              disabled={isLoading}
+              disabled={isLoading || proposalLocked}
               size="lg"
               className="w-full disabled:cursor-wait"
             >

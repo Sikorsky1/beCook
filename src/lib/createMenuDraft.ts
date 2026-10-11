@@ -80,11 +80,14 @@ export function clearMenuFormDraft(identity: DataIdentity, isoWeek: IsoWeek) {
 }
 
 // Decision 10 of the plan: drafts and unapplied proposals of past weeks are dropped when Crear menú
-// loads (only for the identity on screen).
-export function pruneStaleMenuDrafts(identity: DataIdentity, currentWeek: IsoWeek) {
+// loads (only for the identity on screen). The week on screen is never dropped, even if it is a
+// past one chosen with ?week=: the user is working on it.
+export function pruneStaleMenuDrafts(identity: DataIdentity, currentWeek: IsoWeek, selectedWeek?: IsoWeek) {
+  const keep = selectedWeek ? getIsoWeekStorageId(selectedWeek) : null;
   try {
     for (const entity of ["menu-draft", "menu-proposal"] as const) {
       for (const weekId of listScopedWeeks(identity.scope, entity)) {
+        if (weekId === keep) continue;
         const parsed = parseIsoWeekId(weekId);
         const past =
           !parsed.ok ||
