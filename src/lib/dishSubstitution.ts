@@ -55,7 +55,9 @@ export function proposalIdeaProfile(verified: VerifiedFoodContext | null, profil
 export function nextCatalogIdea(weekDays: WeekDay[], slot: SubstitutionSlot, rejected: string[], profile: unknown): DishIdea {
   const menuProfile = readProfile(profile);
   if (!menuProfile) return { status: "error", message: invalidProfileMessage };
-  const idea = catalogAlternative(substitutionRequestFor(weekDays, slot, rejected), menuProfile);
+  // The local search skips every discarded dish; only the API body keeps the latest ones (D-3).
+  const request = { ...substitutionRequestFor(weekDays, slot, rejected), rejected: [...new Set(rejected)] };
+  const idea = catalogAlternative(request, menuProfile);
   return idea ? { status: "found", dish: idea.dish, source: "catalog" } : { status: "catalog_exhausted" };
 }
 

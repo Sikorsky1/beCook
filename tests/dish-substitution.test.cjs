@@ -67,6 +67,27 @@ test("catalogue idea is compatible, new for the week and never a discarded one",
  assert.equal(nextCatalogIdea(week, slot, [], {allergies: "nuts"}).status, "error", "malformed safety constraints are never ignored");
 });
 
+test("«Otra idea» del catálogo no repite descartes aunque haya más de diez (ola 4, D-3)", () => {
+ // The page (Crear menú and Semana) passes every dish shown and discarded in this slot.
+ const slot = {day: "Martes", meal: "lunch"};
+ const rejected = [];
+ for (let round = 0; round < catalog.recipes.length + 2; round++) {
+  const idea = nextCatalogIdea(week, slot, rejected, null);
+  if (idea.status === "catalog_exhausted") break;
+  assert.equal(idea.status, "found");
+  assert.ok(!rejected.includes(idea.dish), `ronda ${round + 1}: «${idea.dish}» ya se había descartado`);
+  rejected.push(idea.dish);
+ }
+ assert.ok(rejected.length > substitutionLimitsMaxRejected(), "more ideas than the API body keeps");
+ assert.deepEqual(nextCatalogIdea(week, slot, rejected, null), {status: "catalog_exhausted"});
+ // The API body still carries only the latest ten.
+ assert.equal(substitutionRequestFor(week, slot, rejected).rejected.length, substitutionLimitsMaxRejected());
+});
+
+function substitutionLimitsMaxRejected() {
+ return require("../src/lib/menu-generation/substitution.ts").substitutionLimits.maxRejected;
+}
+
 test("replacement checks: same, duplicate, discarded, conflict, disliked, generic, ambiguous", () => {
  const request = substitutionRequestFor(week, {day: "Martes", meal: "lunch"}, ["Pollo al limón"]);
  const profile = readMenuProfile({allergies: ["nuts"], dislikedFoods: ["coliflor"]});
