@@ -9,6 +9,7 @@ import { useIdentity } from "@/components/session/IdentityProvider";
 import { OnboardingGate } from "@/components/session/OnboardingGate";
 import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
 import { SyncStatus } from "@/components/session/SyncStatus";
+import { StateMessage } from "@/components/ui/StateMessage";
 import { type MealKey, type WeekDay } from "@/data/mockWeek";
 import {
   addIsoWeeks,
@@ -21,9 +22,11 @@ import {
   type IsoWeek,
 } from "@/lib/isoWeek";
 import { nextCatalogIdea, requestAiIdea } from "@/lib/dishSubstitution";
+import { foodContextChangeNotice, type WeekFoodContextStatus } from "@/lib/menu-generation/food-context";
 import {
   loadProfile,
   loadWeek,
+  loadWeekFoodContext,
   readCachedWeek,
   readSelectedWeek,
   saveWeekSlot,
@@ -75,6 +78,8 @@ function WeekPageContent() {
   // for the current identity, no idea is offered (an empty profile would skip allergies).
   const profileKey = `${identity.scope}:${identity.epoch}`;
   const [profileEntry, setProfileEntry] = useState<{ key: string; data: unknown } | null>(null);
+  // C1: the food context this week was planned with, compared with the profile now.
+  const [foodContextEntry, setFoodContextEntry] = useState<{ key: string; status: WeekFoodContextStatus | null } | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
 
   const isCurrentWeek =
@@ -219,6 +224,28 @@ function WeekPageContent() {
       isCancelled = true;
     };
   }, [identity.status, identity.scope, identity.userId, identity.epoch]);
+
+  const foodContextKey = selectedIsoWeek
+    ? `${identity.scope}:${identity.epoch}:${getIsoWeekStorageId(selectedIsoWeek)}:${reloadCount}`
+    : null;
+
+  useEffect(() => {
+    if (!selectedIsoWeek || identity.status !== "ready" || !identity.userId || !foodContextKey) {
+      return;
+    }
+
+    let isCancelled = false;
+    void loadWeekFoodContext({ scope: identity.scope, userId: identity.userId }, selectedIsoWeek).then((status) => {
+      if (!isCancelled) setFoodContextEntry({ key: foodContextKey, status });
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedIsoWeek, identity.status, identity.scope, identity.userId, foodContextKey]);
+
+  const foodContextNotice =
+    weekDays && foodContextEntry?.key === foodContextKey ? foodContextChangeNotice(foodContextEntry.status) : null;
 
   // «Otra idea»: reviewed catalogue first (free); AI only when the user asks after it runs out.
   const handleRequestIdea: RequestDishIdea = (dayName, mealKey, rejected, mode, signal) => {
@@ -452,6 +479,26 @@ function WeekPageContent() {
           />
         ) : null}
         {isSignedIn ? <SyncNotice state={syncState} /> : null}
+
+        {foodContextNotice && selectedIsoWeek ? (
+          <StateMessage
+            className="mt-0"
+            title={foodContextNotice.title}
+            variant="loading"
+            action={
+              <Link
+                href={buildWeekHref("/create-menu", selectedIsoWeek)}
+                className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
+              >
+                Crear un menú nuevo para esta semana
+              </Link>
+            }
+          >
+            {foodContextNotice.lines.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </StateMessage>
+        ) : null}
 
         <section>
           {weekDays && layout ? (

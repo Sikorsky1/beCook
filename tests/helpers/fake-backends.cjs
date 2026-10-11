@@ -21,6 +21,10 @@ function installFakeBackends(openai) {
   begin: [], finish: [], rpcAuth: [],
   beginResult: {allowed: true, id: "10000000-0000-4000-8000-000000000001", reason: null, retry_after_seconds: null},
   finishResult: {updated: true, month_cost_usd: 0.01, previous_month_cost_usd: 0},
+  // C1: the caller's saved profile as current_food_context() returns it, and the week context.
+  foodContext: foodContextFor({}),
+  weekContext: null,
+  contextCalls: [],
   restore() {
    global.fetch = saved.fetch;
    for (const key of envKeys) {
@@ -38,6 +42,14 @@ function installFakeBackends(openai) {
    if (headers.get("authorization") !== `Bearer ${validToken}`) return Response.json({code: 403, error_code: "bad_jwt", msg: "invalid JWT"}, {status: 403});
    return Response.json({id: userId, aud: "authenticated", role: "authenticated", app_metadata: {}, user_metadata: {}, created_at: "2026-01-01T00:00:00Z"});
   }
+  // C1: profile and week context, read with the caller's session (not the service key).
+  if (url.startsWith(`${supabaseUrl}/rest/v1/rpc/current_food_context`) || url.startsWith(`${supabaseUrl}/rest/v1/rpc/week_food_context_status`)) {
+   const text = await (input instanceof Request ? input.text() : init.body);
+   state.contextCalls.push({rpc: url.split("/").pop(), authorization: headers.get("authorization"), body: text ? JSON.parse(text) : null});
+   if (state.contextMode === "down") return Response.json({message: "unavailable"}, {status: 503});
+   if (url.endsWith("/current_food_context")) return Response.json(state.foodContext);
+   return Response.json(state.weekContext ?? {week: true, frozen: null, current: state.foodContext, restrictionsChanged: false, householdChanged: false});
+  }
   if (url.startsWith(`${supabaseUrl}/rest/v1/rpc/`)) {
    state.rpcAuth.push(headers.get("apikey"));
    if (state.rpcMode === "down") return Response.json({message: "unavailable"}, {status: 503});
@@ -52,10 +64,27 @@ function installFakeBackends(openai) {
  return state;
 }
 
+// What current_food_context() returns for a saved profile (null: no profile).
+function foodContextFor(profile) {
+ if (profile === null) return {found: false};
+ const restrictions = {
+  dietaryRestrictions: [...new Set((profile.dietaryRestrictions ?? []).filter((value) => value !== "none"))].sort(),
+  allergies: [...new Set(profile.allergies ?? [])].sort(),
+  otherAllergies: profile.otherAllergies ?? "",
+  dislikedFoods: [...new Set((profile.dislikedFoods ?? []).map((food) => food.toLowerCase()))].sort(),
+ };
+ return {
+  found: true, householdSize: profile.householdSize ?? 2, restrictions,
+  version: `fc1:${JSON.stringify(restrictions).length.toString(16).padStart(8, "0")}`,
+  preferences: {goals: profile.goals ?? [], otherGoal: profile.otherGoal ?? "", weeklyTrainingDays: profile.weeklyTrainingDays ?? 0, trainingTypes: profile.trainingTypes ?? []},
+  updatedAt: "2026-10-01T10:00:00Z",
+ };
+}
+
 function aiRequest(path, body, {token = validToken, ip = "203.0.113.7", signal} = {}) {
  const headers = {"content-type": "application/json", "x-forwarded-for": `${ip}, 10.0.0.1`};
  if (token) headers.authorization = `Bearer ${token}`;
  return new Request(`http://localhost/api/${path}`, {method: "POST", headers, body: JSON.stringify(body), signal});
 }
 
-module.exports = {installFakeBackends, aiRequest, supabaseUrl, validToken, userId};
+module.exports = {installFakeBackends, aiRequest, foodContextFor, supabaseUrl, validToken, userId};

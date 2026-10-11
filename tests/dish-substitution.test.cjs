@@ -6,7 +6,7 @@ const {readMenuProfile} = require("../src/lib/menu-generation/prompt.ts");
 const {selectionToMenu} = require("../src/lib/menu-generation/validation.ts");
 const {catalogAlternative, checkReplacement, replaceSlot, substitutionRequestFor, validateSubstitutedWeek, readSubstitutionRequest} = require("../src/lib/menu-generation/substitution.ts");
 const {nextCatalogIdea} = require("../src/lib/dishSubstitution.ts");
-const {installFakeBackends, aiRequest} = require("./helpers/fake-backends.cjs");
+const {installFakeBackends, aiRequest, foodContextFor} = require("./helpers/fake-backends.cjs");
 
 // Synthetic data only: no real Supabase project or OpenAI key is contacted.
 const anyone = readMenuProfile(null);
@@ -99,13 +99,15 @@ const originalInfo = console.info;
 beforeEach(() => {
  aiReply = () => Response.json({choices: [{finish_reason: "stop", message: {content: JSON.stringify({dish: "Garbanzos con espinacas y comino"})}}], usage: {prompt_tokens: 400, completion_tokens: 20, total_tokens: 420}});
  fakes = installFakeBackends((url, init) => { fakes.lastBody = JSON.parse(init.body); return aiReply(); });
+ // C1: the route reads the saved profile (vegan here); the profile in the body is ignored.
+ fakes.foodContext = foodContextFor(vegan);
  logs = [];
  console.info = (...args) => logs.push(JSON.stringify(args));
 });
 afterEach(() => { fakes.restore(); console.info = originalInfo; });
 
 const {POST} = require("../src/app/api/substitute-dish/route.ts");
-const veganBody = {profile: vegan, day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: veganCatalog, rejected: []};
+const veganBody = {profile: null, day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: veganCatalog, rejected: []};
 
 test("route: a compatible catalogue recipe is returned without AI, quota or cost", async () => {
  const response = await POST(aiRequest("substitute-dish", {profile: null, day: "Martes", meal: "lunch", currentDish: "Lentejas estofadas", otherDishes: []}));
@@ -120,7 +122,9 @@ test("route: a compatible catalogue recipe is returned without AI, quota or cost
 test("route: catalogue exhausted -> one bounded AI attempt, billed as a menu", async () => {
  const response = await POST(aiRequest("substitute-dish", veganBody));
  assert.equal(response.status, 200);
- assert.deepEqual(await response.json(), {dish: "Garbanzos con espinacas y comino", source: "ai"});
+ const {foodContext, ...idea} = await response.json();
+ assert.deepEqual(idea, {dish: "Garbanzos con espinacas y comino", source: "ai"});
+ assert.deepEqual(foodContext.dietaryRestrictions, ["vegan"]);
  assert.ok(response.headers.get("X-Request-Id"));
  assert.equal(fakes.openAICalls, 1);
  assert.equal(fakes.lastBody.max_completion_tokens, 120);
@@ -163,7 +167,6 @@ test("route: menu quota reached -> 429 before OpenAI; invalid input -> 400 befor
  assert.equal(limited.status, 429);
  assert.match((await limited.json()).error, /menús/);
  assert.equal(fakes.openAICalls, 0);
- assert.equal((await POST(aiRequest("substitute-dish", {...veganBody, profile: {allergies: "nuts"}}))).status, 400);
  assert.equal((await POST(aiRequest("substitute-dish", {...veganBody, meal: "brunch"}))).status, 400);
  assert.equal(fakes.begin.length, 1);
 });
