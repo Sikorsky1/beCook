@@ -118,7 +118,7 @@ function ResetPasswordForm() {
             onChange={(event) => setPassword(event.target.value)}
             required
           />
-          <p id="reset-password-hint" className="text-xs text-[color:var(--color-muted-foreground)]">
+          <p id="reset-password-hint" className="t-meta">
             Al menos {newPasswordMinLength} caracteres.
           </p>
         </div>

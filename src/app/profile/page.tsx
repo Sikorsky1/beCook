@@ -87,11 +87,11 @@ function StatusBadge({ status }: { status: SectionStatus }) {
     status === "saved"
       ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-secondary-hover)]"
       : status === "unsaved" || status === "assumed"
-        ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]"
+        ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
         : "border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)]";
 
   return (
-    <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold ${tone}`}>
+    <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>
       {statusLabels[status]}
     </span>
   );
@@ -110,7 +110,7 @@ function SectionFeedback({ state }: { state: SectionSaveState | undefined }) {
 
   if (state.status === "invalid") {
     return (
-      <div role="alert" className="space-y-1 text-[0.78rem] font-semibold text-[color:var(--color-danger)]">
+      <div role="alert" className="space-y-1 text-sm font-semibold text-[color:var(--color-danger)]">
         {state.issues.map((issue) => (
           <p key={`${issue.field}-${issue.message}`}>{issue.message}</p>
         ))}
@@ -130,7 +130,7 @@ function SectionFeedback({ state }: { state: SectionSaveState | undefined }) {
   return (
     <p
       role="status"
-      className={`inline-flex items-center gap-2 text-[0.78rem] font-semibold ${
+      className={`inline-flex items-center gap-2 text-sm font-semibold ${
         isProblem ? "text-[color:var(--color-danger)]" : "text-[color:var(--color-secondary-hover)]"
       }`}
     >
@@ -336,7 +336,6 @@ export default function ProfilePage() {
         <Button
           type="button"
           variant={canSaveSection(statuses[section]) ? "primary" : "soft"}
-          size="sm"
           disabled={!canSave}
           onClick={() => void save(section)}
           className="w-full rounded-full sm:w-auto"
@@ -463,12 +462,13 @@ export default function ProfilePage() {
                     updateDraft("training", { weeklyTrainingDays: toWeeklyTrainingDays(draft.weeklyTrainingDays - 1) })
                   }
                   aria-label="Reducir días de entrenamiento"
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
                 >
                   -
                 </button>
-                <span aria-live="polite" className="min-w-10 text-center text-[0.78rem] font-semibold text-[color:var(--color-foreground)]">
+                <span aria-live="polite" className="t-body-strong min-w-10 text-center text-[color:var(--color-foreground)]">
                   {draft.weeklyTrainingDays}
+                  <span className="sr-only"> {draft.weeklyTrainingDays === 1 ? "día" : "días"}</span>
                 </span>
                 <button
                   type="button"
@@ -477,7 +477,7 @@ export default function ProfilePage() {
                     updateDraft("training", { weeklyTrainingDays: toWeeklyTrainingDays(draft.weeklyTrainingDays + 1) })
                   }
                   aria-label="Aumentar días de entrenamiento"
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-[0.78rem] font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
                 >
                   +
                 </button>
@@ -519,7 +519,7 @@ export default function ProfilePage() {
               aria-expanded={isBodyOpen}
               aria-controls="body-fields"
               onClick={() => setIsBodyOpen((open) => !open)}
-              className="flex min-h-10 w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-[0.78rem] font-semibold text-[color:var(--color-foreground)]"
+              className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-foreground)]"
             >
               {isBodyOpen ? "Ocultar datos corporales" : "Mostrar datos corporales"}
               <ChevronDown
@@ -563,7 +563,7 @@ export default function ProfilePage() {
                         onChange={(event) => updateDraft("body", { heightCm: event.target.value })}
                         className={`${compactInputClass} pr-10`}
                       />
-                      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[0.78rem] font-semibold text-[color:var(--color-muted-foreground)]">
+                      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-semibold text-[color:var(--color-muted-foreground)]">
                         cm
                       </span>
                     </span>
@@ -582,7 +582,7 @@ export default function ProfilePage() {
                         onChange={(event) => updateDraft("body", { weightKg: event.target.value })}
                         className={`${compactInputClass} pr-10`}
                       />
-                      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[0.78rem] font-semibold text-[color:var(--color-muted-foreground)]">
+                      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-semibold text-[color:var(--color-muted-foreground)]">
                         kg
                       </span>
                     </span>
@@ -593,7 +593,6 @@ export default function ProfilePage() {
                   <Button
                     type="button"
                     variant="soft"
-                    size="sm"
                     onClick={() => updateDraft("body", emptyBodyDraft())}
                     className="rounded-full"
                   >
@@ -631,7 +630,7 @@ export default function ProfilePage() {
               ) : (
                 <Link
                   href={loginHrefFor("/profile")}
-                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-xs font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
                 >
                   Entrar o crear cuenta
                 </Link>

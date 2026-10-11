@@ -25,6 +25,13 @@ function installFakeBackends(openai) {
   foodContext: foodContextFor({}),
   weekContext: null,
   contextCalls: [],
+  // C2 (/api/dish-card): the caller's week as PostgREST returns it, their own cards, and the card
+  // RPCs, all read or written with the caller's session.
+  dishWeek: {version: 3, week_days: [{position: 0, lunch_status: "planned", lunch_dish_name: "Lentejas estofadas", dinner_status: "free", dinner_dish_name: ""}]},
+  ownCards: [],
+  savedCards: {},
+  recipeCalls: [],
+  linkResult: null,
   restore() {
    global.fetch = saved.fetch;
    for (const key of envKeys) {
@@ -50,6 +57,10 @@ function installFakeBackends(openai) {
    if (url.endsWith("/current_food_context")) return Response.json(state.foodContext);
    return Response.json(state.weekContext ?? {week: true, frozen: null, current: state.foodContext, restrictionsChanged: false, householdChanged: false});
   }
+  if (url.startsWith(`${supabaseUrl}/rest/v1/rpc/save_inferred_recipe`) || url.startsWith(`${supabaseUrl}/rest/v1/rpc/update_week_slot_recipe`)
+   || url.startsWith(`${supabaseUrl}/rest/v1/weeks`) || url.startsWith(`${supabaseUrl}/rest/v1/recipe_versions`) || url.startsWith(`${supabaseUrl}/rest/v1/recipes?`)) {
+   return dishCardRest(state, url, init, headers, input);
+  }
   if (url.startsWith(`${supabaseUrl}/rest/v1/rpc/`)) {
    state.rpcAuth.push(headers.get("apikey"));
    if (state.rpcMode === "down") return Response.json({message: "unavailable"}, {status: 503});
@@ -62,6 +73,32 @@ function installFakeBackends(openai) {
   return openai(url, init, state);
  };
  return state;
+}
+
+async function dishCardRest(state, url, init, headers, input) {
+ const text = await (input instanceof Request ? input.text() : init.body);
+ const body = text ? JSON.parse(text) : null;
+ const name = new URL(url).pathname.split("/").pop();
+ state.recipeCalls.push({name, authorization: headers.get("authorization"), body, url});
+ if (state.recipeMode === "down") return Response.json({message: "unavailable"}, {status: 503});
+ const answer = rows => headers.get("accept")?.includes("vnd.pgrst.object")
+  ? (rows.length ? Response.json(rows[0]) : Response.json({code: "PGRST116", message: "no rows"}, {status: 406}))
+  : Response.json(rows);
+ if (name === "weeks") return answer(state.dishWeek ? [state.dishWeek] : []);
+ if (name === "recipes") return answer([...new Set(state.ownCards.map(row => row.recipes.id))].map(id => ({id})));
+ if (name === "recipe_versions") {
+  const id = new URL(url).searchParams.get("id");
+  if (id) return answer(state.savedCards[id.replace(/^eq\./, "")] ? [state.savedCards[id.replace(/^eq\./, "")]] : []);
+  return answer(state.ownCards);
+ }
+ if (name === "save_inferred_recipe") {
+  const versionId = "20000000-0000-4000-8000-000000000001";
+  const card = body.p_card;
+  state.savedCards[versionId] = {id: versionId, version: 1, base_servings: card.baseServings, total_minutes: card.totalMinutes, ingredients: card.ingredients, steps: card.steps,
+   possible_allergens: card.possibleAllergens, review_status: "inferred", recipes: {id: "30000000-0000-4000-8000-000000000001", title: body.p_title, origin: "ai"}};
+  return Response.json({status: "created", recipe_id: "30000000-0000-4000-8000-000000000001", version_id: versionId, version: 1});
+ }
+ return Response.json(state.linkResult ?? {status: "applied", week_id: "40000000-0000-4000-8000-000000000001", version: (state.dishWeek?.version ?? 0) + 1, updated_at: null});
 }
 
 // What current_food_context() returns for a saved profile (null: no profile).
