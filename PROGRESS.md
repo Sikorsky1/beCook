@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-10 · Rama: `audit-opt` (= `main` tras PR #14: B5 y D2 en producción) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-11 · Rama: `audit-opt` (= `main` tras PR #14: B5 y D2 en producción) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -171,7 +171,7 @@ Paso 21 del roadmap.
 | Observaciones | El catálogo es pequeño (27 recetas; 5 compatibles con vegano y 4 tras quitar el pesto), así que con restricciones se agota pronto y se llega a la IA. Las ideas de IA no se distinguen de los menús en `ai_usage_events` (mismo flujo); solo en el log `dish_substitution`. Si se quiere una cuota propia, hace falta migración (`flow` admite solo `menu`, `import`, `shopping`). La edición manual de un plato y los menús importados siguen sin pasar por las reglas (paso 22: advertir sin modificar la elección del usuario). «Otra idea» en la vista previa de Crear menú es el paso 28 (D3) |
 | Integración | 2026-10-09: `audit/p23-login`, `audit/p21-reglas` y `audit/b6-compra` integradas en `audit-opt` (en ese orden, `merge --no-ff`, sin conflictos). Tras cada merge: lint, typecheck, test y build en verde (147 → 167 → 184 tests). Con todo junto: `db:reset` + `db:seed` + `test:db` 358/358. Sin push |
 
-## Iteración D1 — Alta, login y recuperación de cuenta ✅ (2026-10-09, en producción el 2026-10-09; falta parte de la configuración de Auth)
+## Iteración D1 — Alta, login y recuperación de cuenta ✅ (2026-10-09, en producción el 2026-10-09; configuración de Auth completada el 2026-10-11)
 Paso 23 del roadmap.
 
 | Elemento | Detalle |
@@ -185,8 +185,10 @@ Paso 23 del roadmap.
 | Tests | `tests/account-flows.test.cjs` (12). `tests/ai-routes.test.cjs`: destino por defecto `/profile` → `/week`. `scripts/auth-db-tests.cjs` en `test:db` (+7, ejecutados en la integración): alta, contraseña errónea, alta duplicada, recuperación neutra, enlace de recuperación → `/reset-password?next=` con sesión, contraseña nueva sustituye a la anterior, enlace reutilizado rechazado, `redirectTo` ajeno no se respeta. Usa `generateLink` (no envía emails) y borra el usuario |
 | Comprobaciones | lint, typecheck, test 147/147, build (rutas nuevas estáticas). `test:db` ejecutado en la integración (ver fila Integración). Recorrido real contra Auth local en `next dev` :3001 (script Node, sin navegador: la extensión de Chrome no estaba conectada): alta con sesión inmediata; contraseña errónea → mensaje en español; recuperación → email real en Mailpit → 303 a `http://127.0.0.1:3001/reset-password?next=%2Fshopping%2Flist%3Fweek%3D2026-W41` con sesión `recovery`; página 200; contraseña cambiada (antigua rechazada, nueva acepta); mismo enlace otra vez → `otp_expired` → «El enlace ha caducado o ya se ha usado». Usuario de prueba borrado. Las 5 pantallas responden 200 |
 | Auth remoto configurado | 2026-10-09: Redirect URLs configuradas en becook-preview y en becook (producción); Site URL de becook `https://becook.xyz` |
-| Pendiente (Auth remoto) | Plantillas de email en español («Confirma tu cuenta de beCook», «Crea una contraseña nueva para beCook», con `{{ .ConfirmationURL }}`); longitud mínima de contraseña en Auth = 8 (coherente con el cliente); SMTP propio antes de abrir el registro. También por decidir: confirmación de email en producción y protección de contraseñas filtradas (auditoría §11) |
-| Pendiente (manual, Sergio) | Probar en navegador/móvil: alta (con y sin confirmación), login con `next`, recuperación con un email real en Preview tras configurar las URLs, sesión caducada en Crear menú (borrador y semana conservados) |
+| Auth remoto completado | 2026-10-11, en becook-preview y en becook (producción), por Sergio: SMTP propio con Resend (dominio `becook.xyz` verificado, remitente `no-reply@becook.xyz`, `smtp.resend.com:465`); plantillas en español de «Confirm sign up» y «Reset password»; longitud mínima de contraseña = 8 (coherente con el cliente); «Confirm email» **activado** en ambos proyectos |
+| Probado (Sergio, 2026-10-11) | Alta con confirmación por email, recuperación de contraseña y contraseña corta rechazada |
+| Pendiente (Auth remoto) | Protección de contraseñas filtradas (auditoría §11): **no activada** en becook-preview ni en becook |
+| Pendiente (manual, Sergio) | Probar en navegador/móvil: login con `next` y sesión caducada en Crear menú (borrador y semana conservados) |
 | Decisiones a confirmar | Destino por defecto tras login `/week` y tras alta `/profile`; contraseña nueva ≥ 8 en cliente; una sesión ya iniciada que abre `/reset-password` puede cambiar la contraseña sin la anterior (comportamiento por defecto de Supabase con `secure_password_change = false`) |
 | Integración | 2026-10-09: `audit/p23-login`, `audit/p21-reglas` y `audit/b6-compra` integradas en `audit-opt` (en ese orden, `merge --no-ff`, sin conflictos). Tras cada merge: lint, typecheck, test y build en verde (147 → 167 → 184 tests). Con todo junto: `db:reset` + `db:seed` + `test:db` 358/358. Sin push |
 
@@ -197,7 +199,7 @@ Paso 23 del roadmap.
 | Commit de merge | `ab2433b` (2026-10-09 16:28 UTC); `audit-opt` sincronizada por fast-forward |
 | Migración | `shopping_list_per_week` aplicada antes del merge: becook-preview `20261009154554`, becook `20261009161800` (tras backup completo en ~/Backups/becook/2026-10-09). C5 y D1 sin cambios de esquema |
 | Auth | Redirect URLs configuradas en becook-preview y becook; Site URL `https://becook.xyz` |
-| Pendiente | Comprobar el despliegue de producción en Vercel (no revisado en esta sesión); prueba manual en navegador de B6, C5 y D1 (Sergio); resto de Auth de D1 (plantillas en español, mínimo 8, SMTP propio) |
+| Pendiente | Comprobar el despliegue de producción en Vercel (no revisado en esta sesión); prueba manual en navegador de B6, C5 y D1 (Sergio); resto de Auth de D1 (plantillas en español, mínimo 8, SMTP propio): hecho el 2026-10-11, ver D1 |
 
 ## Iteración B7 — Despensa remota segura ✅ (2026-10-09, en producción el 2026-10-09)
 Paso 13 del roadmap (H8 §8; UX 18-20). Rama `audit/b7-despensa` (desde `audit-opt`), sin push.
@@ -364,7 +366,7 @@ Pasos 24 y 25 del roadmap (UX 01-04, 19; Backend H2-H3, H5-H6). Rama `audit/d2-p
 | 20 Reconciliar cambios de plato | C4 | ⏳ | |
 | 21 Reglas culinarias y sustitución | C5 | ✅ | En producción desde 2026-10-09 (PR #12): reglas de títulos, «Otra idea» con catálogo y luego IA (flujo `menu`); ver C5 |
 | 22 Importación y borradores | C6 | ⏳ | |
-| 23 Alta, login y recuperación | D1 | ✅ | En producción desde 2026-10-09 (PR #12): alta, login con `next`, recuperación; Redirect URLs configuradas, faltan plantillas, mínimo 8 y SMTP; ver D1 |
+| 23 Alta, login y recuperación | D1 | ✅ | En producción desde 2026-10-09 (PR #12): alta, login con `next`, recuperación. Auth completado el 2026-10-11 en preview y producción: SMTP Resend, plantillas en español, mínimo 8, confirmación de email activada. Solo queda la protección de contraseñas filtradas; ver D1 |
 | 24 Perfil simplificado | D2 | ✅ | Primera mitad en producción (PR #13); resto en `audit-opt` desde 2026-10-10: datos corporales opcionales y `confirmed_sections`. Migración `20261010090000` en preview y producción (2026-10-10); en producción desde 2026-10-10 (PR #14); ver D2 (segunda mitad) |
 | 25 Onboarding y primer menú | D2 | ✅ | En `audit-opt` desde 2026-10-10: onboarding de 3 pasos con `onboarding_progress`; migración `20261010090000` en preview y producción (2026-10-10); en producción desde 2026-10-10 (PR #14); ver D2 (segunda mitad) |
 | 26 Aplicar propuesta visible y segura | D3 | ⏳ | |
