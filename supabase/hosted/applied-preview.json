@@ -74,6 +74,14 @@
       "source": "supabase/migrations/20261010090000_profile_optional_body_onboarding.sql",
       "sha256": "b30b647482cf75cc7c4e44e7f75c700ab009129cd98a164e48a92f627232753c",
       "appliedAt": "2026-10-10"
+    },
+    {
+      "version": "20261011190843",
+      "name": "week_food_context",
+      "source": "supabase/migrations/20261011090000_week_food_context.sql",
+      "sha256": "f38576d675ca0bde658aa49a91d20952be6899d1f6b0660c5f40b12a1b3aa404",
+      "appliedAt": "2026-10-11",
+      "notes": "Aplicada con el conector de Supabase; 5 funciones y RLS de week_food_contexts comprobadas."
     }
   ]
 }
