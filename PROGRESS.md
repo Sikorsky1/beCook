@@ -616,7 +616,7 @@ Revisión final; migración en becook-preview y producción (ver «Antes de remo
 | profile_optional_body_onboarding (`20261010090000`) | ✅ | ✅ 20261010193641 (conector Supabase) | ✅ 20261010194325 (conector Supabase; backup completo en `~/Backups/becook/2026-10-10-ola3`) |
 | week_food_context (`20261011090000`) | ✅ | ✅ 20261011190843 | ✅ 20261011195740 (tras backup completo en ~/Backups/becook/2026-10-11-ola4) |
 | recipe_cards (`20261012090000`) | ✅ | ✅ 20261011204724 + 20261011204749 (`_apply_week`) | ✅ 20261011205123 + 20261011205211 (tras backup completo en ~/Backups/becook/2026-10-11-ola5) |
-| shopping_item_origins (`20261013090000`) | ✅ | ⏳ | ⏳ (con OK, backup completo y `backup_AAAAMMDD`, antes del merge) |
+| shopping_item_origins (`20261013090000`) | ✅ | ✅ 20261011223501 | ✅ 20261011223838 (tras backup completo en ~/Backups/becook/2026-10-12-ola6) |
 
 ## Decisiones
 | # | Decisión | Fecha |
