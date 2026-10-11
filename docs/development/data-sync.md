@@ -1,4 +1,4 @@
-# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1)
+# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1, C2)
 
 Pasos 06 y 07 del roadmap (H3, H7), sin cambios de base de datos, y paso 10 (B4, H8):
 escrituras de semana transaccionales con versión e idempotencia.
@@ -282,6 +282,49 @@ Pasos 11 y 15 del roadmap (H9). Sin cambios de base de datos.
   perfil actual (restricciones por versión, hogar por número). Si cambió, Semana lo dice y ofrece
   «Crear un menú nuevo para esta semana». Nunca afirma que los platos sean o no compatibles.
 
+## Fichas de plato (C2)
+
+- **Modelo.** `recipes` (identidad: catálogo global con `owner_user_id` NULL y `catalog_key`, o
+  receta propia de un usuario; título y `title_key` = minúsculas y espacios normalizados) y
+  `recipe_versions` (versión inmutable: raciones base 1–12, minutos, ingredientes
+  `{name, quantity|null, unit|null, category, optional}`, ≤ 20 pasos, posibles alérgenos UE-14,
+  `review_status` `reviewed` | `inferred`, `content_hash`). Las versiones no se modifican ni se
+  borran directamente; solo se van con su receta o su cuenta. Solo el catálogo tiene versiones
+  revisadas; un usuario solo tiene estimadas.
+- **Vínculo por comida.** `week_days.lunch_recipe_version_id` / `dinner_recipe_version_id`
+  (FK `ON DELETE RESTRICT`). NULL = solo título (menús anteriores a C2) o comida libre. En el
+  cliente, `WeekDay.lunchRecipe` / `dinnerRecipe` = `{versionId}`; ausente = sin ficha.
+- **Escrituras.** Sin permisos directos sobre las tablas de recetas. `apply_week` (misma firma)
+  acepta las claves opcionales de vínculo por día: ausentes → conserva el vínculo; `null` → lo
+  quita. `update_week_slot_recipe` enlaza una sola comida con la versión de semana esperada
+  (`applied | duplicate | conflict`, como `update_week_slot`, que no cambia).
+  `save_inferred_recipe` guarda una ficha estimada como receta propia (siempre `inferred`,
+  dueño `auth.uid()`), reutiliza la receta del mismo título y crea versión nueva solo si cambia el
+  contenido.
+- **Integridad en cualquier camino de escritura** (trigger `week_days_recipe_links`, también para el
+  cliente anterior): comida libre → sin ficha; cambia el título (otra `title_key`) sin cambiar el
+  vínculo → se quita; el vínculo debe ser del catálogo o del dueño de la semana (23503); un vínculo
+  cuyo título no es el del plato se descarta. Así una copia antigua del dispositivo nunca deja una
+  ficha pegada a otro plato.
+- **Edición de un plato** (`saveWeekSlot`): la ficha se conserva si el título es el mismo (mayúsculas
+  y espacios aparte); si el título nuevo es exactamente una receta del catálogo con versión
+  revisada, se enlaza (p. ej. «Otra idea»). **Aplicar un menú** (`applyMenuToWeek`) enlaza igual por
+  título exacto. Hoy el catálogo no tiene versiones revisadas: no se enlaza nada.
+- **Ficha estimada por IA** (`POST /api/dish-card`, un plato, solo con sesión): guard de A3;
+  comprueba antes de gastar que la comida sigue siendo ese plato en la versión que conoce el
+  cliente (409 si no); si el usuario ya tiene ficha de ese título, la reutiliza sin IA; si no, un
+  intento (`beginAiUsage` con el flujo `shopping`, sin reintento), validación del esquema (422 sin
+  reparar), `save_inferred_recipe` y `update_week_slot_recipe` con el JWT del usuario. El cliente
+  vuelve a leer la semana para tener el vínculo y la versión nueva. Sin generación por lotes.
+- **Menús históricos.** La ficha dice «Solo tenemos el título». Si el título coincide con el
+  catálogo y hay versión revisada → «Usar receta del catálogo» (sin IA); si es del catálogo sin
+  versión revisada → «Ficha pendiente de revisión»; en cualquier caso, con sesión, «Crear ficha
+  estimada (IA)». Nada se crea ni se enlaza automáticamente. Invitados: solo catálogo, sin IA.
+- **Borrador del catálogo.** `src/data/recipe-cards/catalog-v1.json` (estado `draft_unreviewed`)
+  no se carga en la base ni en la app; publicar fichas revisadas requiere una migración nueva.
+- **Fuera de alcance** (C3/C4): validar restricciones contra ingredientes, compra desde las fichas,
+  escalado de cantidades y firma de compra (sigue basada en títulos).
+
 ## Datos anteriores a B1 (sin ámbito)
 
 Al arrancar, las claves `becook-profile`, `becook-pantry-base` y
@@ -327,3 +370,10 @@ Nunca se asignan a una cuenta automáticamente. Con sesión iniciada aparece
   reemplazar», propuesta por identidad y semana, respuesta perdida, pendiente superado en otro
   dispositivo, dos lecturas a la vez, reintento sin conexión, compra pendiente al cerrar sesión y
   estados visibles.
+- `tests/recipe-cards.test.cjs`: esquema de fichas, título exacto del catálogo, identidades de la
+  migración, borrador del catálogo, vínculos en el modelo de semana, edición y enlace por
+  repositorio, vista de la ficha y `/api/dish-card` (409 antes de gastar, reutilización sin IA,
+  un intento con cuota `shopping`, 422/502/429).
+- `scripts/recipe-cards-db-tests.cjs` (en `test:db`): catálogo para invitados, guardado de fichas
+  estimadas, RLS y permisos, inmutabilidad, enlace y edición por la app, comprobaciones de
+  propiedad y título, catálogo revisado, despliegue con el cliente anterior y borrado de cuenta.
