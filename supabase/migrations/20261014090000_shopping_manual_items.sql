@@ -9,7 +9,8 @@
 -- edit_shopping_items is the only function that removes rows here (DELETE of items added by hand,
 -- with the transaction-local permission becook.shopping_edit); it is SECURITY INVOKER (RLS applies).
 -- Applied remotely only by Sergio (becook-preview first, then becook with explicit OK); see
--- docs/development/progress-d5.md for the remote procedure (without BEGIN/COMMIT and SET LOCAL).
+-- PROGRESS.md (D5, «Aplicación remota») for the remote procedure: with the Supabase connector only
+-- BEGIN and COMMIT are removed (it opens its own transaction); the SET LOCAL lines stay.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '120s';
