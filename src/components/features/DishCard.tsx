@@ -139,6 +139,7 @@ export function DishCard({
   onWeekChanged,
 }: DishCardProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const titleId = `${useId()}-dish-card-title`;
   const day = slot && weekDays ? (weekDays.find((candidate) => candidate.day === slot.day) ?? null) : null;
   const title = day && slot ? day[slot.meal] : "";
@@ -226,6 +227,9 @@ export function DishCard({
     abortRef.current = null;
     settle(action);
     setBusy(null);
+    // The button that asked for the card is gone: take the focus to the dish title, so keyboard
+    // and screen reader users land at the start of the new card instead of on the page body.
+    if (action.status === "linked" && action.card) requestAnimationFrame(() => titleRef.current?.focus());
   };
 
   const signedIn = identity.userId !== null;
@@ -246,7 +250,7 @@ export function DishCard({
             <p className="t-meta">
               {mealLabels[slot.meal]} · {slot.day}
             </p>
-            <h2 id={titleId} className="t-h2 mt-1 text-[color:var(--color-foreground)] [overflow-wrap:anywhere]">
+            <h2 id={titleId} ref={titleRef} tabIndex={-1} className="t-h2 mt-1 text-[color:var(--color-foreground)] [overflow-wrap:anywhere]">
               {title}
             </h2>
           </div>
@@ -339,6 +343,9 @@ export function DishCard({
             <SecondaryButton
               onClick={() => {
                 const current = slot;
+                // Close the native dialog now, so it gives focus back to the dish before the
+                // editor mounts and its field takes the focus (not after, which would steal it).
+                dialogRef.current?.close();
                 close();
                 onChangeDish(current);
               }}
