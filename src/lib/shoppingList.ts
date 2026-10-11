@@ -45,6 +45,14 @@ export type ShoppingOrigin = {
   quantity: number | null;
 };
 
+// D5 (roadmap step 31): an item added by hand to the week's list (item_key «manual|…»), and a
+// quantity the user adjusted on an item of the dishes (kept while those dishes stay the same).
+export type ShoppingManualOrigin = { kind: "manual"; quantity: number | null };
+export type ShoppingAdjustOrigin = { kind: "user_adjust"; quantity: number | null };
+
+// What a stored row may carry: dish origins, plus at most one manual or user_adjust entry.
+export type ShoppingRowOrigin = ShoppingOrigin | ShoppingManualOrigin | ShoppingAdjustOrigin;
+
 // An item as stored (account row or device copy). quantity null = «al gusto». itemKey and origins
 // are absent on lists made before C4.
 export type StoredShoppingItem = {
@@ -53,7 +61,7 @@ export type StoredShoppingItem = {
   unit: string;
   category: SupermarketCategory;
   itemKey?: string | null;
-  origins?: ShoppingOrigin[] | null;
+  origins?: ShoppingRowOrigin[] | null;
 };
 
 // One visible line of the list.
@@ -63,26 +71,42 @@ export type ShoppingViewItem = {
   quantity: number | null;
   unit: string;
   category: SupermarketCategory;
-  origins: ShoppingOrigin[];
+  origins: ShoppingRowOrigin[];
   // Bought, but the dishes now need more than that.
   needsReview: boolean;
   // Bought, and no dish needs it any more.
   removed: boolean;
+  // D5: added by hand (not from the dishes) · its quantity was changed by the user · its quantity
+  // can be changed here (one row with an amount).
+  manual: boolean;
+  adjusted: boolean;
+  editable: boolean;
 };
 
 const originKinds = new Set<ShoppingOriginKind>(["card_reviewed", "card_inferred", "ai_title"]);
 
-// Origins as read from the account (null: none recorded). Entries outside the shape are dropped.
-export function parseShoppingOrigins(value: unknown): ShoppingOrigin[] | null {
+export const isDishOrigin = (origin: ShoppingRowOrigin): origin is ShoppingOrigin => originKinds.has(origin.kind as ShoppingOriginKind);
+export const isCardOrigin = (origin: ShoppingRowOrigin) => origin.kind === "card_reviewed" || origin.kind === "card_inferred";
+export const dishOriginsOf = (origins: ShoppingRowOrigin[] | null | undefined) => (origins ?? []).filter(isDishOrigin);
+
+const validQuantity = (quantity: unknown) =>
+  quantity === null || (typeof quantity === "number" && Number.isFinite(quantity) && quantity >= 0);
+
+// Origins as read from the account (null: none recorded). Entries outside the shape are dropped
+// (including kinds this client does not know).
+export function parseShoppingOrigins(value: unknown): ShoppingRowOrigin[] | null {
   if (!Array.isArray(value)) return null;
-  return value.flatMap((entry) => {
+  return value.flatMap((entry): ShoppingRowOrigin[] => {
     if (!entry || typeof entry !== "object") return [];
     const { day, meal, dish, kind, versionId, quantity } = entry as Record<string, unknown>;
+    if (kind === "manual" || kind === "user_adjust") {
+      return validQuantity(quantity) ? [{ kind, quantity: quantity as number | null }] : [];
+    }
     if (!Number.isInteger(day) || (day as number) < 0 || (day as number) > 6) return [];
     if (meal !== "lunch" && meal !== "dinner") return [];
     if (typeof dish !== "string" || dish.length === 0 || dish.length > 200) return [];
     if (!originKinds.has(kind as ShoppingOriginKind)) return [];
-    if (quantity !== null && (typeof quantity !== "number" || !Number.isFinite(quantity) || quantity < 0)) return [];
+    if (!validQuantity(quantity)) return [];
     return [{
       day: day as number,
       meal,

@@ -29,14 +29,17 @@ test("every role=tablist is a complete tab pattern: tabs, panels, aria-controls 
   }
 });
 
-test("category selectors of Compra and Despensa are toggle-button groups, not tabs", () => {
-  for (const file of ["src/components/pages/ShoppingListPage.tsx", "src/components/pages/PantryPage.tsx"]) {
-    const source = read(file);
-    assert.ok(!source.includes('role="tablist"'), file);
-    assert.match(source, /role="group"\s+aria-label="Categorías de (compra|despensa)"/);
-    // The pill announces its progress in words, not just «2/5».
-    assert.match(source, /aria-label=\{`\$\{category\}: \$\{\w+\} de \$\{total\} \w+`\}/);
-  }
+test("Despensa's category selector is a toggle-button group and Compra's sections are links, not tabs", () => {
+  const pantry = read("src/components/pages/PantryPage.tsx");
+  assert.ok(!pantry.includes('role="tablist"'));
+  assert.match(pantry, /role="group"\s+aria-label="Categorías de despensa"/);
+  // The pill announces its progress in words, not just «2/5».
+  assert.match(pantry, /aria-label=\{`\$\{category\}: \$\{\w+\} de \$\{total\} \w+`\}/);
+  // D5: Compra is one continuous list; its quick links name each section and its progress.
+  const shopping = read("src/components/pages/ShoppingListPage.tsx");
+  assert.ok(!shopping.includes('role="tablist"'));
+  assert.match(shopping, /<nav aria-label="Secciones de la lista"/);
+  assert.match(shopping, /aria-label=\{`\$\{capitalize\(section\.category\)\}: \$\{section\.done\} de \$\{section\.total\} comprados`\}/);
 });
 
 test("chips built on a visually hidden input show the focus on their label", () => {

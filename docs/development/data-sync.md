@@ -279,6 +279,65 @@ encontrar las filas que tenía, relee la cuenta en lugar de recrearlas (escenari
 `scripts/pantry-db-tests.cjs`, con una copia congelada del cliente de ab2433b en
 `tests/fixtures/`).
 
+## Compra completa, artículos manuales y acciones de despensa (D5)
+
+Pasos 30 y 31 del roadmap. Código en `src/lib/data/shopping.ts` (ediciones), `src/lib/shopping/`
+(`reconcile.ts`, `units.ts`), `src/lib/data/pantry.ts` y `src/lib/pantryStorage.ts`; migración
+`20261014090000_shopping_manual_items` (aditiva: trigger `shopping_items_guard_manual` y función
+`edit_shopping_items`, `SECURITY INVOKER`, solo `authenticated`; sin columnas nuevas ni cambios en
+funciones existentes).
+
+- **Artículo manual** (algo que no está en el menú): solo en la lista de esa semana y solo si la
+  semana ya tiene lista. Convención sin columnas nuevas: `item_key = 'manual|<nombre normalizado>'`
+  (uno por nombre en la lista, sin mayúsculas, acentos ni plurales simples) y
+  `origins = [{kind: "manual", quantity}]`. Se ve siempre como línea propia («Añadido por ti»),
+  aunque coincida con un ingrediente de los platos.
+- **`edit_shopping_items(año, semana, lista, ops)`** sobre la lista vigente (si no lo es →
+  `stale`, nada escrito; semana bloqueada `FOR SHARE`, como los marcados). `add` (≤ 50) con id
+  elegido por el cliente: reenvío → `duplicate`; misma clave activa → `existing` (dos dispositivos
+  a la vez → una fila). `set_quantity` (≤ 50) sobre cualquier fila activa: un manual cambia
+  cantidad y unidad; un artículo de los platos conserva su unidad (y su clave) y guarda sus
+  orígenes de platos más `{kind: "user_adjust", quantity}`. `remove` (≤ 50) solo de manuales
+  (`not_manual` si no). Nunca cambia `week_signature`, `ingredient_basis` ni `reconciled_at`.
+  Resultado `{status: applied | duplicate | existing | stale | no_week, list, results}`.
+- **Protección en servidor** (`shopping_items_guard_manual`, BEFORE UPDATE OR DELETE): un artículo
+  manual solo lo borra o cambia `edit_shopping_items` (permiso local de transacción
+  `becook.shopping_edit`); cualquier otro DELETE se ignora en silencio y cualquier otro UPDATE
+  también, salvo que solo cambie el marcado (`checked`, `checked_quantity`, `needs_review`,
+  `updated_at`). Borrar la lista, la semana o la cuenta lo borra (cascada, profundidad de trigger
+  > 1, como en C2).
+- **Reconciliación** (C4): `diffShoppingList` excluye los manuales; un ajuste `user_adjust` se
+  respeta mientras los orígenes de platos de ese ingrediente sean los mismos; si cambian, la fila se
+  recalcula (se pierde el ajuste) y la vista lo avisa (`discardedAdjustments`: «Hemos recalculado
+  cantidades que habías cambiado»).
+- **Sin conexión**: cada edición se aplica al momento en la copia del dispositivo y queda en
+  `pendingEdits` (con su id y un token por edición); se envía en la misma cola que los marcados
+  (un marcado de un artículo añadido sin conexión espera a que llegue el artículo) y antes que
+  ellos al cargar o reconciliar. La última cantidad de una fila gana; un `add` nunca se descarta
+  (si su respuesta se perdió, el reenvío es `duplicate`). Lista sustituida o semana borrada →
+  ediciones descartadas con el aviso de cambios no guardados. Una lista generada sin conexión se
+  guarda sin sus manuales y estos se envían después como ediciones.
+- **`fromCards`** cuenta solo orígenes de ficha (`card_reviewed`, `card_inferred`); un manual, un
+  ajuste o un tipo desconocido no es una ficha. `parseShoppingOrigins` acepta `manual` y
+  `user_adjust` y sigue descartando tipos desconocidos.
+- **Despensa desde Compra**: «Se me acabó» en un artículo omitido por estar en la despensa →
+  `set_pantry_items_active(false)` del artículo de despensa con ese nombre (mismo criterio que la
+  clasificación: sin mayúsculas, acentos ni plurales simples); vuelve a «Te falta comprar».
+  «Añadir a despensa» en un comprado → lo añade (sección por la de la tienda: despensa → básicos,
+  congelados → congelados, resto → otros) o, si estaba agotado, lo marca «Tengo».
+- **Despensa**: «Tengo / Se acabó» fija el valor (no alterna); varios básicos en una sola
+  `add_pantry_items`; borrar oculta el artículo al momento y lo borra en la cuenta tras ~6 s salvo
+  «Deshacer» (salir de la página o cambiar de identidad confirma lo pendiente).
+- Invitado: manuales, cantidades y despensa solo en el dispositivo.
+
+Despliegue: migración antes que el código. Con la migración aplicada, el cliente de `main`
+(f810818, copias congeladas en `tests/fixtures/legacy-shopping-*-f810818.ts`) lee los manuales como
+artículos normales (su lector descarta el origen `manual`), puede marcarlos, y cuando su
+reconciliación pide quitarlos el trigger los deja (escenario de `scripts/shopping-manual-db-tests.cjs`).
+Límites conocidos de ese cliente: si cae al respaldo de lista nueva, los manuales se quedan en la
+lista anterior; y al reconciliar un artículo de platos sobrescribe su cantidad ajustada. Sin la
+migración, el cliente nuevo guarda las ediciones como pendientes en el dispositivo.
+
 ## Aplicar un menú y estados de guardado (B5)
 
 Pasos 11 y 15 del roadmap (H9). Sin cambios de base de datos.

@@ -103,3 +103,13 @@ export function shoppingItemKey(category: SupermarketCategory, name: string, dim
 export function storedItemKey(item: { name: string; quantity: number | null; unit: string | null; category: SupermarketCategory; itemKey?: string | null }) {
   return item.itemKey || shoppingItemKey(item.category, item.name, normalizeAmount(item.quantity, item.unit).dimension);
 }
+
+// D5: an item added by hand. One per name in a list (whatever its unit or section), never mixed with
+// the lines of the dishes (their keys never start with «manual|»).
+export const MANUAL_KEY_PREFIX = "manual|";
+
+export function manualItemKey(name: string) {
+  return `${MANUAL_KEY_PREFIX}${shoppingNameKey(name)}`.slice(0, 200);
+}
+
+export const isManualKey = (key: string | null | undefined) => typeof key === "string" && key.startsWith(MANUAL_KEY_PREFIX);
