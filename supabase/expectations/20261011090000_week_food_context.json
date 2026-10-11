@@ -1,0 +1,320 @@
+{
+  "migration": "20261011090000_week_food_context",
+  "replaces": {},
+  "supersedes": {
+    "schema": "Nothing: purely additive (one new table week_food_contexts and five new functions). weeks, week_days, profiles, apply_week and update_week_slot are not redefined; no row is modified.",
+    "client": [
+      "/api/generate-menu and /api/substitute-dish took the profile (restrictions, allergies) from the request body; now the server reads it with current_food_context() and ignores body.profile.",
+      "/api/generate-shopping-list assumed 2 people and received no restrictions; now it reads the week's frozen context with week_food_context_status().",
+      "Shopping signature with a constant context (2 people, no restrictions); now the week's frozen servings and restrictions version (legacy constant kept for weeks without a context)."
+    ],
+    "rollout": "The previous client keeps applying weeks with this migration applied (no freeze: they read as weeks before C1). scripts/food-context-db-tests.cjs, scenario 9. Order: migration -> code."
+  },
+  "columns": [
+    {
+      "table_name": "week_food_contexts",
+      "name": "week_id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_food_contexts",
+      "name": "user_id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_food_contexts",
+      "name": "servings",
+      "type": "smallint",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_food_contexts",
+      "name": "servings_source",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_food_contexts",
+      "name": "household_size",
+      "type": "smallint",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_food_contexts",
+      "name": "restrictions",
+      "type": "jsonb",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_food_contexts",
+      "name": "context_version",
+      "type": "text",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_food_contexts",
+      "name": "profile_updated_at",
+      "type": "timestamp with time zone",
+      "not_null": false,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_food_contexts",
+      "name": "request_key",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_food_contexts",
+      "name": "frozen_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    }
+  ],
+  "tables": [
+    {
+      "relname": "week_food_contexts",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "week_food_contexts_servings_check",
+      "table_name": "week_food_contexts",
+      "definition": "CHECK (((servings >= 1) AND (servings <= 10)))"
+    },
+    {
+      "conname": "week_food_contexts_servings_source_check",
+      "table_name": "week_food_contexts",
+      "definition": "CHECK ((servings_source = ANY (ARRAY['generation'::text, 'profile'::text, 'default'::text])))"
+    },
+    {
+      "conname": "week_food_contexts_household_size_check",
+      "table_name": "week_food_contexts",
+      "definition": "CHECK (((household_size >= 1) AND (household_size <= 10)))"
+    },
+    {
+      "conname": "week_food_contexts_restrictions_check",
+      "table_name": "week_food_contexts",
+      "definition": "CHECK (((restrictions IS NULL) OR (jsonb_typeof(restrictions) = 'object'::text)))"
+    },
+    {
+      "conname": "week_food_contexts_context_version_check",
+      "table_name": "week_food_contexts",
+      "definition": "CHECK ((char_length(context_version) <= 40))"
+    },
+    {
+      "conname": "week_food_contexts_pkey",
+      "table_name": "week_food_contexts",
+      "definition": "PRIMARY KEY (week_id)"
+    },
+    {
+      "conname": "week_food_contexts_user_id_fkey",
+      "table_name": "week_food_contexts",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "week_food_contexts_week_owner_fkey",
+      "table_name": "week_food_contexts",
+      "definition": "FOREIGN KEY (week_id, user_id) REFERENCES weeks(id, user_id) ON DELETE CASCADE"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "week_food_contexts",
+      "indexname": "week_food_contexts_pkey",
+      "indexdef": "CREATE UNIQUE INDEX week_food_contexts_pkey ON public.week_food_contexts USING btree (week_id)"
+    },
+    {
+      "tablename": "week_food_contexts",
+      "indexname": "week_food_contexts_user_id_idx",
+      "indexdef": "CREATE INDEX week_food_contexts_user_id_idx ON public.week_food_contexts USING btree (user_id)"
+    }
+  ],
+  "policies": [
+    {
+      "tablename": "week_food_contexts",
+      "policyname": "week_food_contexts_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(user_id = ( SELECT auth.uid() AS uid))",
+      "with_check": null
+    }
+  ],
+  "functions": [
+    {
+      "proname": "food_context_restrictions",
+      "definition": "CREATE OR REPLACE FUNCTION public.food_context_restrictions(p_dietary_restrictions text[], p_allergies text[], p_other_allergies text, p_disliked_foods text)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_text text := btrim(coalesce(p_disliked_foods, ''));\n  v_foods text[];\nBEGIN\n  BEGIN\n    IF v_text LIKE '[%' THEN\n      v_foods := ARRAY(SELECT jsonb_array_elements_text(v_text::jsonb));\n    ELSIF v_text LIKE '{%' THEN\n      v_foods := v_text::text[];\n    END IF;\n  EXCEPTION WHEN others THEN\n    v_foods := NULL;\n  END;\n  IF v_foods IS NULL THEN\n    v_foods := regexp_split_to_array(v_text, '[,;\\n]');\n  END IF;\n\n  RETURN jsonb_build_object(\n    'dietaryRestrictions', coalesce((\n      SELECT jsonb_agg(DISTINCT r ORDER BY r) FROM unnest(p_dietary_restrictions) AS r\n      WHERE r IS NOT NULL AND r <> 'none'), '[]'::jsonb),\n    'allergies', coalesce((\n      SELECT jsonb_agg(DISTINCT a ORDER BY a) FROM unnest(p_allergies) AS a WHERE a IS NOT NULL), '[]'::jsonb),\n    'otherAllergies', regexp_replace(btrim(coalesce(p_other_allergies, '')), '\\s+', ' ', 'g'),\n    'dislikedFoods', coalesce((\n      SELECT jsonb_agg(DISTINCT f ORDER BY f)\n      FROM (SELECT lower(regexp_replace(btrim(food), '\\s+', ' ', 'g')) AS f FROM unnest(v_foods) AS food) AS cleaned\n      WHERE f IS NOT NULL AND f <> ''), '[]'::jsonb)\n  );\nEND;\n$function$\n"
+    },
+    {
+      "proname": "food_context_version",
+      "definition": "CREATE OR REPLACE FUNCTION public.food_context_version(p_restrictions jsonb)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO ''\nAS $function$\n  SELECT CASE WHEN p_restrictions IS NULL THEN 'fc1:none' ELSE 'fc1:' || md5(p_restrictions::text) END;\n$function$\n"
+    },
+    {
+      "proname": "current_food_context",
+      "definition": "CREATE OR REPLACE FUNCTION public.current_food_context()\n RETURNS jsonb\n LANGUAGE sql\n STABLE\n SET search_path TO ''\nAS $function$\n  SELECT coalesce((\n    SELECT jsonb_build_object(\n      'found', true,\n      'householdSize', p.household_size,\n      'restrictions', r.restrictions,\n      'version', public.food_context_version(r.restrictions),\n      'preferences', jsonb_build_object(\n        'goals', to_jsonb(p.goals),\n        'otherGoal', coalesce(p.other_goal, ''),\n        'weeklyTrainingDays', p.weekly_training_days,\n        'trainingTypes', to_jsonb(p.training_types)),\n      'updatedAt', p.updated_at)\n    FROM public.profiles AS p\n    CROSS JOIN LATERAL (SELECT public.food_context_restrictions(\n      p.dietary_restrictions, p.allergies, p.other_allergies, p.disliked_foods) AS restrictions) AS r\n    WHERE p.user_id = (SELECT auth.uid())\n    LIMIT 1\n  ), jsonb_build_object('found', false));\n$function$\n"
+    },
+    {
+      "proname": "freeze_week_food_context",
+      "definition": "CREATE OR REPLACE FUNCTION public.freeze_week_food_context(p_iso_year integer, p_iso_week integer, p_request_key uuid, p_generation_request_id uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_week public.weeks%ROWTYPE;\n  v_existing public.week_food_contexts%ROWTYPE;\n  v_profile public.profiles%ROWTYPE;\n  v_restrictions jsonb;\n  v_servings integer;\n  v_source text;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'freeze_week_food_context: authentication required';\n  END IF;\n  IF p_request_key IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'freeze_week_food_context: request key required';\n  END IF;\n\n  SELECT * INTO v_week FROM public.weeks\n  WHERE user_id = v_user AND iso_year = p_iso_year AND iso_week = p_iso_week\n  FOR UPDATE;\n  IF NOT FOUND OR NOT (p_request_key = ANY (v_week.request_keys)) THEN\n    RETURN jsonb_build_object('status', 'not_applied');\n  END IF;\n\n  SELECT * INTO v_existing FROM public.week_food_contexts WHERE week_id = v_week.id;\n  IF FOUND AND v_existing.request_key = p_request_key THEN\n    RETURN jsonb_build_object('status', 'duplicate', 'servings', v_existing.servings,\n      'version', v_existing.context_version);\n  END IF;\n  -- request_keys is newest first: a late retry of an older apply never replaces a newer context.\n  IF FOUND AND array_position(v_week.request_keys, v_existing.request_key)\n      < array_position(v_week.request_keys, p_request_key) THEN\n    RETURN jsonb_build_object('status', 'superseded', 'servings', v_existing.servings,\n      'version', v_existing.context_version);\n  END IF;\n\n  SELECT * INTO v_profile FROM public.profiles WHERE user_id = v_user LIMIT 1;\n  IF FOUND THEN\n    v_restrictions := public.food_context_restrictions(v_profile.dietary_restrictions,\n      v_profile.allergies, v_profile.other_allergies, v_profile.disliked_foods);\n  END IF;\n\n  IF p_generation_request_id IS NOT NULL THEN\n    SELECT people_count INTO v_servings FROM public.menu_generation_requests\n    WHERE id = p_generation_request_id AND user_id = v_user AND created_week_id = v_week.id;\n  END IF;\n  IF v_servings IS NOT NULL THEN\n    v_source := 'generation';\n  ELSIF v_profile.household_size IS NOT NULL THEN\n    v_servings := v_profile.household_size;\n    v_source := 'profile';\n  ELSE\n    v_servings := 2;\n    v_source := 'default';\n  END IF;\n\n  INSERT INTO public.week_food_contexts (week_id, user_id, servings, servings_source, household_size,\n    restrictions, context_version, profile_updated_at, request_key, frozen_at)\n  VALUES (v_week.id, v_user, least(greatest(v_servings, 1), 10), v_source, v_profile.household_size,\n    v_restrictions, public.food_context_version(v_restrictions), v_profile.updated_at, p_request_key, now())\n  ON CONFLICT (week_id) DO UPDATE\n  SET servings = EXCLUDED.servings, servings_source = EXCLUDED.servings_source,\n      household_size = EXCLUDED.household_size, restrictions = EXCLUDED.restrictions,\n      context_version = EXCLUDED.context_version, profile_updated_at = EXCLUDED.profile_updated_at,\n      request_key = EXCLUDED.request_key, frozen_at = EXCLUDED.frozen_at;\n\n  RETURN jsonb_build_object('status', 'frozen', 'servings', least(greatest(v_servings, 1), 10),\n    'version', public.food_context_version(v_restrictions));\nEND;\n$function$\n"
+    },
+    {
+      "proname": "week_food_context_status",
+      "definition": "CREATE OR REPLACE FUNCTION public.week_food_context_status(p_iso_year integer, p_iso_week integer)\n RETURNS jsonb\n LANGUAGE sql\n STABLE\n SET search_path TO ''\nAS $function$\n  WITH week AS (\n    SELECT w.id FROM public.weeks AS w\n    WHERE w.user_id = (SELECT auth.uid()) AND w.iso_year = p_iso_year AND w.iso_week = p_iso_week\n    LIMIT 1\n  ), frozen AS (\n    SELECT c.* FROM public.week_food_contexts AS c JOIN week ON week.id = c.week_id\n  ), current_context AS (\n    SELECT public.current_food_context() AS ctx\n  )\n  SELECT jsonb_build_object(\n    'week', EXISTS (SELECT 1 FROM week),\n    'frozen', (SELECT jsonb_build_object(\n      'servings', f.servings, 'servingsSource', f.servings_source, 'householdSize', f.household_size,\n      'restrictions', f.restrictions, 'version', f.context_version, 'frozenAt', f.frozen_at)\n      FROM frozen AS f),\n    'current', (SELECT ctx - 'preferences' FROM current_context),\n    'restrictionsChanged', coalesce((\n      SELECT f.context_version IS DISTINCT FROM\n        CASE WHEN (cc.ctx ->> 'found')::boolean THEN cc.ctx ->> 'version' ELSE 'fc1:none' END\n      FROM frozen AS f, current_context AS cc), false),\n    'householdChanged', coalesce((\n      SELECT f.household_size IS NOT NULL AND (cc.ctx ->> 'found')::boolean\n        AND f.household_size <> (cc.ctx ->> 'householdSize')::integer\n      FROM frozen AS f, current_context AS cc), false)\n  );\n$function$\n"
+    }
+  ],
+  "grants": [
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "week_food_contexts",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    }
+  ],
+  "function_grants": [
+    {
+      "routine_name": "food_context_restrictions",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "food_context_version",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "current_food_context",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "freeze_week_food_context",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "week_food_context_status",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "food_context_restrictions",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "food_context_version",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "food_context_restrictions",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "food_context_version",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "current_food_context",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "freeze_week_food_context",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "week_food_context_status",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    }
+  ]
+}

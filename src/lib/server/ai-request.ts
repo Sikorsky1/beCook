@@ -2,7 +2,7 @@ import { createClient, type User } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 export type AiRequestGuardResult =
-  | { ok: true; user: User; body: Record<string, unknown> }
+  | { ok: true; user: User; body: Record<string, unknown>; accessToken: string }
   | { ok: false; response: NextResponse };
 
 function reject(status: number, error: string): AiRequestGuardResult {
@@ -92,5 +92,5 @@ export async function guardAiRequest(
     return reject(400, "La petición no tiene el formato esperado.");
   }
 
-  return { ok: true, user, body: body as Record<string, unknown> };
+  return { ok: true, user, body: body as Record<string, unknown>, accessToken: token };
 }

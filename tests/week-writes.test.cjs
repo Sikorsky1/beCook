@@ -23,7 +23,8 @@ const days = dish => [
 
 // The account: one week row (version, days) and the answers the next RPC calls should give.
 function installSyntheticSupabase() {
- const state = {week: null, calls: [], next: []};
+ // freezes: C1 food-context freezes, kept apart from the week writes; freezeError: make them fail.
+ const state = {week: null, calls: [], next: [], freezes: [], freezeError: null};
  const rowsOf = week => week.days.map(day => ({
   day_name: day.day_name, position: day.position, lunch_status: day.lunch_status,
   lunch_dish_name: day.lunch_dish_name, dinner_status: day.dinner_status, dinner_dish_name: day.dinner_dish_name,
@@ -42,6 +43,10 @@ function installSyntheticSupabase() {
  const saved = {rpc: supabase.rpc, from: supabase.from};
  supabase.from = query;
  supabase.rpc = async (name, params) => {
+  if (name === "freeze_week_food_context") {
+   state.freezes.push(params);
+   return state.freezeError ? {data: null, error: {message: state.freezeError}} : {data: {status: "frozen", servings: 2, version: "fc1:test"}, error: null};
+  }
   state.calls.push({name, params});
   const scripted = state.next.shift();
   if (scripted) return scripted(state, params);
@@ -226,4 +231,41 @@ test("applying a menu over a pending copy the server keeps refusing: read withou
  assert.equal(account.calls.at(-1).params.p_expected_version, 1);
  const cached = readEnvelope(asA.scope, "week", "2026-W41");
  assert.deepEqual([cached.pending, cached.remoteVersion, cached.data.find(day => day.day === "Lunes").lunch], [false, "2", "Menú L"]);
+});
+
+test("C1: after a whole-week write the week's food context is frozen with the same request key (never after a dish edit)", async () => {
+ const requestKey = "33333333-3333-4333-8333-333333333333";
+ assert.equal((await repos.saveWeek(asA, week41, days("Menú"), {requestKey, generationRequestId: "g7"})).status, "synced");
+ assert.deepEqual(account.freezes, [{p_iso_year: 2026, p_iso_week: 41, p_request_key: requestKey, p_generation_request_id: "g7"}]);
+ assert.equal(account.calls.length, 1, "freezing is not a week write");
+
+ // A lost answer resent: apply_week says duplicate and the freeze is repeated (idempotent in the database).
+ account.next.push(state => ({data: {status: "duplicate", week_id: "w1", version: state.week.version, updated_at: null}, error: null}));
+ await repos.saveWeek(asA, week41, days("Menú"), {overwrite: true, requestKey, generationRequestId: "g7"});
+ assert.equal(account.freezes.length, 2);
+ assert.equal(account.freezes[1].p_request_key, requestKey);
+
+ // Dish edit: only that meal, the week keeps the context it was planned with.
+ const edited = days("Menú").map(day => day.day === "Lunes" ? {...day, lunch: "Otro plato"} : day);
+ assert.equal((await repos.saveWeekSlot(asA, week41, edited, {day: "Lunes", meal: "lunch"})).status, "synced");
+ assert.equal(account.calls.at(-1).name, "update_week_slot");
+ assert.equal(account.freezes.length, 2);
+
+ // Conflict: nothing written, nothing frozen.
+ account.week.version = 40;
+ assert.equal((await repos.saveWeek(asA, week41, days("Pisada"))).status, "conflict");
+ assert.equal(account.freezes.length, 2);
+});
+
+test("C1: a failed freeze never turns a saved menu into an error", async () => {
+ account.freezeError = "network";
+ const warn = console.warn;
+ console.warn = () => {};
+ try {
+  assert.equal((await repos.saveWeek(asA, week41, days("Menú"))).status, "synced");
+ } finally {
+  console.warn = warn;
+ }
+ assert.equal(readEnvelope(asA.scope, "week", "2026-W41").pending, false);
+ assert.equal(account.freezes.length, 1);
 });

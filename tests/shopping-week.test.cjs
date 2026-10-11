@@ -46,7 +46,8 @@ function createAccount() {
     const week = st.weeks.get(k);
     if (!week) return {week: null, list: null};
     const list = current(k);
-    return {week: {days: structuredClone(week.days), version: week.version, updatedAt: String(week.updatedAt).padStart(6, "0")}, list: list && asList(list)};
+    return {week: {days: structuredClone(week.days), version: week.version, updatedAt: String(week.updatedAt).padStart(6, "0"),
+     ...(week.foodContext !== undefined ? {foodContext: week.foodContext} : {})}, list: list && asList(list)};
    },
    async save({signature, items, expectedWeekVersion}) {
     st.calls.save++;
@@ -72,9 +73,10 @@ function createAccount() {
   };
  };
  // A write of the week by any client: version and updated_at always move, even with the same dishes.
- const writeWeek = (isoWeek, days) => {
+ // foodContext (C1): the context frozen with this write (undefined: a week applied before C1).
+ const writeWeek = (isoWeek, days, foodContext) => {
   const previous = st.weeks.get(key(isoWeek));
-  st.weeks.set(key(isoWeek), {days: structuredClone(days), version: (previous?.version ?? 0) + 1, updatedAt: tick()});
+  st.weeks.set(key(isoWeek), {days: structuredClone(days), version: (previous?.version ?? 0) + 1, updatedAt: tick(), foodContext});
  };
  const noEntity = {fetch: async () => ({data: null, version: null}), push: async () => ({version: null})};
  return {st, writeWeek, listsOf: w => st.lists.filter(l => l.week === key(w)),
@@ -89,11 +91,12 @@ function newDevice() { const device = createDevice(); devices.push(device); onDe
 beforeEach(() => {
  account = createAccount();
  repos.configureRemotes(account.remotes);
- ai = {calls: 0, gate: null};
+ ai = {calls: 0, gate: null, bodies: []};
  originalFetch = global.fetch;
- global.fetch = async (url) => {
+ global.fetch = async (url, init) => {
   assert.equal(String(url), "/api/generate-shopping-list");
   ai.calls++;
+  ai.bodies.push(JSON.parse(init.body));
   if (ai.gate) await ai.gate;
   return Response.json({items: generatedItems});
  };
@@ -347,4 +350,57 @@ test("fast repeated marks of one item reach the account in order: the last one w
   shopping.setShoppingItemChecked(asA, W41, "frutería-tomate-ud", value)));
  assert.equal(account.listsOf(W41)[0].items.find(i => i.name === "tomate").checked, true);
  assert.deepEqual(repos.readShoppingCache(asA, W41).pendingChecks, {});
+});
+
+// --- C1: the week's frozen food context is part of the signature -----------------------------------
+
+test("C1 signature: legacy weeks keep the B6 signature; servings and restrictions version change it", () => {
+ const days = menu();
+ const legacy = getShoppingSignature(W41, days);
+ assert.equal(getShoppingSignature(W41, days, null), legacy, "no frozen context = signature of lists made before C1");
+ assert.ok(legacy.includes('"servings":2') && legacy.includes('"restrictions":null'));
+ const frozen = getShoppingSignature(W41, days, {servings: 2, version: "fc1:aaa"});
+ assert.notEqual(frozen, legacy, "a list made without restrictions is not valid for a week that has them");
+ assert.notEqual(getShoppingSignature(W41, days, {servings: 4, version: "fc1:aaa"}), frozen);
+ assert.notEqual(getShoppingSignature(W41, days, {servings: 2, version: "fc1:bbb"}), frozen);
+ assert.equal(getShoppingSignature(W41, withWeekDates(days, W40), {servings: 2, version: "fc1:aaa"}), frozen, "dates are still presentation");
+ // Context unknown (account unreachable): the device list is matched by week and dishes only.
+ assert.equal(matchesShoppingSignature(frozen, W41, days), true);
+ assert.equal(matchesShoppingSignature(frozen, W41, days, null), false);
+ assert.equal(matchesShoppingSignature(frozen, W41, menu("Pollo")), false);
+});
+
+test("C1: the list is signed with the week's context and the request names the week (servings read on the server)", async () => {
+ account.writeWeek(W41, menu(), {servings: 4, version: "fc1:vegan"});
+ const load = await openShopping();
+ assert.equal(load.status, "ready");
+ assert.equal(ai.calls, 1);
+ assert.equal(ai.bodies[0].isoWeek, "2026-W41");
+ assert.equal(ai.bodies[0].profile, undefined, "nothing about the profile is sent");
+ assert.equal(account.listsOf(W41)[0].signature, getShoppingSignature(W41, menu(), {servings: 4, version: "fc1:vegan"}));
+ // Reload: same list, no AI.
+ assert.equal((await openShopping()).status, "ready");
+ assert.equal(ai.calls, 1);
+});
+
+test("C1: a legacy week keeps its list; applying the menu again with a frozen context makes a new one", async () => {
+ account.writeWeek(W41, menu());
+ await openShopping();
+ assert.equal(ai.calls, 1);
+ account.writeWeek(W41, menu());
+ await openShopping();
+ assert.equal(ai.calls, 1, "same dishes, no context: the list is still valid");
+ account.writeWeek(W41, menu(), {servings: 3, version: "fc1:nuts"});
+ await openShopping();
+ assert.equal(ai.calls, 2, "same dishes for 3 people and new restrictions: new list");
+ assert.equal(account.listsOf(W41).length, 2, "the previous list stays as history");
+});
+
+test("C1: a direct generation signs with the account's context (two calls -> one AI request)", async () => {
+ account.writeWeek(W41, menu(), {servings: 3, version: "fc1:x"});
+ const [one, two] = await Promise.all([shopping.generateShoppingList(asA, W41, menu()), shopping.generateShoppingList(asA, W41, menu())]);
+ assert.equal(one.status, "ready");
+ assert.equal(two.status, "ready");
+ assert.equal(ai.calls, 1);
+ assert.equal(account.listsOf(W41)[0].signature, getShoppingSignature(W41, menu(), {servings: 3, version: "fc1:x"}));
 });

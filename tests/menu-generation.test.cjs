@@ -7,7 +7,7 @@ const {createMenuCompletion} = require("../src/lib/menu-generation/runtime.ts");
 const {isImportedMenuResponse, importedMenuToWeekDays} = require("../src/lib/importMenu.ts");
 const {weekDaysToSupabaseWeek, withWeekDates} = require("../src/lib/weekStorage.ts");
 const {estimateOpenAICostUsd} = require("../src/lib/openai/cost.ts");
-const {installFakeBackends, aiRequest} = require("./helpers/fake-backends.cjs");
+const {installFakeBackends, aiRequest, foodContextFor} = require("./helpers/fake-backends.cjs");
 const profile = readMenuProfile(null);
 const selection = {
  lunches: ["Pollo asado con batata", "Lentejas estofadas", "Arroz meloso de sepia", "Espaguetis con setas", "Garbanzos con espinacas", "Merluza al horno", "Paella de pollo"],
@@ -30,7 +30,7 @@ test("blocks visible dietary/allergen conflicts including accents and compound d
  assert.throws(() => selectionToMenu(selection,readMenuProfile({dietaryRestrictions:["vegetarian"]})), /restriction/);
 });
 test("keeps weekly requests and safety constraints distinct; filters examples without claiming ingredient safety", () => {
- const input = buildMenuInput({peopleCount:2,freeTextPrompt:"Quiero pasta con setas",profile:{id:"private-id",birthDate:"1990-01-01",dislikedFoods:["pasta"],allergies:["nuts"],otherAllergies:"sésamo"}});
+ const input = buildMenuInput({peopleCount:2,freeTextPrompt:"Quiero pasta con setas",profile:{id:"private-id",allergies:[]}},readMenuProfile({id:"private-id",birthDate:"1990-01-01",dislikedFoods:["pasta"],allergies:["nuts"],otherAllergies:"sésamo"}));
  const data = JSON.parse(input.userPrompt);
  assert.equal(data.weeklyRequest,"Quiero pasta con setas");
  assert.deepEqual(data.preferences.dislikedFoods,["pasta"]);
@@ -39,7 +39,8 @@ test("keeps weekly requests and safety constraints distinct; filters examples wi
  assert.ok(!input.userPrompt.includes("private-id"));
  assert.throws(() => readMenuProfile({allergies:"nuts"}));
  assert.throws(() => readMenuProfile({otherAllergies:"a".repeat(1001)}));
- assert.throws(() => buildMenuInput({peopleCount:7}));
+ assert.deepEqual(data.mandatory.allergies,["nuts"], "the profile argument decides, never body.profile");
+ assert.throws(() => buildMenuInput({peopleCount:7},profile));
 });
 test("cost includes cache reads and cache write surcharge at current standard prices", () => {
  assert.equal(estimateOpenAICostUsd({model:"gpt-5.6-sol",promptTokens:2000,cachedPromptTokens:1000,cacheWriteTokens:1000,completionTokens:100}),0.0074);
@@ -70,7 +71,6 @@ test("HTTP route rejects invalid input before billing and invalid output without
   const {POST} = require("../src/app/api/generate-menu/route.ts");
   const request = body => aiRequest("generate-menu", body);
   assert.equal((await POST(request({peopleCount:8}))).status,400);
-  assert.equal((await POST(request({peopleCount:2,profile:{allergies:"nuts"}}))).status,400);
   assert.equal(fakes.openAICalls,0);
   assert.equal(fakes.begin.length,0, "invalid input never opens a usage record");
   const success = await POST(request({peopleCount:2}));
@@ -81,7 +81,9 @@ test("HTTP route rejects invalid input before billing and invalid output without
   assert.equal((await POST(request({peopleCount:2}))).status,422);
   assert.equal(fakes.openAICalls,2);
   responseSelection = selection;
-  assert.equal((await POST(request({peopleCount:2,profile:{dietaryRestrictions:["vegetarian"]}}))).status,422);
+  // C1: the saved profile (read on the server) is what the menu is validated against.
+  fakes.foodContext = foodContextFor({dietaryRestrictions:["vegetarian"]});
+  assert.equal((await POST(request({peopleCount:2}))).status,422);
   assert.equal(fakes.openAICalls,3);
   assert.deepEqual(fakes.finish.map(f => f.p_status), ["succeeded","failed","failed"]);
  } finally {

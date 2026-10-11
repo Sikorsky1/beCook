@@ -1,7 +1,7 @@
 const {test, beforeEach, afterEach} = require("node:test");
 const assert = require("node:assert/strict");
 const {safeNextPath, loginHrefFor} = require("../src/lib/navigation.ts");
-const {installFakeBackends, validToken} = require("./helpers/fake-backends.cjs");
+const {installFakeBackends, validToken, foodContextFor} = require("./helpers/fake-backends.cjs");
 
 // Synthetic values only: no real Supabase project or OpenAI key is contacted.
 const selection = {
@@ -14,8 +14,8 @@ const shoppingList = {items: [{name: "lentejas", quantity: 500, unit: "g", categ
 const routes = {
  "generate-menu": {valid: {peopleCount: 2}, invalidShape: {peopleCount: 9}, maxBytes: 64 * 1024},
  "import-menu": {valid: {text: "Lunes\tLentejas\tLIBRE"}, invalidShape: {text: 42}, maxBytes: 32 * 1024},
- // Vegan profile whose compatible catalogue recipes are already in the week: needs the AI.
- "substitute-dish": {valid: {profile: {dietaryRestrictions: ["vegan"]}, day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: ["Lentejas estofadas", "Espaguetis con brócoli", "Escalibada", "Espárragos, berenjena, calabacín y zanahoria plancha"]}, invalidShape: {day: "Lunes", meal: "brunch"}, maxBytes: 16 * 1024},
+ // Vegan saved profile (C1: read on the server) whose compatible catalogue recipes are already in the week: needs the AI.
+ "substitute-dish": {profile: {dietaryRestrictions: ["vegan"]}, valid: {day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: ["Lentejas estofadas", "Espaguetis con brócoli", "Escalibada", "Espárragos, berenjena, calabacín y zanahoria plancha"]}, invalidShape: {day: "Lunes", meal: "brunch"}, maxBytes: 16 * 1024},
  "generate-shopping-list": {valid: {week: [{day: "Lunes", date: "5 oct", lunch: "Lentejas", dinner: "LIBRE"}]}, invalidShape: {week: [{day: "Lunes", date: "5 oct", lunch: {dish: "x"}, dinner: "LIBRE"}]}, maxBytes: 16 * 1024},
 };
 
@@ -95,6 +95,7 @@ for (const [path, spec] of Object.entries(routes)) {
  });
 
  test(`${path}: valid session with simulated OpenAI -> 200`, async () => {
+  if (spec.profile) fakes.foodContext = foodContextFor(spec.profile);
   const response = await POST(post(path, {body: spec.valid, token: validToken}));
   assert.equal(response.status, 200);
   assert.equal(fakes.openAICalls, 1);

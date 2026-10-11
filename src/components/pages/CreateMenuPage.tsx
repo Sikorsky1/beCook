@@ -484,7 +484,6 @@ export default function CreateMenuPage() {
       preparationMs = Math.round(performance.now() - generationStartedAt);
       const apiStartedAt = performance.now();
       const response = await postAi("/api/generate-menu", {
-        profile: profileForGeneration,
         pantryItems: pantryItemsForGeneration,
         peopleCount,
         menuStyle: menuStylesForGeneration,

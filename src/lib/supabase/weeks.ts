@@ -449,3 +449,67 @@ export async function getLatestWeekFromSupabase(): Promise<SupabaseWeek | null> 
     days: await readWeekDays(latestWeek.id),
   };
 }
+
+// --- Food context of a week (C1, roadmap step 16) -----------------------------------------------
+
+// Freezes the caller's saved profile (restrictions, household) and the servings of the applied
+// generation request as this week's food context. Called right after apply_week with the same
+// request key; repeating it is a no-op. Never changes weeks.version.
+export async function freezeWeekFoodContextInSupabase({
+  isoYear,
+  isoWeek,
+  requestKey,
+  generationRequestId,
+}: {
+  isoYear: number;
+  isoWeek: number;
+  requestKey: string;
+  generationRequestId?: string | null;
+}) {
+  const { data, error } = await requireSupabase().rpc("freeze_week_food_context", {
+    p_iso_year: isoYear,
+    p_iso_week: isoWeek,
+    p_request_key: requestKey,
+    p_generation_request_id: generationRequestId ?? null,
+  });
+
+  if (error) {
+    throw new Error(`Could not freeze the week food context: ${error.message}`);
+  }
+
+  const status = (data as { status?: unknown } | null)?.status;
+  if (status !== "frozen" && status !== "duplicate" && status !== "superseded" && status !== "not_applied") {
+    throw new Error("Unexpected food context result.");
+  }
+  return status;
+}
+
+// The week's frozen context next to the current profile, compared in the database.
+export async function getWeekFoodContextStatusFromSupabase({ isoYear, isoWeek }: { isoYear: number; isoWeek: number }) {
+  const { parseWeekFoodContextStatus } = await import("@/lib/menu-generation/food-context");
+  const { data, error } = await requireSupabase().rpc("week_food_context_status", {
+    p_iso_year: isoYear,
+    p_iso_week: isoWeek,
+  });
+
+  if (error) {
+    throw new Error(`Could not read the week food context: ${error.message}`);
+  }
+
+  return parseWeekFoodContextStatus(data);
+}
+
+// Servings and restrictions version a week's shopping list depends on (null: none frozen).
+export async function getWeekFoodContextFromSupabase(weekId: string) {
+  const { data, error } = await requireSupabase()
+    .from("week_food_contexts")
+    .select("servings,context_version")
+    .eq("week_id", weekId)
+    .maybeSingle<{ servings: number; context_version: string }>();
+
+  if (error) {
+    throw new Error(`Could not read the week food context: ${error.message}`);
+  }
+
+  return data ? { servings: data.servings, version: data.context_version } : null;
+}

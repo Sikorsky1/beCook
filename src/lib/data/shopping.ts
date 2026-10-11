@@ -27,6 +27,7 @@ import {
   generateShoppingListForWeek,
   getShoppingSignature,
   matchesShoppingSignature,
+  type ShoppingFoodContext,
 } from "@/lib/shoppingListStorage";
 import type { ShoppingList } from "@/lib/supabase/shopping-lists";
 
@@ -122,6 +123,10 @@ function enqueue<T>(key: string, task: () => Promise<T>): Promise<T> {
 
 const queueKey = (identity: DataIdentity, isoWeek: IsoWeek) => `${identity.scope}|${getIsoWeekStorageId(isoWeek)}`;
 
+// C1: the week's frozen food context is part of its list's signature. Weeks without one (applied
+// before C1, guests, test doubles) keep the legacy signature, so their lists stay valid.
+const weekContext = (week: NonNullable<RemoteShoppingState["week"]>) => week.foodContext ?? null;
+
 // Resends this device's pending marks of `cache.listId`; returns the cache as the account has it.
 async function pushPendingChecks(
   identity: DataIdentity,
@@ -188,7 +193,7 @@ async function storeList(
     if (result.status === "week_changed") {
       const current = await remote.fetch().catch(() => null);
       if (!current?.week) return { status: "missing", offline: !current };
-      if (getShoppingSignature(isoWeek, current.week.days) !== signature) return { status: "missing", offline: false };
+      if (getShoppingSignature(isoWeek, current.week.days, weekContext(current.week)) !== signature) return { status: "missing", offline: false };
       expectedWeekVersion = current.week.version;
       continue;
     }
@@ -213,11 +218,12 @@ export async function loadShoppingList(
 ): Promise<ShoppingLoad> {
   const cache = readShoppingCache(identity, isoWeek);
   const remote = shoppingRemote(identity, isoWeek);
-  const deviceListMatches = (days: WeekDay[]) =>
-    Boolean(cache?.items.length && matchesShoppingSignature(cache.weekSignature, isoWeek, days));
+  // context undefined: the account did not answer, only the week and its dishes can be compared.
+  const deviceListMatches = (days: WeekDay[], context?: ShoppingFoodContext | null) =>
+    Boolean(cache?.items.length && matchesShoppingSignature(cache.weekSignature, isoWeek, days, context));
 
   if (!remote) {
-    return deviceListMatches(weekDays)
+    return deviceListMatches(weekDays, null)
       ? { status: "ready", view: cacheToView(cache!, "local", false) }
       : { status: "missing", offline: false };
   }
@@ -234,7 +240,8 @@ export async function loadShoppingList(
   if (!state.week) return { status: "no_week" };
 
   // The account week decides which list applies, not this device's copy of it.
-  const signature = getShoppingSignature(isoWeek, state.week.days);
+  const context = weekContext(state.week);
+  const signature = getShoppingSignature(isoWeek, state.week.days, context);
 
   if (state.list && isCurrentList(state.list, state.week, signature)) {
     let next = listToCache(state.list, signature);
@@ -251,7 +258,7 @@ export async function loadShoppingList(
 
   // This device has the list for this content but the account does not (generated while offline,
   // or replaced elsewhere and then changed back): save it, without calling the AI.
-  if (deviceListMatches(state.week.days)) {
+  if (deviceListMatches(state.week.days, context)) {
     return storeList(identity, isoWeek, signature, cache!.items, state.week.version, cache!.checkedItemIds);
   }
 
@@ -263,23 +270,31 @@ export async function loadShoppingList(
 // instead of paying for another one. It is never aborted by leaving the page.
 const generations = new Map<string, Promise<ShoppingLoad>>();
 
-export function generateShoppingList(
+export async function generateShoppingList(
   identity: DataIdentity,
   isoWeek: IsoWeek,
   weekDays: WeekDay[],
 ): Promise<ShoppingLoad> {
-  const signature = getShoppingSignature(isoWeek, weekDays);
+  const context = await accountWeekContext(identity, isoWeek);
+  const signature = getShoppingSignature(isoWeek, weekDays, context);
   const key = `${identity.scope}|${signature}`;
   const running = generations.get(key);
   if (running) return running;
 
   const generation = (async () => {
-    const generated = await generateShoppingListForWeek(weekDays);
+    // The server reads the week's servings and restrictions itself (never sent from here).
+    const generated = await generateShoppingListForWeek(weekDays, undefined, identity.userId ? isoWeek : undefined);
     return storeList(identity, isoWeek, signature, visibleItems(generated.items), readCachedWeekVersion(identity, isoWeek));
   })().finally(() => generations.delete(key));
 
   generations.set(key, generation);
   return generation;
+}
+
+// The week's frozen context as the account has it now (null: guest, none, or unreachable).
+async function accountWeekContext(identity: DataIdentity, isoWeek: IsoWeek): Promise<ShoppingFoodContext | null> {
+  const state = await shoppingRemote(identity, isoWeek)?.fetch().catch(() => null);
+  return state?.week ? weekContext(state.week) : null;
 }
 
 // The week's list, generated only if the account confirms there is none for its content

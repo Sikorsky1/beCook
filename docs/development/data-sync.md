@@ -1,4 +1,4 @@
-# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2)
+# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1)
 
 Pasos 06 y 07 del roadmap (H3, H7), sin cambios de base de datos, y paso 10 (B4, H8):
 escrituras de semana transaccionales con versión e idempotencia.
@@ -257,6 +257,30 @@ Pasos 11 y 15 del roadmap (H9). Sin cambios de base de datos.
   nueva. El paso 2 solo avanza si el perfil quedó guardado en la cuenta (`synced`); la despensa exprés usa las
   escrituras por artículo de B7. Al terminar se va a Crear menú (`?from=onboarding`); el menú se genera y se
   confirma allí, con «Usar este menú».
+
+## Contexto alimentario de cada semana (C1)
+
+- **Perfil en servidor.** `/api/generate-menu` y `/api/substitute-dish` leen el perfil guardado con
+  la sesión del usuario (`current_food_context()`, RLS) e ignoran `profile` del cuerpo. Sin perfil
+  guardado → 409 `profile_required` (antes se generaba sin alergias); perfil ilegible → 503. Las
+  dos respuestas añaden `foodContext` (restricciones usadas y versión; en el menú también `servings`).
+- **Congelado.** Tras cada escritura de semana completa (`apply_week` aplicado o duplicado), el
+  cliente llama a `freeze_week_food_context` con la misma clave. La base lee el perfil guardado
+  (nunca datos del navegador) y guarda en `week_food_contexts`: raciones (de la petición de
+  generación aplicada a esa semana; si no, el hogar del perfil; si no, 2), hogar, restricciones
+  canónicas y su versión `fc1:<md5>`. No toca `weeks.version`. Repetido → `duplicate`; un reintento
+  de una aplicación más antigua → `superseded`. Editar un plato no cambia el contexto. Si el
+  congelado falla, el menú sigue guardado y la semana se comporta como anterior a C1.
+- **Semanas anteriores a C1** (sin contexto): la compra sigue con 2 raciones y la firma de B6, así
+  que sus listas no se regeneran; las listas nuevas de esas semanas respetan las restricciones del
+  perfil actual.
+- **Compra.** La firma incluye las raciones y la versión de restricciones congeladas; la ruta de
+  compra recibe `isoWeek` y lee ese contexto en servidor (`week_food_context_status`). Volver a
+  aplicar el mismo menú con un contexto distinto crea una lista nueva (la anterior queda en el
+  historial).
+- **Aviso en Semana.** `week_food_context_status` compara en la base el contexto congelado con el
+  perfil actual (restricciones por versión, hogar por número). Si cambió, Semana lo dice y ofrece
+  «Crear un menú nuevo para esta semana». Nunca afirma que los platos sean o no compatibles.
 
 ## Datos anteriores a B1 (sin ámbito)
 
