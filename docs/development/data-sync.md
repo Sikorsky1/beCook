@@ -160,6 +160,65 @@ completa por clic) sigue funcionando y el cliente nuevo reutiliza su lista más
 reciente (escenario 8 de `scripts/shopping-db-tests.cjs`, con una copia congelada
 del cliente de 5a573ff en `tests/fixtures/`).
 
+## Compra desde las fichas y cambios de plato sin perder lo comprado (C4)
+
+Pasos 19 y 20 del roadmap. Código en `src/lib/shopping/{units,build,reconcile}.ts` (puros) y
+`src/lib/data/shopping.ts`; migración `20261013090000_shopping_item_origins` (aditiva salvo
+`save_shopping_list`, redefinida con la misma firma).
+
+- **Origen de cada artículo.** `shopping_items.item_key` («categoría|nombre normalizado|dimensión»;
+  nombre sin mayúsculas, acentos ni plurales simples) y `origins` (`[{day, meal, dish, kind,
+  versionId?, quantity}]`, `kind` = `card_reviewed` | `card_inferred` | `ai_title`). Un artículo
+  activo por clave y lista (índice único parcial). `shopping_lists.ingredient_basis` = `mixed-v1`
+  cuando los artículos tienen clave y orígenes; NULL en listas anteriores a C4 o del cliente previo.
+- **Unidades** (`units.ts`, misma tabla que `shopping_quantity_base`): masa en g (kg ×1000),
+  volumen en ml (cl ×10, l ×1000), unidades en «ud» (ud, uds, unidad(es) o sin unidad); cucharada,
+  cucharadita, diente y pizca se agrupan por nombre sin convertir; nunca volumen ↔ masa. kg y l solo
+  al mostrar (desde 1000). Cantidad NULL = «al gusto» (fila propia; la base solo la acepta con esa
+  unidad). Redondeo de compra: g/ml/ud enteros hacia arriba, cucharadas y pizcas de media en media.
+- **Compra mixta.** Plato con ficha (C2): ingredientes de la ficha × raciones de la semana (C1,
+  `foodContext.servings`, 2 si no hay) / raciones de la ficha, leídas en una sola consulta
+  (`getRecipeCardsFromSupabase`, `.in`). Los opcionales no entran (aviso fijo en Compra). Plato sin
+  ficha: los ingredientes `ai_title` que la lista ya tiene para ese plato (misma comida o el mismo
+  plato movido de día), si la lista se hizo para las mismas raciones y restricciones; si no, una
+  llamada a `/api/generate-shopping-list` con `breakdown: true` y solo esos platos (el resto
+  «LIBRE»), que responde `dishes: [{day, meal, items}]` además de `items` (cliente anterior intacto).
+  Una llamada, una unidad de cuota. Con todos los platos con ficha no hay IA. Las fichas no se
+  generan al preparar la compra.
+- **Despensa** (B7, sin cantidades): no se descuenta nada; al pintar, `classifyShoppingLine`
+  distingue «Te falta comprar», «Ya lo tienes habitualmente» (nombre normalizado y plural simple),
+  «Comprado», «Comprado, ya no hace falta» y «Revisar».
+- **Firma.** Sin ningún plato con ficha, exactamente la de B6/C1 (las listas existentes no cambian).
+  Con alguno, añade `cards: [[pos, lunchV, dinnerV]]` e `ingredientSource: "mixed-v1"`.
+- **Cambio de platos** (`loadShoppingList` → `outdated` en lugar de `missing`): conjunto deseado →
+  diff por `item_key` en el cliente (`diffShoppingList`; a las filas sin clave se les calcula con
+  las mismas reglas) → `reconcile_shopping_list(año, semana, lista, firma origen, firma destino,
+  ops, versión)`: `FOR UPDATE` de la semana; `no_week` | `week_changed` | `stale` (otra lista
+  vigente, otra firma o un artículo que no es de esa lista) | `existing` (otro dispositivo ya la
+  dejó en la firma destino) | `applied` con resumen `{added, removed, keptBought, changed, review}`.
+  La lista conserva id y `created_at`. Quitar: no marcado → se borra
+  (`shopping_items_discard_unbought`, función aparte); marcado → `removed_at` («Comprado, ya no hace
+  falta»). Actualizar un marcado: sigue marcado; si ahora hace falta más que lo comprado
+  (`checked_quantity`, en unidades base) → `needs_review` hasta volver a marcarlo. «Usar este menú»
+  (`ensureShoppingList`) también reconcilia.
+- **Marcado** (`set_shopping_items_checked` sin cambios): el trigger `shopping_items_check_state`
+  guarda `checked_quantity` al marcar, lo quita al desmarcar y resuelve `needs_review`, también
+  para el cliente desplegado. Un marcado sobre un artículo que ya no está → `stale` y se relee.
+- **Si la IA falla o no hay cuota.** Lista con orígenes: se aplica lo sabido y el plato queda
+  pendiente («Faltan ingredientes de «X»», botón «Calcular (IA)» = reconciliación con la misma firma
+  solo para esos platos). Lista sin orígenes (anterior a C4): no se toca (nunca se vacía por una
+  llamada fallida) y se muestra el error. Sin reconciliación en la base (PGRST202) o servidor sin
+  desglose: lista nueva, como en B6.
+- **Despliegue.** Migración antes que código. El cliente de `main` (copia congelada
+  `tests/fixtures/legacy-shopping-client-6121e34.ts`) sigue guardando, marcando y leyendo; el
+  cliente nuevo reconcilia sus listas en el sitio conservando marcados. Límite conocido: una pestaña
+  con el cliente anterior no puede leer una lista con filas «al gusto» del cliente nuevo.
+- **Pruebas.** `tests/shopping-recipes.test.cjs` (unidades, construcción, diff, firma, capa de
+  datos con cuenta en memoria de `tests/helpers/fake-shopping.cjs`, ruta con desglose) y
+  `scripts/shopping-reconcile-db-tests.cjs` en `test:db` (fichas, cambio de plato en el sitio,
+  trigger con el cliente anterior, contrato de la RPC, permisos, concurrencia, despliegue).
+  `tests/shopping-week.test.cjs` y `scripts/shopping-db-tests.cjs` cubren además el respaldo a B6.
+
 ## Despensa (B7)
 
 Paso 13 del roadmap (H8 §8). Código en `src/lib/data/pantry.ts`; migración
