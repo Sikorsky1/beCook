@@ -22,7 +22,8 @@ escrituras de semana transaccionales con versión e idempotencia.
 
 `becook:<scope>:<entidad>[:<semana>]`, con `scope` = `guest` o `u_<userId>`.
 Entidades: `profile`, `pantry`, `week:YYYY-Www`, `selected-week`,
-`shopping:YYYY-Www`, `legacy-origin` (solo invitado).
+`shopping:YYYY-Www`, `menu-proposal:YYYY-Www`, `menu-draft:YYYY-Www`, `legacy-origin` (solo
+invitado).
 
 Valor con versión de formato:
 `{ v: 1, data, savedAt, remoteVersion, pending }`. `remoteVersion` es la versión
@@ -30,8 +31,9 @@ remota sobre la que se basa la copia (semana: `weeks.version`; perfil y despensa
 `updated_at`; despensa desde B7: ver «Despensa (B7)»); `pending` indica un cambio
 local no aceptado aún por el servidor (nunca en invitado).
 
-El borrador de «Crear menú» sigue en `sessionStorage` sin ámbito, a propósito:
-sirve para pasar de invitado a sesión iniciada.
+El formulario de «Crear menú» se guarda por identidad y semana en `menu-draft:YYYY-Www` (C6) y
+la propuesta sin aplicar en `menu-proposal:YYYY-Www` (B5). Solo el viaje de invitado a sesión
+iniciada usa además una copia en `sessionStorage` sin ámbito, a propósito.
 
 ## Fuente de verdad y conflictos
 
@@ -451,17 +453,23 @@ Sin cambios de esquema ni de datos remotos: todo vive en el navegador y en `/api
 
 - **Parser local primero** (`parseMenuTextLocally`, `src/lib/importMenu.ts`). Un texto es
   inequívoco si cada línea no vacía es una cabecera de día, una línea «Comida:»/«Cena:» bajo un
-  día, una fila de 3 columnas (día, comida, cena; tabuladores, `|` o 2+ espacios) o la cabecera
-  DÍA|COMIDA|CENA; sin días ni comidas repetidos y títulos de ≤ 120 caracteres. Entonces se ordena
-  en el dispositivo, sin petición, sin cuota y también para invitados. Una comida que falta en un
-  bloque de día queda libre y se avisa. Cualquier otra cosa es ambigua y va a la IA (solo con
-  sesión; el invitado ve el aviso de inicio de sesión con su texto conservado).
+  día (con una sola etiqueta: «Comida: X; Cena: Y» es ambiguo), una fila de 3 columnas (día,
+  comida, cena) o la cabecera DÍA|COMIDA|CENA; sin días ni comidas repetidos y títulos de ≤ 120
+  caracteres. Un solo separador por línea: tabulador si lo hay, si no `|`; por espacios (2 o más)
+  solo si hay al menos dos filas así y todas tienen 3 columnas alineadas (tabla de ancho fijo).
+  Una celda puede repetir su etiqueta («Comida: Lentejas»); la etiqueta de la otra comida es
+  ambigua. Libre: vacío, «LIBRE»/«Libre.», «-», «–», «—», «·», «x» o «/». Entonces se ordena en
+  el dispositivo, sin petición, sin cuota y también para invitados. Una comida que falta o una
+  celda vacía queda libre y se avisa. Cualquier otra cosa es ambigua y va a la IA (solo con
+  sesión; el invitado ve el aviso de inicio de sesión con su texto conservado). Los límites de
+  texto que comprueba el navegador están en `importTextLimits` (iguales a los de `ai-limits.ts`).
 - **Ruta** (`/api/import-menu`, tras el guard de A3). Orden: 400 con `reason` (`not_text`, `empty`,
   `too_long` > 8.000 caracteres, `too_many_lines` > 80 líneas no vacías) → el mismo parser local
   (responde `parsedBy: "local"` sin abrir registro de uso: protege a clientes anteriores) → 422
-  `no_menu_found` si el texto no nombra ningún día (gratis) → cuota (A4) → OpenAI con esfuerzo bajo y
+  `no_menu_found` si el texto no nombra ningún día (gratis; aquí cuentan también abreviaturas, «X»
+  a principio de línea y los nombres en inglés) → cuota (A4) → OpenAI con esfuerzo bajo y
   `max_completion_tokens` 2.000 → 422 `empty_menu` si la IA no encuentra ningún plato (cuenta: hubo
-  tokens) → 502 con `reason` (`invalid_output`, `truncated_output`, `empty_output`, `timeout`,
+  tokens, y el mensaje lo dice) → 502 con `reason` (`invalid_output`, `truncated_output`, `empty_output`, `timeout`,
   `ai_failed`). Un 422 local con todos los huecos libres también es `empty_menu`, sin IA. El
   cliente traduce cada `reason` (`importErrorMessage`) y no ofrece «Reintentar» en 400/422.
 - **Borrador del formulario** (`becook:<scope>:menu-draft:YYYY-Www`): modo, texto pegado y
@@ -474,7 +482,11 @@ Sin cambios de esquema ni de datos remotos: todo vive en el navegador y en `/api
   `contextVersion` (`foodContext.version` de C1; null en importados) y `createdAt`. Las de antes de
   C6 se leen deduciendo el origen de su `foodContext`.
 - **Semanas pasadas**: al cargar Crear menú se borran borradores y propuestas sin aplicar de
-  semanas anteriores a la actual (solo de la identidad en pantalla).
+  semanas anteriores a la actual (solo de la identidad en pantalla), salvo la semana seleccionada
+  (una semana pasada elegida con `?week=`).
+- **Estado de la página**: «Procesar menú» y «Crear menú semanal» se rechazan y se desactivan
+  mientras «Usar este menú» guarda o se puede deshacer. Un cambio de identidad sin recargar vuelve
+  a montar la página (`key` = ámbito).
 - **«Usar este menú»**: se rechaza en el manejador mientras haya otra generación activa de esa
   identidad y semana (`activeGenerationRun`). En una propuesta generada con sesión se compara su
   `contextVersion` con `week_food_context_status.current.version`; si difiere (o ya no hay perfil)

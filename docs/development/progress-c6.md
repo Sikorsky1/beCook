@@ -20,4 +20,21 @@ la base de datos. Sin push. Resumen para pasar a `PROGRESS.md` al integrar.
 | Comprobaciones | `lint`, `typecheck`, `test` 388/388 (con `GITLEAKS_BIN`), `build` en una copia sin `.env*` con variables sintéticas. Recorrido en el navegador sobre ese build (`next start`, :3107, sin Supabase ni OpenAI, como invitado): `?mode=import` abre el desplegable; menú con «Lentejas con chorizo» y «Pollo con salsa especial» → propuesta local con aviso culinario y «Martes: no indica la cena»; recarga → texto y propuesta recuperados (`becook:guest:menu-draft:2026-W43`); prosa → aviso de inicio de sesión sin petición; texto sin días → «No encontramos ningún día…» sin «Reintentar»; 375 px sin desbordamiento; sin errores en consola. Datos del navegador borrados |
 | Decisiones propias | 1) `reasoning_effort: "low"` en la importación: con el esfuerzo por defecto, el tope de 2.000 tokens podía quedarse en razonamiento y cortar la respuesta (es extracción, como la compra). 2) Un texto local con todos los huecos libres responde 422 `empty_menu` sin IA. 3) La propuesta de un invitado no pasa a la cuenta al iniciar sesión (como en B5); el formulario sí, por `sessionStorage`. 4) Los avisos de importados usan el perfil que la página ya carga (con sesión, el de la cuenta) |
 | No probado | Importación con IA real (sin OpenAI en local) y el aviso de contexto con una cuenta real (cubierto por tests de `checkProposalUse`; el manejador lee `week_food_context_status`). `test:db` no aplica (sin cambios de esquema) |
-| Pendiente | Integración con D5 y NAV (NAV enlaza «Ya tengo un menú» → `/create-menu?mode=import&week=`; `/import` → `/create-menu?mode=import`). La línea de «Claves locales» de `data-sync.md` sigue diciendo que el borrador está solo en `sessionStorage`: actualizarla al integrar (no la he tocado para no chocar). CI y Preview |
+| Pendiente | Integración con D5 y NAV (NAV enlaza «Ya tengo un menú» → `/create-menu?mode=import&week=`; `/import` → `/create-menu?mode=import`). CI y Preview |
+
+## Cambios tras la revisión (apta con cambios)
+
+| Punto | Cambio |
+|---|---|
+| 1 | «Comida: X; Cena: Y» en una línea → ambiguo (`several_meals_in_line`) |
+| 2 | Un separador por línea: tabulador, si no `\|`; por espacios solo en una tabla alineada de 2+ filas con 3 columnas (`unaligned_columns`). «Lunes  Lentejas con  chorizo» suelto va a la IA |
+| 3 | «Procesar menú» y «Crear menú semanal» retornan (`proposalBusy`) y se desactivan mientras se guarda o dura «Deshacer» |
+| 4 | La poda nunca borra la semana seleccionada (tercer argumento de `pruneStaleMenuDrafts`) |
+| 5 | Celdas con su propia etiqueta respetadas; la de la otra comida → `label_mismatch`; libres `-`, `–`, `—`, `·`, `x`, `/`, «Libre.»; celda vacía → libre con aviso |
+| 6 | `mentionsAnyDayName` acepta abreviaturas, «X» a principio de línea e inglés (solo decide si se pregunta a la IA) |
+| 7 | `CreateMenuPage` envuelve el contenido con `key={identity.scope}` |
+| 8 | El aviso de contexto enfoca «Usar igualmente» y «Ahora no» devuelve el foco a «Usar este menú»; el panel de importación siempre en el DOM con `hidden` |
+| 9 | Retirado `src/lib/rovingTabs.ts` (sin uso); en `tests/a11y-semantics.test.cjs` se quitan su `require` y sus tres tests (teclado e ids de pestañas, líneas 8 y 21-43; las 57-65 de D5 no se tocan). Límites de texto del cliente en `importTextLimits` (`importMenu.ts`), con test de igualdad con `ai-limits.ts`. El 422 `empty_menu` de la IA dice que cuenta como importación |
+| 10 | «Claves locales» de `data-sync.md` actualizada (entidades y borrador) |
+
+Tests 388 → **391** (casos nuevos dentro de los existentes y 6 tests de revisión, menos 3 de pestañas retirados).
