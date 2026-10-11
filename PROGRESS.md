@@ -542,7 +542,7 @@ Paso 33 del roadmap. Rama `audit/a11y` desde `audit-opt` (02aa5b8), en paralelo 
 | pantry_item_writes | ✅ | ✅ 20261009222300 (SQL Editor, registrada a mano en el ledger) | ✅ 20261009223500 (SQL Editor, registrada a mano en el ledger) |
 | profile_optional_body_onboarding (`20261010090000`) | ✅ | ✅ 20261010193641 (conector Supabase) | ✅ 20261010194325 (conector Supabase; backup completo en `~/Backups/becook/2026-10-10-ola3`) |
 | week_food_context (`20261011090000`) | ✅ | ✅ 20261011190843 | ✅ 20261011195740 (tras backup completo en ~/Backups/becook/2026-10-11-ola4) |
-| recipe_cards (`20261012090000`) | ✅ | ⏳ | ⏳ (antes del merge a `main`, con OK y backup) |
+| recipe_cards (`20261012090000`) | ✅ | ✅ 20261011204724 + 20261011204749 (`_apply_week`) | ✅ 20261011205123 + 20261011205211 (tras backup completo en ~/Backups/becook/2026-10-11-ola5) |
 
 ## Decisiones
 | # | Decisión | Fecha |
