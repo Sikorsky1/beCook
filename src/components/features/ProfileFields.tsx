@@ -30,7 +30,7 @@ export const goalOptions: { label: string; value: Goal }[] = [
   { label: "Otro", value: "other" },
 ];
 
-const dietaryRestrictionOptions: { label: string; value: DietaryRestriction }[] = [
+export const dietaryRestrictionOptions: { label: string; value: DietaryRestriction }[] = [
   { label: "Ninguna", value: "none" },
   { label: "Vegetariano", value: "vegetarian" },
   { label: "Vegano", value: "vegan" },
@@ -41,7 +41,7 @@ const dietaryRestrictionOptions: { label: string; value: DietaryRestriction }[] 
 
 const noAllergiesValue = "none";
 
-const allergyOptions: { label: string; value: Allergy | typeof noAllergiesValue }[] = [
+export const allergyOptions: { label: string; value: Allergy | typeof noAllergiesValue }[] = [
   { label: "Ninguna", value: noAllergiesValue },
   { label: "Gluten", value: "gluten" },
   { label: "Lactosa", value: "lactose" },
