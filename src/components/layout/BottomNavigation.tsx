@@ -69,7 +69,7 @@ export function BottomNavigation() {
               href={href}
               prefetch={false}
               aria-current={active ? "page" : undefined}
-              className={`flex min-h-[4.25rem] flex-col items-center justify-center gap-1 rounded-full px-2 text-center text-[0.72rem] font-semibold leading-tight transition-[background-color,color,transform,box-shadow] duration-200 ease-out active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100 ${
+              className={`flex min-h-[4.25rem] flex-col items-center justify-center gap-1 rounded-full px-2 text-center text-xs font-semibold leading-tight transition-[background-color,color,transform,box-shadow] duration-200 ease-out active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100 ${
                 active
                   ? "bg-[color:var(--color-surface-muted)] text-[color:var(--color-foreground)] shadow-[inset_0_0_0_1px_rgba(232,213,181,0.55)]"
                   : "text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-accent-soft)] hover:text-[color:var(--color-foreground)]"
