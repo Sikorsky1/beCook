@@ -1,5 +1,14 @@
 import { redirect } from "next/navigation";
 
-export default function ImportRedirectPage() {
-  redirect("/create-menu");
+import { createMenuImportHref } from "@/lib/navigation";
+
+// Step 32: importing is part of Crear menú (?mode=import, contract with C6). The week is kept
+// when it is a valid YYYY-Www; anything else is dropped.
+export default async function ImportRedirectPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const { week } = await searchParams;
+  redirect(createMenuImportHref(week));
 }
