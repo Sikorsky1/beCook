@@ -328,6 +328,41 @@ Pasos 11 y 15 del roadmap (H9). Sin cambios de base de datos.
 - **Fuera de alcance** (C3/C4): validar restricciones contra ingredientes, compra desde las fichas,
   escalado de cantidades y firma de compra (sigue basada en títulos).
 
+## Restricciones contra ingredientes (C3)
+
+Sin cambios de esquema ni de datos: todo se calcula en el navegador o en la ruta, con las fichas de
+C2 y el contexto alimentario de C1.
+
+- **Léxico** (`src/lib/recipes/food-lexicon.ts`): grupos en español (carne, cerdo, pescado,
+  crustáceos, moluscos, huevo, lácteos, gluten, frutos secos, cacahuete, alcohol, miel, gelatina y
+  el resto de alérgenos UE-14) con plurales, variantes y frases. Coincidencia por palabras completas
+  tras `normalizeFood` («pan» ≠ «panceta»); la frase más larga gana («nuez moscada», «leche de
+  coco», «mantequilla de cacahuete», «vinagre de vino», «buey de mar» no cuentan como frutos secos,
+  lácteos, alcohol o carne). «sin gluten/lactosa/huevo…» anula ese grupo en el mismo texto («sin
+  lactosa» solo para la intolerancia, no para vegano). Hay menciones posibles (harina sin calificar,
+  avena, salsa de soja, alioli, cacahuete bajo frutos secos, ingrediente opcional).
+- **Comprobación** (`src/lib/recipes/restriction-check.ts`, `checkDish`): título siempre, más
+  ingredientes y etiquetas `possibleAllergens` si hay ficha. Una etiqueta presente es conflicto.
+  Resultado `conflict | possible_conflict | unverifiable | none_detected` con su base
+  (`reviewed_card | inferred_card | title_only`). Solo con el título nunca es «sin conflictos»; un
+  texto libre vago («algunas frutas», «trazas», menos de 3 letras, categorías como «frutas» o
+  «legumbres») queda en `uninterpretable` y el resultado es como mucho `unverifiable`. Texto libre:
+  nombre de grupo o alérgeno (también dentro de la frase: «pescado azul» → todo el pescado), palabra
+  del léxico (solo esa, más la etiqueta del grupo como posible) o literal con plural. Una dieta
+  desconocida o «Otra» alergia sin texto tampoco se ignora.
+- **Propuestas automáticas** (menú IA en `selectionToMenu`, ejemplos del prompt, «Otra idea» de
+  catálogo e IA en `checkReplacement`/`catalogAlternative`): se bloquea un conflicto seguro de dieta o
+  alergia, o uno posible de alergia; los alimentos que no gustan siguen como `disliked_food` (solo
+  ideas, no el menú semanal). «Otras alergias» ahora también bloquea al generar (422
+  `restriction_conflict`, aceptado). Una ficha **revisada** del catálogo se comprueba por
+  ingredientes (`ReviewedCardLookup`); una estimada no decide.
+- **Ficha de plato**: sección «Compatibilidad con tu perfil» con la base visible y «No garantiza
+  ausencia de alérgenos ni trazas». Restricciones: `status.current` de la cuenta (C1) con sesión; si
+  no se ha podido leer, «No hemos podido leer tus restricciones» (nunca el perfil del dispositivo en su
+  lugar); invitado, el perfil local. Solo avisa: no cambia platos elegidos a mano ni semanas guardadas.
+- Pruebas: `tests/restriction-check.test.cjs` (léxico, `checkDish`, texto libre, defectos del
+  filtro anterior), más casos en `menu-generation`, `dish-substitution` y `recipe-cards`.
+
 ## Datos anteriores a B1 (sin ámbito)
 
 Al arrancar, las claves `becook-profile`, `becook-pantry-base` y
