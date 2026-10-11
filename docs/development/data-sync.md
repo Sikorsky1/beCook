@@ -197,18 +197,26 @@ Pasos 19 y 20 del roadmap. Código en `src/lib/shopping/{units,build,reconcile}.
   vigente, otra firma o un artículo que no es de esa lista) | `existing` (otro dispositivo ya la
   dejó en la firma destino) | `applied` con resumen `{added, removed, keptBought, changed, review}`.
   La lista conserva id y `created_at`. Quitar: no marcado → se borra
-  (`shopping_items_discard_unbought`, función aparte); marcado → `removed_at` («Comprado, ya no hace
-  falta»). Actualizar un marcado: sigue marcado; si ahora hace falta más que lo comprado
-  (`checked_quantity`, en unidades base) → `needs_review` hasta volver a marcarlo. «Usar este menú»
+  (`shopping_items_discard_unbought`); marcado → `removed_at` («Comprado, ya no hace falta»).
+  Actualizar un marcado: sigue marcado; si ahora hace falta más que lo comprado (`checked_quantity`,
+  en unidades base; en filas marcadas antes de C4 se fija con la cantidad que tenían) →
+  `needs_review` hasta volver a marcarlo. Una clave ya ocupada (dos dispositivos añadiendo a la vez)
+  → `stale` sin escribir nada. El resumen compara cantidades en unidades base (1 kg → 1000 g no es
+  un cambio). «Usar este menú»
   (`ensureShoppingList`) también reconcilia.
 - **Marcado** (`set_shopping_items_checked` sin cambios): el trigger `shopping_items_check_state`
   guarda `checked_quantity` al marcar, lo quita al desmarcar y resuelve `needs_review`, también
   para el cliente desplegado. Un marcado sobre un artículo que ya no está → `stale` y se relee.
-- **Si la IA falla o no hay cuota.** Lista con orígenes: se aplica lo sabido y el plato queda
+- **Si la IA falla o no hay cuota.** Lista con orígenes válidos (mismas raciones y restricciones):
+  se aplica lo sabido, sin quitar filas que un plato pendiente pueda necesitar, y el plato queda
   pendiente («Faltan ingredientes de «X»», botón «Calcular (IA)» = reconciliación con la misma firma
-  solo para esos platos). Lista sin orígenes (anterior a C4): no se toca (nunca se vacía por una
-  llamada fallida) y se muestra el error. Sin reconciliación en la base (PGRST202) o servidor sin
-  desglose: lista nueva, como en B6.
+  solo para esos platos). Lista sin orígenes (anterior a C4) u orígenes de otras raciones o
+  restricciones: no se toca y se muestra tal cual con «Esta lista es de tu menú anterior» y el botón
+  «Actualizar lista (IA)»; nunca un error en lugar de la lista. Un fallo no se vuelve a pagar al
+  reabrir Compra en la misma sesión (solo con el botón). Las respuestas de la IA se recuerdan entre
+  los reintentos de una misma actualización (lista o semana que cambian a la vez); si tras tres
+  intentos sigue cambiando, se muestra la lista como está. Sin la RPC en la base (solo PGRST202 o
+  un 42883 que la nombre) o servidor sin desglose: lista nueva, como en B6.
 - **Despliegue.** Migración antes que código. El cliente de `main` (copia congelada
   `tests/fixtures/legacy-shopping-client-6121e34.ts`) sigue guardando, marcando y leyendo; el
   cliente nuevo reconcilia sus listas en el sitio conservando marcados. Límite conocido: una pestaña
