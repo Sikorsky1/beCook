@@ -1,7 +1,8 @@
 import catalog from "@/data/nutritionist-recipes.json";
 import type { MealKey, WeekDay } from "@/data/mockWeek";
+import { checkDish, mentionsDislikedFood, blocksAutomaticProposal, type DishCardForCheck } from "@/lib/recipes/restriction-check";
 import { culinaryIssue } from "./culinary-rules";
-import { dayNames, isGenericDish, type MenuProfile, normalizeFood, visibleFoodConflict } from "./validation";
+import { dayNames, isGenericDish, type MenuProfile, normalizeFood } from "./validation";
 
 // Single-slot substitution (step 21): change one meal, keep the other thirteen.
 // Shared by the week page (catalogue ideas, no cost) and /api/substitute-dish (one AI attempt).
@@ -32,27 +33,25 @@ export const substitutionLimits = { maxDishLength: 110, maxOtherDishes: 13, maxR
 
 const isPlanned = (dish: string) => dish.trim() !== "" && dish !== "LIBRE";
 
-// Words of free-text constraints (disliked foods, «otras alergias») matched against a title.
-// Only a visible match: passing never certifies that the dish is free of them.
-function freeTextTerms(profile: MenuProfile) {
-  const fromOther = profile.otherAllergies.split(/[,;\n/]| y | e /);
-  return [...profile.dislikedFoods, ...fromOther].map(normalizeFood).filter((term) => term.length >= 3);
-}
+// A reviewed card of the dish, when the catalogue has one (C3): its ingredients are checked too.
+// Estimated cards never decide an automatic idea; the title check still applies.
+export type ReviewedCardLookup = (title: string) => DishCardForCheck | null;
 
-function mentionsTerm(dish: string, terms: string[]) {
-  const text = ` ${normalizeFood(dish)} `;
-  return terms.some((term) => new RegExp(`\\b${term.replace(/[^a-z0-9 ]/g, "")}(s|es)?\\b`).test(text));
-}
-
-export function checkReplacement(dish: unknown, request: SubstitutionRequest, profile: MenuProfile): ReplacementIssue | null {
+export function checkReplacement(
+  dish: unknown,
+  request: SubstitutionRequest,
+  profile: MenuProfile,
+  card: DishCardForCheck | null = null,
+): ReplacementIssue | null {
   if (typeof dish !== "string" || dish.trim().length < 3 || dish.length > substitutionLimits.maxDishLength) return "invalid_dish";
   const key = normalizeFood(dish);
   if (!key) return "invalid_dish";
   if (key === normalizeFood(request.currentDish)) return "same_dish";
   if (request.otherDishes.some((other) => normalizeFood(other) === key)) return "duplicate_dish";
   if (request.rejected.some((other) => normalizeFood(other) === key)) return "already_rejected";
-  if (visibleFoodConflict(dish, profile)) return "restriction_conflict";
-  if (mentionsTerm(dish, freeTextTerms(profile))) return "disliked_food";
+  const check = checkDish({ title: dish, card: card?.reviewStatus === "reviewed" ? card : null }, profile);
+  if (blocksAutomaticProposal(check)) return "restriction_conflict";
+  if (mentionsDislikedFood(check)) return "disliked_food";
   if (isGenericDish(dish)) return "generic_dish";
   if (culinaryIssue(dish) !== null) return "ambiguous_dish";
   return null;
@@ -67,9 +66,13 @@ function slotRank(slot: SubstitutionSlot, recipeId: string) {
 
 // Next reviewed catalogue recipe compatible with the profile and the rest of the week.
 // Recipes for the same meal come first. Null when the catalogue has nothing left.
-export function catalogAlternative(request: SubstitutionRequest, profile: MenuProfile): { dish: string; recipeId: string } | null {
+export function catalogAlternative(
+  request: SubstitutionRequest,
+  profile: MenuProfile,
+  reviewedCard: ReviewedCardLookup = () => null,
+): { dish: string; recipeId: string } | null {
   const candidates = catalog.recipes
-    .filter((recipe) => checkReplacement(recipe.name, request, profile) === null)
+    .filter((recipe) => checkReplacement(recipe.name, request, profile, reviewedCard(recipe.name)) === null)
     .sort((a, b) => Number(b.slot === request.meal) - Number(a.slot === request.meal) || slotRank(request, a.id) - slotRank(request, b.id));
   const recipe = candidates[0];
   return recipe ? { dish: recipe.name, recipeId: recipe.id } : null;

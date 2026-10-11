@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const catalog = require("../src/data/nutritionist-recipes.json");
 const {culinaryIssue} = require("../src/lib/menu-generation/culinary-rules.ts");
 const {readMenuProfile} = require("../src/lib/menu-generation/prompt.ts");
-const {selectionToMenu} = require("../src/lib/menu-generation/validation.ts");
+const {selectionToMenu, dayNames} = require("../src/lib/menu-generation/validation.ts");
 const {catalogAlternative, checkReplacement, replaceSlot, substitutionRequestFor, validateSubstitutedWeek, readSubstitutionRequest} = require("../src/lib/menu-generation/substitution.ts");
 const {nextCatalogIdea} = require("../src/lib/dishSubstitution.ts");
 const {installFakeBackends, aiRequest, foodContextFor} = require("./helpers/fake-backends.cjs");
@@ -190,4 +190,19 @@ test("route: menu quota reached -> 429 before OpenAI; invalid input -> 400 befor
  assert.equal(fakes.openAICalls, 0);
  assert.equal((await POST(aiRequest("substitute-dish", {...veganBody, meal: "brunch"}))).status, 400);
  assert.equal(fakes.begin.length, 1);
+});
+
+test("C3: catalogue ideas skip recipes whose reviewed card conflicts; estimated cards never decide", () => {
+ const week = dayNames.map((day) => ({day, date: "", lunch: "LIBRE", dinner: "LIBRE"}));
+ const slot = {day: "Lunes", meal: "lunch"};
+ const nuts = readMenuProfile({allergies: ["nuts"]});
+ const request = substitutionRequestFor(week, slot, []);
+ const first = catalogAlternative(request, nuts);
+ assert.ok(first);
+ const reviewed = {reviewStatus: "reviewed", possibleAllergens: ["nuts"], ingredients: [{name: "almendras laminadas", quantity: 20, unit: "g", category: "despensa", optional: false}]};
+ const withCard = catalogAlternative(request, nuts, (title) => (title === first.dish ? reviewed : null));
+ assert.ok(withCard);
+ assert.notEqual(withCard.dish, first.dish, "the reviewed card lists nuts");
+ const estimated = catalogAlternative(request, nuts, (title) => (title === first.dish ? {...reviewed, reviewStatus: "inferred"} : null));
+ assert.equal(estimated.dish, first.dish);
 });
