@@ -123,7 +123,7 @@ function LoginForm() {
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between gap-3">
             <FieldLabel htmlFor="login-password">Contraseña</FieldLabel>
-            <Link href={authHref("/forgot-password", next)} className={`text-xs ${authTextLinkClass}`}>
+            <Link href={authHref("/forgot-password", next)} className={`-my-3 inline-flex items-center py-3 text-sm ${authTextLinkClass}`}>
               ¿La has olvidado?
             </Link>
           </div>
