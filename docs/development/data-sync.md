@@ -1,4 +1,4 @@
-# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1, C2)
+# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1, C2, C3, C4)
 
 Pasos 06 y 07 del roadmap (H3, H7), sin cambios de base de datos, y paso 10 (B4, H8):
 escrituras de semana transaccionales con versión e idempotencia.
@@ -184,7 +184,9 @@ Pasos 19 y 20 del roadmap. Código en `src/lib/shopping/{units,build,reconcile}.
   llamada a `/api/generate-shopping-list` con `breakdown: true` y solo esos platos (el resto
   «LIBRE»), que responde `dishes: [{day, meal, items}]` además de `items` (cliente anterior intacto).
   Una llamada, una unidad de cuota. Con todos los platos con ficha no hay IA. Las fichas no se
-  generan al preparar la compra.
+  generan al preparar la compra. Un plato cuyo título coincide con una ficha propia que no está
+  enlazada a esa comida (p. ej. el mismo plato escrito a mano otro día) cuenta como «sin ficha» y va
+  a la IA; «Crear ficha estimada (IA)» en la ficha del plato la enlaza sin IA (pendiente).
 - **Despensa** (B7, sin cantidades): no se descuenta nada; al pintar, `classifyShoppingLine`
   distingue «Te falta comprar», «Ya lo tienes habitualmente» (nombre normalizado y plural simple),
   «Comprado», «Comprado, ya no hace falta» y «Revisar».
@@ -213,7 +215,8 @@ Pasos 19 y 20 del roadmap. Código en `src/lib/shopping/{units,build,reconcile}.
   solo para esos platos). Lista sin orígenes (anterior a C4) u orígenes de otras raciones o
   restricciones: no se toca y se muestra tal cual con «Esta lista es de tu menú anterior» y el botón
   «Actualizar lista (IA)»; nunca un error en lugar de la lista. Un fallo no se vuelve a pagar al
-  reabrir Compra en la misma sesión (solo con el botón). Las respuestas de la IA se recuerdan entre
+  reabrir Compra en la misma sesión (solo con el botón); al cambiar de identidad (entrar, salir o
+  sesión caducada) esos fallos se olvidan (`forgetShoppingUpdateFailures`, desde `IdentityProvider`). Las respuestas de la IA se recuerdan entre
   los reintentos de una misma actualización (lista o semana que cambian a la vez); si tras tres
   intentos sigue cambiando, se muestra la lista como está. Sin la RPC en la base (solo PGRST202 o
   un 42883 que la nombre) o servidor sin desglose: lista nueva, como en B6.
@@ -392,8 +395,9 @@ Pasos 11 y 15 del roadmap (H9). Sin cambios de base de datos.
   estimada (IA)». Nada se crea ni se enlaza automáticamente. Invitados: solo catálogo, sin IA.
 - **Borrador del catálogo.** `src/data/recipe-cards/catalog-v1.json` (estado `draft_unreviewed`)
   no se carga en la base ni en la app; publicar fichas revisadas requiere una migración nueva.
-- **Fuera de alcance** (C3/C4): validar restricciones contra ingredientes, compra desde las fichas,
-  escalado de cantidades y firma de compra (sigue basada en títulos).
+- **Después de C2**: las restricciones se comprueban contra los ingredientes de la ficha (C3) y la
+  compra sale de las fichas, escaladas a las raciones de la semana, con firma que incluye sus
+  versiones (C4); ver sus secciones.
 
 ## Restricciones contra ingredientes (C3)
 
@@ -411,7 +415,8 @@ C2 y el contexto alimentario de C1.
   queso», «sin trigo») solo quita esa palabra. «sin lactosa» solo vale para la intolerancia, no para
   vegano. En propuestas automáticas la negación rebaja a posible en vez de anular. Hay menciones
   posibles (harina sin calificar, avena, salsa de soja, alioli, paella, cacahuete bajo frutos secos,
-  ingrediente opcional). «tostada» solo cuenta como pan cuando es sustantivo.
+  ingrediente opcional). «tostada» solo cuenta como pan y «cocido» como el guiso cuando son sustantivos
+  («almendras tostadas», «garbanzos cocidos» no).
 - **Comprobación** (`src/lib/recipes/restriction-check.ts`, `checkDish`): título siempre, más
   ingredientes y etiquetas `possibleAllergens` si hay ficha. Una etiqueta presente es conflicto.
   Resultado `conflict | possible_conflict | unverifiable | none_detected` con su base
@@ -428,7 +433,10 @@ C2 y el contexto alimentario de C1.
   alergia, o uno posible de alergia; los alimentos que no gustan siguen como `disliked_food` (solo
   ideas, no el menú semanal). «Otras alergias» ahora también bloquea al generar (422
   `restriction_conflict`, aceptado). Una ficha **revisada** del catálogo se comprueba por
-  ingredientes (`ReviewedCardLookup`); una estimada no decide.
+  ingredientes (`ReviewedCardLookup`); una estimada no decide. Hoy no está conectado a la lectura de
+  fichas (el catálogo no tiene ninguna revisada y la búsqueda de ideas es síncrona): al publicar
+  fichas revisadas, cargarlas por lotes (`recipeCards` de `repositories.ts`) y pasar la búsqueda a
+  `nextCatalogIdea` y a `/api/substitute-dish`.
 - **Ficha de plato**: sección «Compatibilidad con tu perfil» con la base visible y «No garantiza
   ausencia de alérgenos ni trazas». Restricciones: `status.current` de la cuenta (C1) con sesión
   («Cargando tus restricciones…» mientras se lee; si falla, «No hemos podido leer tus restricciones»,
