@@ -31,17 +31,19 @@ export function ProposalActionBar({ summary, weekLabel, status, menu, message, o
         aria-label="Usar la propuesta"
         className="pointer-events-auto w-full max-w-[25rem] rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]/95 p-3 shadow-[0_18px_48px_rgba(46,42,38,0.18)] backdrop-blur-xl"
       >
-        {message ? (
-          <p
-            className={`mb-2 text-xs font-semibold leading-5 ${
-              isError ? "text-[color:var(--color-danger)]" : "text-[color:var(--color-success-hover)]"
-            }`}
-            role={isError ? "alert" : "status"}
-            aria-live="polite"
-          >
-            {message}
-          </p>
-        ) : (
+        {/* The live region is always in the DOM so a new message is announced when it appears. */}
+        <div role="status" aria-live="polite" aria-atomic="true">
+          {message ? (
+            <p
+              className={`mb-2 text-sm font-semibold leading-5 ${
+                isError ? "text-[color:var(--color-danger)]" : "text-[color:var(--color-success-hover)]"
+              }`}
+            >
+              {message}
+            </p>
+          ) : null}
+        </div>
+        {message ? null : (
           <p className="t-meta mb-2">
             {summary} · se guarda en {weekLabel}
           </p>
