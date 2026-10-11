@@ -1376,7 +1376,7 @@ export default function CreateMenuPage() {
             {errorNeedsProfile ? (
               <Link
                 href="/profile"
-                className="mt-2 inline-flex min-h-10 items-center font-semibold underline underline-offset-2"
+                className="mt-2 inline-flex min-h-11 items-center font-semibold underline underline-offset-2"
               >
                 Ir a Perfil
               </Link>
