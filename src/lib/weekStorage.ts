@@ -53,12 +53,22 @@ export function withMealRecipe(weekDays: WeekDay[], dayName: string, meal: MealK
   });
 }
 
+// What a whole-week write sends for one meal (C2). A free meal: null (no card). A planned meal with
+// a link: that version. A planned meal without a link: undefined, so apply_week keeps whatever the
+// account has (safest: a device copy from before C2, or one read before a card was linked on
+// another device, never drops a card). A card is only removed by a title change, a free meal or
+// update_week_slot_recipe with null; the database never leaves it on another dish.
+function recipeLinkToSend(day: WeekDay, meal: MealKey): string | null | undefined {
+  if (day[meal] === "LIBRE") return null;
+  return mealRecipeLink(day, meal)?.versionId;
+}
+
 export function weekDaysToSupabaseWeek(weekDays: WeekDay[]): SupabaseWeek {
   return {
     days: weekDays.map((day) => ({
       dayName: day.day,
-      lunch: { ...mealSlotToSupabase(day.lunch), recipeVersionId: mealRecipeLink(day, "lunch")?.versionId ?? null },
-      dinner: { ...mealSlotToSupabase(day.dinner), recipeVersionId: mealRecipeLink(day, "dinner")?.versionId ?? null },
+      lunch: { ...mealSlotToSupabase(day.lunch), recipeVersionId: recipeLinkToSend(day, "lunch") },
+      dinner: { ...mealSlotToSupabase(day.dinner), recipeVersionId: recipeLinkToSend(day, "dinner") },
     })),
   };
 }

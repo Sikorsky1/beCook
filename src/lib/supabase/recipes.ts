@@ -64,12 +64,25 @@ export async function getCatalogReviewedVersionsFromSupabase(client?: SupabaseCl
 }
 
 // The caller's own estimated card for a title (latest version), if they already have one.
+// Two plain reads (the recipe by owner and title key, then its latest version): no filters on an
+// embedded resource, which PostgREST would apply to the embed and not to the rows.
 export async function getOwnRecipeCardByTitleFromSupabase(client: SupabaseClient, userId: string, title: string) {
+  const { data: recipe, error: recipeError } = await client
+    .from("recipes")
+    .select("id")
+    .eq("owner_user_id", userId)
+    .eq("title_key", recipeTitleKey(title))
+    .maybeSingle<{ id: string }>();
+
+  if (recipeError) {
+    throw new Error(`Could not read the dish card: ${recipeError.message}`);
+  }
+  if (!recipe) return null;
+
   const { data, error } = await client
     .from("recipe_versions")
     .select(cardColumns)
-    .eq("recipes.owner_user_id", userId)
-    .eq("recipes.title_key", recipeTitleKey(title))
+    .eq("recipe_id", recipe.id)
     .order("version", { ascending: false })
     .limit(1)
     .maybeSingle();

@@ -5,8 +5,8 @@ export type MealStatus = "planned" | "free";
 export type SupabaseMealSlot = {
   status: MealStatus;
   dishName: string;
-  // C2: week_days.*_recipe_version_id. null: no card. undefined: not known by the caller
-  // (apply_week then keeps the slot's current link).
+  // C2: week_days.*_recipe_version_id. null: no card (sent only for free meals). undefined: not
+  // sent, apply_week keeps the slot's current link (see recipeLinkToSend in weekStorage.ts).
   recipeVersionId?: string | null;
 };
 
