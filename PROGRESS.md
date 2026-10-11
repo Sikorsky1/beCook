@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-11 · Rama: `audit-opt` (= `main` tras PR #14: B5 y D2 en producción) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-11 · Rama: `audit-opt` (= `main` tras PR #15: C1 y D3 en producción) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -341,7 +341,7 @@ Pasos 24 y 25 del roadmap (UX 01-04, 19; Backend H2-H3, H5-H6). Rama `audit/d2-p
 | Validación | B5 y D2 probados en la Preview de `audit-opt` antes del PR |
 | Pendiente | Comprobar el despliegue de producción en Vercel (no revisado en esta sesión). `audit-opt` = `main` por fast-forward antes de este commit de documentación |
 
-## Iteración C1 — Contexto alimentario congelado por semana ✅ local (2026-10-11, integrada en `audit-opt` el 2026-10-11; falta remoto)
+## Iteración C1 — Contexto alimentario congelado por semana ✅ (2026-10-11, en producción el 2026-10-11)
 Paso 16 del roadmap (Backend H6; UX 10, 11). Rama `audit/c1-contexto` (desde `audit-opt`), en paralelo con el agente de D3 (pasos 26–28). Sin push.
 
 | Elemento | Detalle |
@@ -366,7 +366,7 @@ Paso 16 del roadmap (Backend H6; UX 10, 11). Rama `audit/c1-contexto` (desde `au
 3. Compra de una semana nueva: la lista se calcula para los comensales de esa semana. Compra de una semana antigua: se mantiene la lista que había (sin nueva llamada).
 4. Cuenta sin perfil guardado: generar menú → mensaje «Guarda tu perfil…».
 
-## Iteración D3 — Aplicar la propuesta, generación honesta y «Otra idea» en la vista previa ✅ local (2026-10-11, integrada en `audit-opt` el 2026-10-11; sin push)
+## Iteración D3 — Aplicar la propuesta, generación honesta y «Otra idea» en la vista previa ✅ (2026-10-11, en producción el 2026-10-11)
 Pasos 26, 27 y 28 del roadmap (UX 05-08, 10; Backend H8-H10, §9-10). Rama `audit/d3-propuesta` (desde `audit-opt`), en paralelo con el agente de C1 (paso 16).
 
 | Elemento | Detalle |
@@ -407,7 +407,7 @@ Pasos 26, 27 y 28 del roadmap (UX 05-08, 10; Backend H8-H10, §9-10). Rama `audi
 | «Otra idea» en la vista previa | Usa el contexto del servidor: el catálogo se filtra con la unión del `foodContext` de la propuesta y el perfil de la página (`proposalIdeaProfile`; un cambio posterior del perfil solo añade restricciones). Funciona aunque la página aún no haya leído el perfil. «Pedir idea a la IA»: el cuerpo ya no lleva `profile` (también en Semana) y la idea se rechaza si choca con el perfil local o con el `foodContext` que devuelve `/api/substitute-dish`. +3 tests en `tests/create-menu-proposal.test.cjs` |
 | Comprobaciones | Tras cada merge: lint, typecheck, test (262/262 tras C1; 276/276 tras D3; **279/279** tras la conexión) y build (en una copia sin `.env*`). Con todo junto: `db:reset` + `db:seed` + `test:db` **396/396** |
 | No probado | Prueba manual en navegador del conjunto (resumen «Generado para…», «Otra idea» con el contexto del servidor, perfil sin guardar → 409 en Crear menú). CI (sin push). No se compara `foodContext.version` con el perfil actual al aplicar (observación de C1) |
-| Pendiente | Migración `20261011090000_week_food_context` en becook-preview y validación en la Preview; producción con OK y backup **antes** del merge a `main` (sin ella `/api/generate-menu` responde 503). Pruebas manuales de C1 y D3 |
+| Pendiente | ~~Migración en preview y producción, pruebas manuales~~ hecho el 2026-10-11, ver «C1 y D3 en producción» |
 
 ### Correcciones tras la prueba de la ola 4 ✅ local (2026-10-11, sin push)
 | Defecto | Arreglo |
@@ -419,6 +419,15 @@ Pasos 26, 27 y 28 del roadmap (UX 05-08, 10; Backend H8-H10, §9-10). Rama `audi
 | M-3 409 sin perfil | Sin «Reintentar» ni «Puedes reintentarlo tal cual…», no cuenta para el límite de 3 y ofrece «Ir a Perfil». El resumen previo dice que hace falta guardar el perfil |
 | M-1 Borrador de sessionStorage | Las personas restauradas de un borrador ya no las sobrescribe el perfil cuando el efecto se repite |
 | Comprobaciones | lint, typecheck, test **281/281**, build (copia sin `.env*`). `test:db` **397/397** con la BD local compartida, que ya tenía la migración `20261012090000_recipe_cards` de `audit/c2-fichas` (se contó su expectativa solo para esa ejecución; sin `db:reset`). Sin prueba manual en navegador de D-2, M-1, M-2 ni M-3 |
+
+## C1 y D3 en producción ✅ (2026-10-11)
+| Elemento | Resultado |
+|---|---|
+| PR | [#15](https://github.com/Sikorsky1/beCook/pull/15) `audit-opt` → `main`, merge commit `25d8c03` (2026-10-11); checks en verde (application, database, Vercel) |
+| Migración | `week_food_context` aplicada antes del merge con el conector de Supabase: becook-preview `20261011190843`, becook `20261011195740` (tras backup completo en `~/Backups/becook/2026-10-11-ola4`; aditiva, sin filas afectadas). Registrada en `supabase/hosted/applied-*.json` |
+| Validación | Recorrido en navegador en local de D3 1–7 y C1 antes y después de las correcciones; Preview de `audit-opt` sin sesión (páginas 200, rutas de IA 401) |
+| Despliegue be-cook | `dpl_5obRzbZ6ExPacZGXwkdUxK6c4FKn` READY en `www.becook.xyz` y `becook.xyz` (anterior para rollback: `dpl_9VuF8fxMN6EvNp22pL2tkge8zeEh`). `/login`, `/week`, `/create-menu`, `/shopping/list` 200 · `/` 307 · `POST` de las 4 rutas de IA sin sesión 401 |
+| Pendiente | Generación real con IA en producción y en Preview con sesión (Sergio): no se pudo probar sin cuenta propia. `audit-opt` = `main` por fast-forward antes de este commit |
 
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
@@ -438,7 +447,7 @@ Pasos 26, 27 y 28 del roadmap (UX 05-08, 10; Backend H8-H10, §9-10). Rama `audi
 | 13 Despensa remota segura | B7 | ✅ | En producción desde 2026-10-09 (PR #13): escrituras por artículo con versión; migración `pantry_item_writes` en preview y producción; ver B7 |
 | 14 Firma de compra estable | B6 | ✅ | En producción desde 2026-10-09 (PR #12): firma canónica sin fechas ni versión; mismo menú → misma lista; ver B6 |
 | 15 Estados de sincronización visibles | B5 | ✅ | En `audit-opt` desde 2026-10-10, en producción desde 2026-10-10 (PR #14): `SyncStatus` en Semana, Compra, Despensa, Perfil y onboarding; ver B5 e integración |
-| 16 Contexto alimentario por semana | C1 | 🟡 | En `audit-opt` desde 2026-10-11 (local): perfil leído en servidor, contexto congelado por semana; falta migración `20261011090000` en preview y producción; ver C1 |
+| 16 Contexto alimentario por semana | C1 | ✅ | En producción 2026-10-11 (PR #15): perfil leído en servidor, contexto congelado por semana; ver C1 |
 | 17 Fichas de plato versionadas | C2 | ⏳ | |
 | 18 Validación de restricciones | C3 | ⏳ | |
 | 19 Compra desde recetas y despensa | C4 | ⏳ | |
@@ -448,9 +457,9 @@ Pasos 26, 27 y 28 del roadmap (UX 05-08, 10; Backend H8-H10, §9-10). Rama `audi
 | 23 Alta, login y recuperación | D1 | ✅ | En producción desde 2026-10-09 (PR #12): alta, login con `next`, recuperación. Auth completado el 2026-10-11 en preview y producción: SMTP Resend, plantillas en español, mínimo 8, confirmación de email activada. Solo queda la protección de contraseñas filtradas; ver D1 |
 | 24 Perfil simplificado | D2 | ✅ | Primera mitad en producción (PR #13); resto en `audit-opt` desde 2026-10-10: datos corporales opcionales y `confirmed_sections`. Migración `20261010090000` en preview y producción (2026-10-10); en producción desde 2026-10-10 (PR #14); ver D2 (segunda mitad) |
 | 25 Onboarding y primer menú | D2 | ✅ | En `audit-opt` desde 2026-10-10: onboarding de 3 pasos con `onboarding_progress`; migración `20261010090000` en preview y producción (2026-10-10); en producción desde 2026-10-10 (PR #14); ver D2 (segunda mitad) |
-| 26 Aplicar propuesta visible y segura | D3 | 🟡 | En `audit-opt` desde 2026-10-11 (local): CTA fijo, diálogo propio y deshacer; falta Preview; ver D3 |
-| 27 Generación honesta | D3 | 🟡 | En `audit-opt` desde 2026-10-11 (local): progreso real, cancelación, borrador recuperable, «Generado para…» con el contexto de C1; falta Preview; ver D3 e integración |
-| 28 «Otra idea» por plato | D3 | 🟡 | En `audit-opt` desde 2026-10-11 (local): en la vista previa, con el contexto del servidor; falta Preview; ver D3 e integración |
+| 26 Aplicar propuesta visible y segura | D3 | ✅ | En producción 2026-10-11 (PR #15); ver D3 e integración |
+| 27 Generación honesta | D3 | ✅ | En producción 2026-10-11 (PR #15); ver D3 e integración |
+| 28 «Otra idea» por plato | D3 | ✅ | En producción 2026-10-11 (PR #15); ver D3 e integración |
 | 29 Semana con «Hoy» | D4 | ✅ | En producción desde 2026-10-09 (PR #13): bloque «Hoy» y días compactos; ficha de plato al llegar C2; ver D4 |
 | 30 Compra completa y despensa | D5 | ⏳ | |
 | 31 Despensa con acciones claras | D5 | ⏳ | |
@@ -474,7 +483,7 @@ Pasos 26, 27 y 28 del roadmap (UX 05-08, 10; Backend H8-H10, §9-10). Rama `audi
 | shopping_list_per_week | ✅ | ✅ 20261009154554 | ✅ 20261009161800 (tras backup completo en ~/Backups/becook/2026-10-09) |
 | pantry_item_writes | ✅ | ✅ 20261009222300 (SQL Editor, registrada a mano en el ledger) | ✅ 20261009223500 (SQL Editor, registrada a mano en el ledger) |
 | profile_optional_body_onboarding (`20261010090000`) | ✅ | ✅ 20261010193641 (conector Supabase) | ✅ 20261010194325 (conector Supabase; backup completo en `~/Backups/becook/2026-10-10-ola3`) |
-| week_food_context (`20261011090000`) | ✅ | ⏳ | ⏳ (antes del merge a `main`, con OK y backup) |
+| week_food_context (`20261011090000`) | ✅ | ✅ 20261011190843 | ✅ 20261011195740 (tras backup completo en ~/Backups/becook/2026-10-11-ola4) |
 
 ## Decisiones
 | # | Decisión | Fecha |
