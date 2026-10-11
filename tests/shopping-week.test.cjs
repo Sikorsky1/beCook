@@ -4,6 +4,9 @@ const assert = require("node:assert/strict");
 // B6: shopping list tied to its week (step 12) and stable signature (step 14). The real data layer
 // runs against an in-memory account with the semantics of save_shopping_list and
 // set_shopping_items_checked (current list = newest of the week); the AI route is stubbed. No network.
+// C4: this account has no reconcile_shopping_list and the stubbed route answers whole-week items only
+// (no breakdown per dish), so these tests also prove the fallback to the B6 behaviour (a dish change
+// makes a new list). The C4 behaviour is in tests/shopping-recipes.test.cjs.
 process.env.NEXT_PUBLIC_SUPABASE_URL = "http://supabase.test";
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "synthetic-anon-key";
 const {createDevice, useDevice} = require("./helpers/fake-browser.cjs");
@@ -198,7 +201,7 @@ test("applying the same dishes again (new week version) keeps the list and its m
  assert.deepEqual(after.view.checkedItemIds, ["frutería-tomate-ud"]);
 });
 
-test("changing a dish makes a new list; the previous one is kept as history", async () => {
+test("changing a dish without in-place update (server or database before C4) makes a new list; the previous one is kept", async () => {
  account.writeWeek(W41, menu());
  await openShopping();
  account.writeWeek(W41, menu("Garbanzos"));
@@ -317,7 +320,7 @@ test("the week changed while generating: same dishes → saved on the new versio
  assert.equal(account.listsOf(W41).length, 1, "a list for other dishes is not stored");
 });
 
-test("lists saved before B6 (no signature) are reused only if generated after the week's last change", async () => {
+test("lists saved before B6 (no signature) are reused only if generated after the week's last change (fallback without C4)", async () => {
  account.writeWeek(W41, menu());
  const legacyItems = generatedItems.map((item, n) => ({...item, id: "old-" + n, checked: n === 1}));
  account.st.lists.push({id: "legacy", week: "2026-W41", at: account.st.seq + 1, signature: null, items: legacyItems});
@@ -383,7 +386,7 @@ test("C1: the list is signed with the week's context and the request names the w
  assert.equal(ai.calls, 1);
 });
 
-test("C1: a legacy week keeps its list; applying the menu again with a frozen context makes a new one", async () => {
+test("C1: a legacy week keeps its list; applying the menu again with a frozen context makes a new one (fallback without C4)", async () => {
  account.writeWeek(W41, menu());
  await openShopping();
  assert.equal(ai.calls, 1);
