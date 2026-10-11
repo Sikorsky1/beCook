@@ -2,7 +2,8 @@
 
 Fecha: 2026-10-12 · Rama de trabajo: `audit/nav` (desde `audit-opt` c1b9c1a), ola 7 en paralelo con
 C6 (paso 22, propietario de Crear menú) y D5 (pasos 30-31, propietario de Compra y Despensa).
-Estado: **propuesto para validación del revisor** (Sergio delegó la aprobación en un revisor;
+Estado: **aprobado por el revisor delegado y aplicado (2026-10-12)**, con los cambios del revisor
+que se recogen en «Revisión y aplicación» al final (Sergio delegó la aprobación en un revisor;
 decisiones 7 y 9 del plan de la ola 7).
 
 `AGENTS.md` exige plan aprobado en `design-plans/` antes de tocar `src/components/layout/*`. Este
@@ -29,8 +30,10 @@ completo en un solo sitio.
    contexto alimentario) y desde onboarding.
 2. **Ninguna ruta desaparece.** `/create-menu`, `/import`, `/pantry`, `/shopping-list`, `/` siguen
    respondiendo. No se retiran redirecciones (paso 34).
-3. **`/import` → `/create-menu?mode=import`** (conserva `week=YYYY-Www` si viene y es válido).
-   `?mode=import` es el contrato con C6: Crear menú abre la importación cuando lo recibe.
+3. **`/import` → `/create-menu?mode=import`** (conserva `week=YYYY-Www` si viene y está bien formado,
+   o el antiguo `?isoYear=&isoWeek=`). `?mode=import` es el contrato con C6: Crear menú abre la
+   importación cuando lo recibe. **NAV solo llega a `main` junto con C6**: sin C6, «Ya tengo un
+   menú» y `/import` abrirían Crear menú en modo generar.
 4. **Lógica pura en `src/lib/navigation.ts`** (solo añadidos): `appSections`, `activeSection(pathname)`,
    `sectionAriaCurrent(section, pathname)` y `createMenuImportHref(week)`. El componente solo pinta.
 
@@ -83,17 +86,29 @@ Se muestra cuando la semana ya se ha leído y no tiene menú (invitado incluido)
 2. **«Crear menú»** — acción principal, enlace a `/create-menu?week=…`, `bg-[color:var(--color-accent-strong)]`
    con texto blanco (4,87:1), hover `accent-strong-hover`, `min-h-11`.
 3. **«Repetir la semana N»** — solo si la semana anterior tiene al menos un plato planificado. Botón
-   secundario (borde, fondo `surface`), `min-h-11`. Debajo, texto `t-meta`/`text-sm`:
-   «Copia los platos y sus fichas del D–D mes. Se guarda con tu perfil actual (raciones y
-   restricciones de hoy). La lista de la compra se prepara cuando abras Compra.»
+   secundario (borde, fondo `surface`), `min-h-11`. Debajo, texto `text-sm` (enlazado con
+   `aria-describedby`):
+   - Con cuenta: «Copia los platos y sus fichas de esa semana (D–D mes). Se guarda con tu perfil
+     actual (raciones y restricciones de hoy). La lista de la compra se prepara cuando abras Compra.»
+   - Invitado: «Copia los platos y sus fichas de esa semana (D–D mes). Se copia en este
+     dispositivo. Para la lista de la compra, inicia sesión.»
    - Usa `applyMenuToWeek` y `saveWeek` **sin modificarlos** (`applyWeek.ts` solo se importa):
      copia título y ficha (`lunchRecipe`/`dinnerRecipe`) de cada día; `generationRequestId: null`,
      de modo que el contexto alimentario se congela con el perfil actual, como un menú importado;
      `prepareShopping` no hace nada (la compra se prepara al abrir Compra).
-   - Si al guardar la semana ya tiene menú (otro dispositivo), no se reemplaza: se avisa y se
-     vuelve a leer la semana. Si la cuenta no confirma, se avisa con el mensaje de `applyWeek`
-     y «Reintentar» reutiliza la misma clave (sin duplicar).
-   - Mientras guarda: botón deshabilitado con «Copiando…»; resultado en una región `role="status"`.
+   - Si al guardar la semana ya tiene menú (otro dispositivo, también si llega entre la lectura y
+     la escritura), no se reemplaza: se avisa y se vuelve a leer la semana.
+   - Si la cuenta no confirma (pendiente), la copia queda en este dispositivo, la semana se vuelve
+     a leer y la muestra pendiente; el reintento es el «Reintentar» del estado de guardado
+     (`SyncStatus`), que reenvía con la escritura habitual (clave nueva) y no duplica porque se
+     comprueba contra la versión esperada. Solo si no se ha enviado nada (cuenta inaccesible al
+     leer) «Repetir» de nuevo reutiliza la misma clave.
+   - Mientras guarda: «Copiando…» con `aria-busy` y `aria-disabled`, sin `disabled` ni atenuado
+     (conserva el foco; una segunda pulsación se ignora).
+   - Resultado: aviso encima de la semana que recibe el foco (`tabIndex={-1}`), sin `role="status"`,
+     para no anunciarse a la vez que `SyncStatus`.
+   - El estado vacío y la lectura de la semana anterior solo siguen a una lectura completada de la
+     semana seleccionada (misma identidad y semana); mientras tanto se muestra «Cargando esta semana...».
 4. **«Ya tengo un menú»** — enlace secundario a `/create-menu?mode=import&week=…`, `min-h-11`.
 
 Textos sin jerga; nada por debajo de 12 px; objetivos táctiles de 44 px; foco con el anillo global.
@@ -102,16 +117,17 @@ Textos sin jerga; nada por debajo de 12 px; objetivos táctiles de 44 px; foco c
 
 - `nav` con `aria-label="Navegación principal"`; enlaces reales (`Link`), iconos `aria-hidden`.
 - `aria-current` como se describe arriba. Contraste de colores sin cambios.
-- Semana vacía: botones y enlaces con texto propio; el resultado de «Repetir» se anuncia con
-  `role="status"`; el botón en curso tiene `aria-busy` y texto visible.
+- Semana vacía: botones y enlaces con texto propio; el resultado de «Repetir» recibe el foco (no es
+  región viva); el botón en curso tiene `aria-busy`, `aria-disabled` y texto visible.
 
 ## Pruebas
 
 - `tests/navigation.test.cjs`: sección activa por ruta (incluidas `/`, `/create-menu`, `/import`,
   `/pantry`, `/shopping-list`, cuenta, barra final, rutas sin sección), `aria-current`
   (`page`/`true`/ninguno), `createMenuImportHref` y redirección de `/import`, que la barra tenga 3
-  destinos, 13 px y la misma altura, y el estado vacío de Semana (enlaces, 44 px, copia de platos y
-  fichas sin preparar la compra).
+  destinos, 13 px y la misma altura, y el estado vacío de Semana (enlaces, 44 px, textos de
+  invitado, foco, copia de platos y fichas sin preparar la compra, carrera lectura→escritura con
+  conflicto, pendiente y duplicado confirmado).
 - Regresión del paso 33: `tests/a11y-semantics.test.cjs` sigue pasando sin cambios.
 
 ## Riesgos
@@ -120,3 +136,22 @@ Textos sin jerga; nada por debajo de 12 px; objetivos táctiles de 44 px; foco c
   revisar a 320 y 390 px en la Preview de `audit-opt`, y VoiceOver en iPhone físico (paso 36).
 - «Crear menú» deja de estar a un toque desde cualquier pantalla; se compensa con las entradas de
   Semana. Validar con usuarios.
+
+## Revisión y aplicación (2026-10-12)
+
+Aprobado por el revisor delegado con estos cambios, ya incorporados arriba y aplicados en `audit/nav`:
+
+1. Foco tras «Repetir»: el aviso recibe el foco (`tabIndex={-1}`) y no es región viva, para no
+   anunciarse a la vez que `SyncStatus`.
+2. Textos de invitado: no se le dice que se guarda con el perfil actual ni que la compra se prepara
+   al abrir Compra («Se copia en este dispositivo. Para la lista de la compra, inicia sesión»).
+3. NAV solo llega a `main` junto con C6 (`?mode=import`).
+4. «Copiando…» sin `disabled:opacity-60`: `aria-busy`, `aria-disabled` y texto, sin atenuar.
+5. Corregida la descripción del reintento en pendiente (lo hace `SyncStatus` con clave nueva; no
+   duplica por la versión esperada).
+
+Además: la lectura de la semana anterior exige que la semana cargada sea la seleccionada (evita una
+lectura sobrante al cambiar de semana), y `/import` entiende también `?isoYear=&isoWeek=`.
+
+Para el paso 34: los avisos de Semana usan el color fijo `text-[#8a4e2a]` sobre `--warning-soft`
+(también `weekNotice` y `SyncStatus`); convertirlo en token al consolidar.
