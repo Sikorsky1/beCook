@@ -107,6 +107,17 @@ function createShoppingAccount() {
       // their unit), remove (manual rows only). Signature and basis never change.
       async edit({ listId, ops }) {
         st.calls.edit++; offline();
+        // editUnavailable: the database without edit_shopping_items (D5 migration not applied).
+        if (st.editUnavailable) return { status: "unavailable" };
+        // The function's validation (22023, nothing written): ids repeated within a kind, repeated
+        // add keys, more than 50 of a kind, nothing at all. rejectNextEdit forces a refusal.
+        const kinds = [ops.add ?? [], ops.set_quantity ?? [], ops.remove ?? []];
+        const repeated = (values) => new Set(values).size !== values.length;
+        if (st.rejectNextEdit || kinds.every((kind) => kind.length === 0) || kinds.some((kind) => kind.length > 50 || repeated(kind.map((op) => op.id)))
+            || repeated((ops.add ?? []).map((op) => op.item_key))) {
+          st.rejectNextEdit = false;
+          throw Object.assign(new Error("edit_shopping_items: invalid item"), { code: "22023", rejected: true });
+        }
         const week = st.weeks.get(k);
         if (!week) return { status: "no_week" };
         const list = current(k);

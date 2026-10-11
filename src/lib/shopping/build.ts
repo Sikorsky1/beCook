@@ -236,11 +236,16 @@ export function pantryNameKeys(pantryNames: string[]) {
   return new Set(pantryNames.map(shoppingNameKey));
 }
 
-export function classifyShoppingLine(item: Pick<ShoppingViewItem, "name" | "needsReview" | "removed">, checked: boolean, pantry: Set<string>): ShoppingLineStatus {
+// An item added by hand (D5) is never «usually at home»: the user asked for it explicitly.
+export function classifyShoppingLine(
+  item: Pick<ShoppingViewItem, "name" | "needsReview" | "removed"> & { manual?: boolean },
+  checked: boolean,
+  pantry: Set<string>,
+): ShoppingLineStatus {
   if (checked && item.needsReview) return "review";
   if (checked && item.removed) return "bought_unneeded";
   if (checked) return "bought";
-  if (pantry.has(shoppingNameKey(item.name))) return "pantry";
+  if (!item.manual && pantry.has(shoppingNameKey(item.name))) return "pantry";
   return "to_buy";
 }
 

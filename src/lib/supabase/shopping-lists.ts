@@ -409,6 +409,16 @@ export type EditShoppingItemsResult =
   // The database does not have edit_shopping_items yet (D5 migration not applied).
   | { status: "unavailable" };
 
+// Thrown when the database refuses a call of edit_shopping_items (22023 invalid, 42501 not
+// allowed), as opposed to a connection failure: the data layer drops those edits.
+export class ShoppingEditRejectedError extends Error {
+  readonly rejected = true;
+  constructor(message: string) {
+    super(`Shopping list edits refused: ${message}`);
+    this.name = "ShoppingEditRejectedError";
+  }
+}
+
 const editOutcomes = new Set<ShoppingEditOutcome>(["created", "duplicate", "existing", "applied", "missing", "not_manual"]);
 
 // Applies the user's edits to the current list of the caller's week (edit_shopping_items): only
@@ -435,6 +445,8 @@ export async function editShoppingItemsInSupabase({
     if (error.code === "PGRST202" || (error.code === "42883" && /edit_shopping_items\s*\(/.test(error.message))) {
       return { status: "unavailable" };
     }
+    // The database refused these edits (invalid, or not allowed): sending them again cannot work.
+    if (error.code === "22023" || error.code === "42501") throw new ShoppingEditRejectedError(error.message);
     throw new Error(`Could not edit shopping list: ${error.message}`);
   }
 

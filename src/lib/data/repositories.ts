@@ -525,7 +525,8 @@ export type CachedShoppingItem = StoredShoppingItem & { needsReview?: boolean; r
 export type ShoppingEdit = { change: string } & (
   | { op: "add"; id: string; name: string; quantity: number | null; unit: string; category: SupermarketCategory; itemKey: string }
   | { op: "set_quantity"; id: string; quantity: number | null; unit: string; origins: ShoppingRowOrigin[] }
-  | { op: "remove"; id: string }
+  // itemKey: the key of the removed item, so a later add of the same item goes in another call.
+  | { op: "remove"; id: string; itemKey?: string | null }
 );
 
 export type ShoppingCache = {

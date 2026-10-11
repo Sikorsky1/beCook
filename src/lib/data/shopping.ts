@@ -272,8 +272,16 @@ async function pushPendingChecks(
   const remaining: Record<string, boolean> = {};
   let discarded = false;
 
+  // Rows added here whose add the account has not accepted yet: their marks wait (D5).
+  const pendingAdds = new Set((cache.pendingEdits ?? []).flatMap((edit) => (edit.op === "add" ? [edit.id] : [])));
   for (const [itemId, value] of Object.entries(pending)) {
     const rows = cache.itemIds?.[itemId];
+    if (rows?.some((row) => pendingAdds.has(row))) {
+      remaining[itemId] = value;
+      if (value) checked.add(itemId);
+      else checked.delete(itemId);
+      continue;
+    }
     if (!remote || !rows?.length) {
       discarded = true;
       continue;
@@ -360,6 +368,28 @@ function toOps(edits: ShoppingEdit[]): ShoppingEditOps {
 // At most 50 of each kind per call (the database's limit): 50 edits at a time, in order.
 const EDIT_BATCH = 50;
 
+// The edits sent in one call. The database applies adds, then quantities, then removes, and refuses
+// a call that repeats an id or an added key: a call ends before any edit whose id or key already
+// appeared in an add or remove of it (add, remove and add again of the same item → three calls).
+function nextBatch(edits: ShoppingEdit[]) {
+  const ids = new Set<string>();
+  const keys = new Set<string>();
+  const batch: ShoppingEdit[] = [];
+  for (const edit of edits) {
+    if (batch.length >= EDIT_BATCH) break;
+    const key = edit.op === "add" ? edit.itemKey : edit.op === "remove" ? edit.itemKey ?? null : null;
+    if (batch.length && (ids.has(edit.id) || (key !== null && keys.has(key)))) break;
+    batch.push(edit);
+    if (edit.op !== "set_quantity") {
+      ids.add(edit.id);
+      if (key !== null) keys.add(key);
+    }
+  }
+  return batch;
+}
+
+const isRejection = (error: unknown) => Boolean(error && typeof error === "object" && (error as { rejected?: unknown }).rejected === true);
+
 type EditsOutcome = {
   // none: nothing to send · synced: accepted · pending: kept here (no connection, or the database
   // cannot take edits yet) · stale: the list was replaced or the week is gone; the edits were dropped.
@@ -368,7 +398,19 @@ type EditsOutcome = {
   existing: string[];
   // The list as the account returned it after the last accepted edits.
   list?: ShoppingList;
+  // Tokens of edits the database refused (dropped, never sent again).
+  rejected: Set<string>;
 };
+
+// Marks not accepted yet stay as this device has them.
+function withPendingMarks(checkedItemIds: string[], pendingChecks: Record<string, boolean> | undefined) {
+  const checked = new Set(checkedItemIds);
+  for (const [id, value] of Object.entries(pendingChecks ?? {})) {
+    if (value) checked.add(id);
+    else checked.delete(id);
+  }
+  return [...checked];
+}
 
 // Sends this device's edits of its list, in the marks' queue. The device copy becomes the account
 // list plus the edits made meanwhile.
@@ -376,37 +418,51 @@ function pushPendingEdits(identity: DataIdentity, isoWeek: IsoWeek): Promise<Edi
   return enqueue(queueKey(identity, isoWeek), async (): Promise<EditsOutcome> => {
     const remote = shoppingRemote(identity, isoWeek);
     const existing: string[] = [];
+    const rejected = new Set<string>();
     let list: ShoppingList | undefined;
     for (;;) {
       const cache = readShoppingCache(identity, isoWeek);
       const edits = cache?.pendingEdits ?? [];
-      if (!cache || !edits.length) return { status: list ? "synced" : "none", existing, list };
-      if (!cache.listId || !remote?.edit) return { status: "pending", existing };
-      const batch = edits.slice(0, EDIT_BATCH);
+      if (!cache || !edits.length) return { status: list || rejected.size ? "synced" : "none", existing, list, rejected };
+      if (!cache.listId || !remote?.edit) return { status: "pending", existing, rejected };
+      const batch = nextBatch(edits);
+      const sent = new Set(batch.map((edit) => edit.change));
+      const remainingAfter = () => (readShoppingCache(identity, isoWeek)?.pendingEdits ?? []).filter((edit) => !sent.has(edit.change));
       let result;
       try {
         result = await remote.edit({ listId: cache.listId, ops: toOps(batch) });
-      } catch {
-        return { status: "pending", existing };
+      } catch (error) {
+        // No connection: everything stays pending. Refused by the database: that call is dropped
+        // (sending it again would be refused again) and the device shows the account list again.
+        if (!isRejection(error)) return { status: "pending", existing, rejected };
+        for (const token of sent) rejected.add(token);
+        const current = readShoppingCache(identity, isoWeek);
+        const remaining = remainingAfter();
+        const fresh = await remote.fetch().catch(() => null);
+        if (current && fresh?.list?.id === cache.listId) {
+          const next = withEdits(listToCache(fresh.list, current.weekSignature), remaining);
+          writeShoppingCache(identity, isoWeek, { ...next, checkedItemIds: withPendingMarks(next.checkedItemIds, current.pendingChecks), pendingChecks: current.pendingChecks ?? {} });
+          list = fresh.list;
+        } else if (current) {
+          writeShoppingCache(identity, isoWeek, { ...current, pendingEdits: remaining });
+        }
+        continue;
       }
-      if (result.status === "unavailable") return { status: "pending", existing };
+      if (result.status === "unavailable") return { status: "pending", existing, rejected };
       const current = readShoppingCache(identity, isoWeek);
-      const sent = new Set(batch.map((edit) => edit.change));
-      const remaining = (current?.pendingEdits ?? []).filter((edit) => !sent.has(edit.change));
+      const remaining = remainingAfter();
       if (result.status === "stale" || result.status === "no_week") {
         if (current) writeShoppingCache(identity, isoWeek, { ...current, pendingEdits: [] });
-        return { status: "stale", existing };
+        return { status: "stale", existing, rejected };
       }
       for (const entry of result.results) if (entry.result === "existing") existing.push(entry.id);
       list = result.list;
       const next = withEdits(listToCache(result.list, current?.weekSignature ?? cache.weekSignature), remaining);
-      // Marks not accepted yet stay as this device has them.
-      const checked = new Set(next.checkedItemIds);
-      for (const [id, value] of Object.entries(current?.pendingChecks ?? {})) {
-        if (value) checked.add(id);
-        else checked.delete(id);
-      }
-      writeShoppingCache(identity, isoWeek, { ...next, checkedItemIds: [...checked], pendingChecks: current?.pendingChecks ?? {} });
+      writeShoppingCache(identity, isoWeek, {
+        ...next,
+        checkedItemIds: withPendingMarks(next.checkedItemIds, current?.pendingChecks),
+        pendingChecks: current?.pendingChecks ?? {},
+      });
     }
   });
 }
@@ -418,22 +474,24 @@ async function settleEdits(identity: DataIdentity, isoWeek: IsoWeek, list: Shopp
   if (!cache?.pendingEdits?.length) return { list, edits: [] as ShoppingEdit[], discarded: false };
   if (cache.listId !== list.id) return { list, edits: [] as ShoppingEdit[], discarded: true };
   const outcome = await pushPendingEdits(identity, isoWeek);
+  const refused = outcome.rejected.size > 0;
   if (outcome.status === "stale") return { list, edits: [] as ShoppingEdit[], discarded: true };
-  if (outcome.status === "pending") return { list, edits: readShoppingCache(identity, isoWeek)?.pendingEdits ?? [], discarded: false };
-  return { list: outcome.list ?? list, edits: readShoppingCache(identity, isoWeek)?.pendingEdits ?? [], discarded: false };
+  if (outcome.status === "pending") return { list: outcome.list ?? list, edits: readShoppingCache(identity, isoWeek)?.pendingEdits ?? [], discarded: refused };
+  return { list: outcome.list ?? list, edits: readShoppingCache(identity, isoWeek)?.pendingEdits ?? [], discarded: refused };
 }
 
 export type EditResult = {
   // local: guest (this device only) · synced: in the account · pending: kept on this device and sent
   // later · stale: the account replaced the list; nothing was written · existing: that item is
-  // already in the list · no_list: the week has no list yet · refused: not possible on this line.
-  status: "local" | "synced" | "pending" | "stale" | "existing" | "no_list" | "refused";
+  // already in the list · no_list: the week has no list yet · refused: not possible on this line ·
+  // discarded: the database refused it; dropped, the device shows the account list again.
+  status: "local" | "synced" | "pending" | "stale" | "existing" | "no_list" | "refused" | "discarded";
   view: ShoppingView | null;
 };
 
-const viewOf = (identity: DataIdentity, isoWeek: IsoWeek, days: WeekDay[]) => {
+const viewOf = (identity: DataIdentity, isoWeek: IsoWeek, days: WeekDay[], discarded = false) => {
   const cache = readShoppingCache(identity, isoWeek);
-  return cache ? cacheToView(cache, identity.userId ? "remote" : "local", false, days) : null;
+  return cache ? cacheToView(cache, identity.userId ? "remote" : "local", false, days, discarded) : null;
 };
 
 // The device copy as it is now (after an edit, a mark or a pantry change), for the page.
@@ -456,10 +514,11 @@ async function runEdit(identity: DataIdentity, isoWeek: IsoWeek, days: WeekDay[]
   writeShoppingCache(identity, isoWeek, { ...applyEdit(cache, edit), pendingEdits: queueEdit(cache.pendingEdits ?? [], edit) });
   const outcome = await pushPendingEdits(identity, isoWeek);
   const status = outcome.status === "stale" ? "stale"
-    : outcome.status === "pending" ? "pending"
-      : edit.op === "add" && outcome.existing.includes(edit.id) ? "existing"
-        : "synced";
-  return { status, view: viewOf(identity, isoWeek, days) };
+    : outcome.rejected.has(edit.change) ? "discarded"
+      : outcome.status === "pending" ? "pending"
+        : edit.op === "add" && outcome.existing.includes(edit.id) ? "existing"
+          : "synced";
+  return { status, view: viewOf(identity, isoWeek, days, outcome.rejected.size > 0) };
 }
 
 const cleanText = (text: string) => text.normalize("NFC").trim().replace(/\s+/g, " ");
@@ -526,7 +585,7 @@ export function removeManualShoppingItem(identity: DataIdentity, isoWeek: IsoWee
     }
     const rowId = rowIdOf(cache, lineId, item);
     if (!rowId) return "refused";
-    return { op: "remove", id: rowId, change: crypto.randomUUID() };
+    return { op: "remove", id: rowId, change: crypto.randomUUID(), itemKey: item.itemKey ?? null };
   });
 }
 
@@ -1036,7 +1095,17 @@ export async function setShoppingItemChecked(
   };
 
   try {
-    const result = await enqueue(queueKey(identity, isoWeek), () => remote.setChecked(rows, checked));
+    // An item added here whose add has not reached the account yet: the mark stays pending (it is
+    // sent after the add, on the next load) instead of being refused as a missing row.
+    const result = await enqueue(queueKey(identity, isoWeek), () => {
+      const now = readShoppingCache(identity, isoWeek);
+      if (now?.pendingEdits?.some((edit) => edit.op === "add" && rows.includes(edit.id))) return Promise.resolve(null);
+      return remote.setChecked(rows, checked);
+    });
+    if (result === null) {
+      settle(true);
+      return { status: "pending" };
+    }
     settle(false);
     return result.status === "applied" ? { status: "synced" } : { status: "stale" };
   } catch {

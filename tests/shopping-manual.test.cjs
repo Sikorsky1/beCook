@@ -172,6 +172,77 @@ test("marking a manual item added offline waits for the add (one queue per week)
  assert.equal(loaded.view.discardedLocalChanges, false);
 });
 
+test("review H1: add, remove and add again the same item offline is sent in safe batches and ends with one row", async () => {
+ account.writeWeek(W41, week());
+ await open();
+ account.st.down = true;
+ const first = await shopping.addManualShoppingItem(asA, W41, {name: "Pan", quantity: 1, unit: "ud", category: "despensa"}, week());
+ const panLine = first.view.items.find((item) => item.name === "Pan").id;
+ await shopping.removeManualShoppingItem(asA, W41, panLine, week());
+ const again = await shopping.addManualShoppingItem(asA, W41, {name: "Pan", quantity: 2, unit: "barras", category: "despensa"}, week());
+ assert.equal(again.status, "pending");
+ account.st.down = false;
+ const loaded = await shopping.loadShoppingList(asA, W41, week());
+ assert.equal(loaded.view.pending, false, "nothing stuck in the queue");
+ assert.equal(loaded.view.discardedLocalChanges, false);
+ const panes = rows().filter((item) => item.itemKey === "manual|pan");
+ assert.equal(panes.length, 1);
+ assert.equal(panes[0].unit, "barras");
+ assert.equal(repos.readShoppingCache(asA, W41).pendingEdits.length, 0);
+});
+
+test("review H1: a batch the database refuses is dropped (not retried forever) and reported as discarded", async () => {
+ account.writeWeek(W41, week());
+ await open();
+ account.st.rejectNextEdit = true;
+ const refused = await shopping.addManualShoppingItem(asA, W41, papel, week());
+ assert.equal(refused.status, "discarded");
+ assert.equal(refused.view.discardedLocalChanges, true);
+ assert.equal(refused.view.items.some((item) => item.name === "Papel de cocina"), false, "the device shows the account list");
+ assert.equal(repos.readShoppingCache(asA, W41).pendingEdits.length, 0);
+ assert.equal((await shopping.addManualShoppingItem(asA, W41, papel, week())).status, "synced", "later edits go through");
+});
+
+test("review H3: marking an item whose add is still pending keeps the mark pending (no server call) and sends it after the add", async () => {
+ account.writeWeek(W41, week());
+ await open();
+ account.st.down = true;
+ const added = await shopping.addManualShoppingItem(asA, W41, papel, week());
+ account.st.down = false;
+ const calls = account.st.calls.setChecked;
+ const marked = await shopping.setShoppingItemChecked(asA, W41, added.view.items.find((item) => item.manual).id, true);
+ assert.equal(marked.status, "pending");
+ assert.equal(account.st.calls.setChecked, calls, "not sent before the item exists");
+ const loaded = await shopping.loadShoppingList(asA, W41, week());
+ assert.equal(rowNamed("Papel de cocina").checked, true);
+ assert.equal(loaded.view.pending, false);
+});
+
+test("review H3: while the add cannot be sent, a load keeps its mark pending (not discarded)", async () => {
+ account.writeWeek(W41, week());
+ await open();
+ account.st.down = true;
+ const added = await shopping.addManualShoppingItem(asA, W41, papel, week());
+ await shopping.setShoppingItemChecked(asA, W41, added.view.items.find((item) => item.manual).id, true);
+ account.st.down = false;
+ account.st.editUnavailable = true;
+ const waiting = await shopping.loadShoppingList(asA, W41, week());
+ assert.equal(waiting.view.discardedLocalChanges, false);
+ assert.equal(waiting.view.pending, true);
+ assert.ok(waiting.view.checkedItemIds.includes(added.view.items.find((item) => item.manual).id));
+ account.st.editUnavailable = false;
+ await shopping.loadShoppingList(asA, W41, week());
+ assert.equal(rowNamed("Papel de cocina").checked, true);
+});
+
+test("review H2: an item added by hand is never hidden as «usually at home»", () => {
+ const build = require("../src/lib/shopping/build.ts");
+ const item = {id: "manual-manual|sal", name: "Sal", quantity: 1, unit: "ud", category: "despensa", origins: [], needsReview: false, removed: false, manual: true, adjusted: false, editable: true};
+ assert.equal(build.classifyShoppingLine(item, false, build.pantryNameKeys(["sal"])), "to_buy");
+ assert.equal(build.classifyShoppingLine({...item, manual: false}, false, build.pantryNameKeys(["sal"])), "pantry");
+ assert.deepEqual(build.classifyShoppingView([item], [], ["sal"]).to_buy.map((entry) => entry.name), ["Sal"]);
+});
+
 test("D5 defect: changing the dishes keeps the manual items (bought or not) where they were", async () => {
  account.writeWeek(W41, week());
  await open();
