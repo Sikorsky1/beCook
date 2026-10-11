@@ -333,9 +333,12 @@ export default function ShoppingListPage() {
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
     const weekToLoad = readSelectedWeek(dataIdentity) ?? getCurrentIsoWeek();
     const loadKey = `${dataIdentity.scope}:${identity.epoch}`;
-    const isSameLoad = lastLoadRef.current === loadKey;
-    lastLoadRef.current = loadKey;
     const loadTimer = window.setTimeout(() => {
+      // Decided when the load really starts: an effect run cancelled before its timer (React's
+      // double run in development, after a client-side navigation) never counts as a first load,
+      // or the page would wait forever for a week it never asked for.
+      const isSameLoad = lastLoadRef.current === loadKey;
+      lastLoadRef.current = loadKey;
       if (isSameLoad) {
         // Retry: the list stays on screen and its state stays visible while the account answers.
         void loadWeek(dataIdentity, weekToLoad).then((result) => {
