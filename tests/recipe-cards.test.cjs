@@ -356,3 +356,74 @@ test("route: invalid AI card -> 422 without retry or repair; OpenAI 503 -> 502 a
   assert.equal((await POST(aiRequest("dish-card", {...body, requestKey: "no"}))).status, 400);
  } finally { routeTeardown(); }
 });
+
+// --- C3: compatibility of the card with the current profile ---------------------------------
+const reviewedOmelette = {
+ versionId: V1, recipeId: V2, version: 1, title: "Tortilla de patata", origin: "catalog", reviewStatus: "reviewed",
+ baseServings: 2, totalMinutes: 30, steps: ["Cuajar."], possibleAllergens: ["eggs"],
+ ingredients: [{name: "patatas", quantity: 500, unit: "g", category: "frutería", optional: false}, {name: "huevos", quantity: 4, unit: "ud", category: "lácteos y huevos", optional: false}, {name: "cebolla", quantity: 1, unit: "ud", category: "frutería", optional: true}],
+};
+const ready = (value) => ({state: "ready", profile: {dietaryRestrictions: [], allergies: [], otherAllergies: "", dislikedFoods: [], ...value}});
+
+test("C3 dish card: conflict with a reviewed card names the ingredient and the allergen tag, and its basis", () => {
+ const view = flow.dishCompatibilityView("Tortilla de patata", reviewedOmelette, ready({allergies: ["egg"]}));
+ assert.equal(view.tone, "danger");
+ assert.equal(view.heading, "Choca con tu perfil");
+ assert.equal(view.basis, "Según la ficha revisada.");
+ assert.equal(view.lines.length, 1, "one line per restriction");
+ assert.match(view.lines[0], /^Alergia: huevo: .*huevos.*huevo \(alérgeno indicado en la ficha\)/);
+ assert.equal(flow.dishCompatibilityDisclaimer, "No garantiza ausencia de alérgenos ni trazas.");
+});
+
+test("C3 dish card: estimated card, title only, possible conflicts and dislikes are said as such", () => {
+ const inferred = {...reviewedOmelette, reviewStatus: "inferred", origin: "ai"};
+ assert.equal(flow.dishCompatibilityView("Tortilla de patata", inferred, ready({allergies: ["egg"]})).basis, "Según una ficha estimada por IA, sin revisar.");
+ const clean = flow.dishCompatibilityView("Tortilla de patata", inferred, ready({allergies: ["gluten"]}));
+ assert.equal(clean.heading, "No hemos detectado conflictos con tu perfil");
+ assert.equal(clean.tone, "neutral");
+ const titleOnly = flow.dishCompatibilityView("Lentejas estofadas", null, ready({dietaryRestrictions: ["vegan"]}));
+ assert.equal(titleOnly.heading, "No podemos comprobarlo");
+ assert.equal(titleOnly.basis, "Solo por el nombre del plato.");
+ assert.ok(titleOnly.notes.includes("Solo conocemos el nombre del plato, no sus ingredientes."));
+ const titleConflict = flow.dishCompatibilityView("Espaguetis carbonara", null, ready({dietaryRestrictions: ["no_pork"]}));
+ assert.equal(titleConflict.heading, "Choca con tu perfil");
+ assert.deepEqual(titleConflict.lines, ["Sin cerdo: «carbonara» en el nombre."]);
+ const optional = flow.dishCompatibilityView("Tortilla de patata", reviewedOmelette, ready({dislikedFoods: ["cebolla"]}));
+ assert.equal(optional.heading, "Puede chocar con tu perfil");
+ assert.deepEqual(optional.lines, ["No te gusta «cebolla»: quizá cebolla."]);
+ const disliked = flow.dishCompatibilityView("Tortilla de patata", reviewedOmelette, ready({dislikedFoods: ["patatas"]}));
+ assert.equal(disliked.heading, "Lleva algo que no te gusta");
+ assert.equal(disliked.tone, "warning");
+ const vague = flow.dishCompatibilityView("Tortilla de patata", reviewedOmelette, ready({allergies: ["other"], otherAllergies: "algunas frutas"}));
+ assert.equal(vague.heading, "No podemos comprobarlo del todo");
+ assert.deepEqual(vague.notes, ["No sabemos comprobar: «algunas frutas». Revísalo tú."]);
+ // Never «apto» in any text.
+ for (const view of [clean, titleOnly, titleConflict, optional, disliked, vague]) {
+  assert.ok(![view.heading, view.basis, ...view.lines, ...view.notes].join(" ").match(/\bapt[oa]\b|sin alérgenos|seguro/i));
+ }
+});
+
+test("C3 dish card: restrictions come from the account (status.current) or, for a guest, the device profile", () => {
+ const current = {found: true, householdSize: 2, version: "v", restrictions: {dietaryRestrictions: ["vegan"], allergies: [], otherAllergies: "", dislikedFoods: []}, preferences: {goals: [], otherGoal: "", weeklyTrainingDays: 0, trainingTypes: []}};
+ const status = {week: true, frozen: null, current, restrictionsChanged: false, householdChanged: false};
+ assert.deepEqual(flow.dishCardRestrictions(true, status, {loaded: true, data: {allergies: ["gluten"]}}), {state: "ready", profile: current.restrictions}, "the account wins over the device copy");
+ assert.deepEqual(flow.dishCardRestrictions(true, {...status, current: {found: false}}, {loaded: true, data: null}), {state: "no_profile"});
+ assert.deepEqual(flow.dishCardRestrictions(true, null, {loaded: true, data: {allergies: ["gluten"]}}), {state: "unknown"}, "unread account context: unknown, not the device profile");
+ assert.equal(flow.dishCardRestrictions(false, null, {loaded: true, data: {allergies: ["gluten"]}}).profile.allergies[0], "gluten");
+ assert.deepEqual(flow.dishCardRestrictions(false, null, {loaded: true, data: null}), {state: "no_profile"});
+ assert.deepEqual(flow.dishCardRestrictions(false, null, {loaded: false, data: null}), {state: "unknown"});
+ assert.deepEqual(flow.dishCardRestrictions(false, null, {loaded: true, data: {allergies: "gluten"}}), {state: "unknown"}, "malformed allergies are never read as none");
+ assert.equal(flow.dishCompatibilityView("Tortilla", null, {state: "unknown"}).heading, "No hemos podido leer tus restricciones");
+ assert.equal(flow.dishCompatibilityView("Tortilla", null, {state: "no_profile"}).heading, "Tu perfil no tiene restricciones ni alergias");
+ assert.equal(flow.dishCompatibilityView("Tortilla", null, ready({})).heading, "Tu perfil no tiene restricciones ni alergias");
+});
+
+test("C3 dish card: the dialog shows the compatibility section with its basis and fixed notice; the week page passes the restrictions", () => {
+ const source = fs.readFileSync(path.join(root, "src/components/features/DishCard.tsx"), "utf8");
+ assert.match(source, /Compatibilidad con tu perfil/);
+ assert.match(source, /dishCompatibilityDisclaimer/);
+ assert.match(source, /aria-labelledby=\{headingId\}/);
+ assert.doesNotMatch(source, /text-xs|text-\[1[01]px\]/);
+ const page = fs.readFileSync(path.join(root, "src/app/week/page.tsx"), "utf8");
+ assert.match(page, /restrictions=\{dishCardRestrictions\(/);
+});

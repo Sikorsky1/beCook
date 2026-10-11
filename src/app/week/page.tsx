@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { DishCard } from "@/components/features/DishCard";
+import { dishCardRestrictions } from "@/lib/recipes/dishCardFlow";
 import { type RequestDishIdea, WeekDayCard } from "@/components/features/WeekDayCard";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { OnboardingGate } from "@/components/session/OnboardingGate";
@@ -511,6 +512,11 @@ function WeekPageContent() {
             identity={{ scope: identity.scope, userId: identity.userId }}
             isoWeek={selectedIsoWeek}
             weekServings={foodContextEntry?.key === foodContextKey ? (foodContextEntry.status?.frozen?.servings ?? null) : null}
+            restrictions={dishCardRestrictions(
+              isSignedIn,
+              foodContextEntry?.key === foodContextKey ? foodContextEntry.status : null,
+              { loaded: profileEntry?.key === profileKey, data: profileEntry?.data ?? null },
+            )}
             loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
             onClose={() => setDishCardSlot(null)}
             onChangeDish={(slot) => setDishEditRequest({ ...slot, key: Date.now() })}
