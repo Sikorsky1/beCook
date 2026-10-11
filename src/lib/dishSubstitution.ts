@@ -1,5 +1,6 @@
 import type { WeekDay } from "@/data/mockWeek";
 import { isAiLoginRequiredError, postAi } from "@/lib/ai-client";
+import type { ImportedMenuResponse } from "@/lib/importMenu";
 import { readMenuProfile } from "@/lib/menu-generation/prompt";
 import {
   catalogAlternative,
@@ -11,6 +12,8 @@ import {
 
 // «Otra idea» for one meal of a saved week (step 21). The idea only fills the editor:
 // saving it goes through the usual single-slot write (update_week_slot, B4).
+// In the preview of Crear menú (step 28) the idea replaces the dish of the proposal directly:
+// nothing is saved until «Usar este menú».
 
 export type DishIdea =
   | { status: "found"; dish: string; source: SubstituteDishResponse["source"] }
@@ -71,4 +74,35 @@ export async function requestAiIdea(
     if (isAiLoginRequiredError(error)) return { status: "login_required" };
     return { status: "error", message: "Sin conexión. Inténtalo de nuevo." };
   }
+}
+
+// Preview of Crear menú (step 28): the reviewed catalogue first, free; the AI only when the user
+// asks after the catalogue runs out, and never for a guest.
+export function requestProposalIdea(
+  weekDays: WeekDay[],
+  slot: SubstitutionSlot,
+  rejected: string[],
+  profile: unknown,
+  mode: "catalog" | "ai",
+  isSignedIn: boolean,
+  signal?: AbortSignal,
+): DishIdea | Promise<DishIdea> {
+  if (mode === "catalog") {
+    const result = nextCatalogIdea(weekDays, slot, rejected, profile);
+    return result.status === "catalog_exhausted" && !isSignedIn ? { status: "login_required" } : result;
+  }
+  return isSignedIn ? requestAiIdea(weekDays, slot, rejected, profile, signal) : { status: "login_required" };
+}
+
+// The proposal with exactly one dish changed; every other day and meal (and the rest of the
+// response) stays as it was. A free meal is never filled.
+export function replaceProposalDish<Menu extends ImportedMenuResponse>(menu: Menu, slot: SubstitutionSlot, dish: string): Menu {
+  return {
+    ...menu,
+    days: menu.days.map((day) =>
+      day.dayName === slot.day && day[slot.meal].status === "planned"
+        ? { ...day, [slot.meal]: { status: "planned", dishName: dish } }
+        : day,
+    ),
+  };
 }
