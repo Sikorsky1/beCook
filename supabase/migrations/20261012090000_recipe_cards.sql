@@ -266,8 +266,9 @@ CREATE INDEX week_days_dinner_recipe_version_id_idx ON public.week_days (dinner_
 -- Every write path of week_days (apply_week, update_week_slot, update_week_slot_recipe, and the
 -- previous client still deployed while this rolls out):
 --   1. a free meal has no card;
---   2. the dish title changed and the link did not: the link is cleared (the card was for the
---      previous dish; update_week_slot and older clients never leave a card on another title);
+--   2. the dish title changed (another title key: case and spacing do not count) and the link did
+--      not: the link is cleared (the card was for the previous dish; update_week_slot and older
+--      clients never leave a card on another title);
 --   3. a link must be a catalogue card or one of the week owner's (otherwise 23503, like the
 --      composite owner FKs of 20260923194029_enforce_reference_ownership);
 --   4. a link whose recipe title is not the dish title is cleared (a stale device copy never
@@ -291,11 +292,11 @@ BEGIN
   IF NEW.dinner_status = 'free' THEN NEW.dinner_recipe_version_id := NULL; END IF;
 
   IF TG_OP = 'UPDATE' THEN
-    IF NEW.lunch_dish_name IS DISTINCT FROM OLD.lunch_dish_name
+    IF public.recipe_title_key(NEW.lunch_dish_name) IS DISTINCT FROM public.recipe_title_key(OLD.lunch_dish_name)
        AND NEW.lunch_recipe_version_id IS NOT DISTINCT FROM OLD.lunch_recipe_version_id THEN
       NEW.lunch_recipe_version_id := NULL;
     END IF;
-    IF NEW.dinner_dish_name IS DISTINCT FROM OLD.dinner_dish_name
+    IF public.recipe_title_key(NEW.dinner_dish_name) IS DISTINCT FROM public.recipe_title_key(OLD.dinner_dish_name)
        AND NEW.dinner_recipe_version_id IS NOT DISTINCT FROM OLD.dinner_recipe_version_id THEN
       NEW.dinner_recipe_version_id := NULL;
     END IF;
