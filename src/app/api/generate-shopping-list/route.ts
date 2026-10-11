@@ -73,6 +73,11 @@ Desglose por comida (obligatorio):
 
 const limits = aiRequestLimits.generateShoppingList;
 
+// Output cap of a breakdown (reasoning included): a whole week without cards is 14 meals of about
+// 10 ingredients (~5k tokens of JSON) plus low-effort reasoning. Same 55 s attempt as the
+// whole-week list; the real duration of a 14-meal breakdown is still to be measured in the Preview.
+const breakdownMaxOutputTokens = 16_000;
+
 // Planned meals of the request week ("LIBRE" or empty meals have nothing to buy).
 function plannedMeals(week: WeekDay[]) {
   const planned = new Set<string>();
@@ -201,6 +206,7 @@ export async function POST(request: Request) {
             ...(/^gpt-5/.test(OPENAI_MODEL)
               ? { reasoning: { effort: shoppingReasoningEffort } }
               : {}),
+            ...(breakdown ? { max_output_tokens: breakdownMaxOutputTokens } : {}),
             instructions: breakdown ? `${systemPrompt(servings)}\n\n${breakdownRules}` : systemPrompt(servings),
             input: `Genera una lista de la compra semanal a partir de esta semana estructurada:\n\n${JSON.stringify(week, null, 2)}${
               restrictions

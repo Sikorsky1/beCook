@@ -221,6 +221,7 @@ beforeEach(() => {
  account.st.cards.set(LENTEJAS_V, lentejasCard);
  account.st.cards.set(POLLO_V, polloCard);
  repos.configureRemotes(account.remotes);
+ shopping.forgetShoppingUpdateFailures();
  ai = {calls: 0, bodies: [], fail: null};
  originalFetch = global.fetch;
  global.fetch = async (url, init) => {
@@ -361,7 +362,7 @@ test("the AI fails while updating: what is known is applied, the dish stays pend
  assert.equal(account.listsOf(W41).length, 1);
 });
 
-test("a list made before C4 (no keys, no origins) is updated in place keeping its marks; a failed AI call never empties it", async () => {
+const legacyList = () => {
  account.writeWeek(W41, [day("Lunes", "Garbanzos", "Merluza")]);
  const signature = getShoppingSignature(W41, [day("Lunes", "Garbanzos", "Merluza")]);
  account.st.lists.push({id: "legacy", week: "2026-W41", at: ++account.st.seq, signature, basis: null, items: [
@@ -369,10 +370,29 @@ test("a list made before C4 (no keys, no origins) is updated in place keeping it
   {id: "old-2", name: "merluza", quantity: 400, unit: "g", category: "pescadería", checked: false, itemKey: null, origins: null, checkedQuantity: null, needsReview: false, removedAt: null},
  ]});
  account.writeWeek(W41, [day("Lunes", "Garbanzos", "Tortilla")]);
+};
+
+test("a list made before C4 + AI failure: the existing list is shown as it is, with the reason; reopening does not pay again", async () => {
+ legacyList();
  ai.fail = "Sin cuota";
- await assert.rejects(open([day("Lunes", "Garbanzos", "Tortilla")]), /Sin cuota/);
+ const failed = await open([day("Lunes", "Garbanzos", "Tortilla")]);
+ assert.equal(failed.status, "ready", "never an error instead of the list");
+ assert.equal(failed.view.notUpdated, true);
+ assert.equal(failed.view.aiError, "Sin cuota");
+ assert.deepEqual(failed.view.items.map((item) => item.name).sort(), ["garbanzos", "merluza"]);
  assert.equal(rows().length, 2, "the old list is left as it is");
+ assert.equal(ai.calls, 1);
+ const again = await open([day("Lunes", "Garbanzos", "Tortilla")]);
+ assert.equal(again.view.notUpdated, true);
+ assert.equal(ai.calls, 1, "the same failure is not paid again on reopening");
  ai.fail = null;
+ const asked = await shopping.reconcileShoppingList(asA, W41, [day("Lunes", "Garbanzos", "Tortilla")], {retryPending: true});
+ assert.equal(ai.calls, 2, "«Actualizar lista (IA)» asks again");
+ assert.equal(asked.view.notUpdated, false);
+});
+
+test("a list made before C4 is updated in place keeping its marks (one AI call for every dish without a card)", async () => {
+ legacyList();
  const after = await open([day("Lunes", "Garbanzos", "Tortilla")]);
  assert.equal(after.status, "ready");
  assert.equal(account.listsOf(W41).length, 1);
@@ -381,8 +401,56 @@ test("a list made before C4 (no keys, no origins) is updated in place keeping it
  assert.equal(garbanzos.checked, true, "same row, still bought");
  assert.equal(garbanzos.itemKey, "despensa|garbanzo|mass");
  assert.equal(garbanzos.needsReview, false, "0.4 kg bought, 400 g needed");
+ assert.equal(garbanzos.checkedQuantity, 400, "what was bought is kept for the next update");
+ assert.equal(after.view.change.changed, 0, "0.4 kg → 400 g is not a change");
  assert.equal(rows().find((item) => item.id === "old-2"), undefined);
  assert.ok(rowNamed("huevos"));
+});
+
+test("origins for other servings + AI failure: nothing is removed, the list is shown as it is", async () => {
+ account.writeWeek(W41, week(), {servings: 2, version: "fc1:a"});
+ await open();
+ const before = JSON.stringify(rows());
+ account.writeWeek(W41, week(), {servings: 4, version: "fc1:a"});
+ ai.fail = "Sin cuota";
+ const after = await open();
+ assert.equal(after.status, "ready");
+ assert.equal(after.view.notUpdated, true);
+ assert.equal(JSON.stringify(rows()), before, "no AI row removed");
+});
+
+test("a list that moves while updating: the AI is asked once; after three attempts the list is shown, never «outdated»", async () => {
+ account.writeWeek(W41, week());
+ await open();
+ account.writeWeek(W41, week("Lentejas estofadas", "Merluza", "Garbanzos"));
+ account.st.forceStale = 1;
+ const retried = await open(week("Lentejas estofadas", "Merluza", "Garbanzos"));
+ assert.equal(retried.status, "ready");
+ assert.equal(retried.view.notUpdated, false);
+ assert.equal(ai.calls, 2, "one call for Garbanzos, reused in the second attempt");
+ account.writeWeek(W41, week("Lentejas estofadas", "Merluza", "Pisto"));
+ account.st.forceStale = 5;
+ const exhausted = await open(week("Lentejas estofadas", "Merluza", "Pisto"));
+ assert.equal(exhausted.status, "ready");
+ assert.equal(exhausted.view.notUpdated, true);
+ assert.match(exhausted.view.aiError, /ha cambiado/);
+ assert.equal(ai.calls, 3);
+});
+
+test("adapter: only a missing reconcile_shopping_list is «unavailable»; any other error is an error", async () => {
+ const {reconcileShoppingListInSupabase} = require("../src/lib/supabase/shopping-lists.ts");
+ const realRpc = supabase.rpc;
+ const input = {isoYear: 2026, isoWeek: 41, listId: "x", fromSignature: null, toSignature: "s", ops: {add: [], update: [], remove: []}, expectedWeekVersion: null};
+ try {
+  supabase.rpc = async () => ({data: null, error: {code: "PGRST202", message: "Could not find the function public.reconcile_shopping_list"}});
+  assert.equal((await reconcileShoppingListInSupabase(input)).status, "unavailable");
+  supabase.rpc = async () => ({data: null, error: {code: "42883", message: "function public.reconcile_shopping_list(integer) does not exist"}});
+  assert.equal((await reconcileShoppingListInSupabase(input)).status, "unavailable");
+  supabase.rpc = async () => ({data: null, error: {code: "42883", message: "function public.shopping_items_discard_unbought(uuid, uuid[]) does not exist"}});
+  await assert.rejects(reconcileShoppingListInSupabase(input), /Could not update shopping list/);
+ } finally {
+  supabase.rpc = realRpc;
+ }
 });
 
 test("new servings or restrictions: the AI ingredients of the list are not reused", async () => {
@@ -437,12 +505,14 @@ test("route: breakdown answers per planned meal and the whole-week items; a non-
   assert.equal(response.status, 200);
   const data = await response.json();
   assert.equal(body.text.format.name, "shopping_list_by_dish");
+  assert.equal(body.max_output_tokens, 16000, "a breakdown has an output cap");
   assert.match(body.instructions, /Desglose por comida/);
   assert.deepEqual(data.dishes.map((dish) => `${dish.day}|${dish.meal}`), ["Lunes|dinner", "Martes|lunch"], "a meal not asked for is dropped");
   assert.deepEqual(data.items.find((item) => item.name === "limón"), {name: "limón", quantity: 3, unit: "ud", category: "frutería"});
   assert.equal((await POST(aiRequest("generate-shopping-list", {week: weekBody, breakdown: "yes"}))).status, 400);
   const legacy = await POST(aiRequest("generate-shopping-list", {week: weekBody}));
   assert.equal(body.text.format.name, "shopping_list", "the previous client still gets the whole-week list");
+  assert.equal(body.max_output_tokens, undefined);
   assert.equal(legacy.status, 502, "(this fake answers per dish, which the whole-week schema rejects)");
  } finally {
   fakes.restore();

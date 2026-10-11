@@ -358,8 +358,12 @@ export async function reconcileShoppingListInSupabase({
   });
 
   if (error) {
-    // PostgREST: function not in the schema cache / Postgres: undefined function.
-    if (error.code === "PGRST202" || error.code === "42883") return { status: "unavailable" };
+    // Only the function itself missing (migration not applied) means «unavailable»: PostgREST
+    // PGRST202, or an undefined-function error that names it. Anything else is an error (never a
+    // reason to make a new list).
+    if (error.code === "PGRST202" || (error.code === "42883" && /reconcile_shopping_list\s*\(/.test(error.message))) {
+      return { status: "unavailable" };
+    }
     throw new Error(`Could not update shopping list: ${error.message}`);
   }
 

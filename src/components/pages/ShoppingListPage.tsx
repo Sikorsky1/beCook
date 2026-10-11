@@ -225,16 +225,30 @@ type ListNoticesProps = {
   pendingDishes: PendingDish[];
   aiError: string | null;
   fromCards: boolean;
+  notUpdated: boolean;
   calculating: boolean;
   onCalculate: () => void;
 };
 
-// C4: what the last update changed, dishes still without ingredients and where items come from.
-function ListNotices({ change, pendingDishes, aiError, fromCards, calculating, onCalculate }: ListNoticesProps) {
-  if (!change && pendingDishes.length === 0 && !fromCards) return null;
+const emptyNotes = { change: null, pendingDishes: [], aiError: null, fromCards: false, notUpdated: false };
+
+// C4: what the last update changed, a list that could not be updated, dishes still without
+// ingredients and where items come from. Always rendered (empty or not) inside a polite live
+// region, so screen readers hear a new summary or a new pending dish.
+function ListNotices({ change, pendingDishes, aiError, fromCards, notUpdated, calculating, onCalculate }: ListNoticesProps) {
+  const calculateButton = (label: string) => (
+    <button
+      type="button"
+      onClick={onCalculate}
+      disabled={calculating}
+      className="mt-4 min-h-11 rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white hover:bg-[color:var(--color-accent-strong-hover)] disabled:opacity-60"
+    >
+      {calculating ? "Calculando…" : label}
+    </button>
+  );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 empty:hidden" aria-live="polite">
       {change ? (
         <StateMessage title="Lista actualizada con tu menú" variant="success">
           <p className="t-meta max-w-xl text-[color:var(--color-success-hover)]">
@@ -242,9 +256,19 @@ function ListNotices({ change, pendingDishes, aiError, fromCards, calculating, o
           </p>
         </StateMessage>
       ) : null}
-      {pendingDishes.length > 0 ? (
-        <StateMessage title="Faltan ingredientes de algunos platos" variant="loading">
-          <ul className="max-w-xl space-y-1 text-base leading-7">
+      {notUpdated ? (
+        <Card className="border-[color:var(--color-warning)] p-5">
+          <h2 className="t-h3 text-[color:var(--color-foreground)]">Esta lista es de tu menú anterior</h2>
+          <p className="mt-2 max-w-xl text-base leading-7 text-[color:var(--color-foreground)]">
+            No se ha podido actualizar con los platos de ahora. Lo que ya has comprado sigue marcado.
+          </p>
+          {aiError ? <p className="t-meta mt-2 max-w-xl">{aiError}</p> : null}
+          {calculateButton("Actualizar lista (IA)")}
+        </Card>
+      ) : pendingDishes.length > 0 ? (
+        <Card className="border-[color:var(--color-warning)] p-5">
+          <h2 className="t-h3 text-[color:var(--color-foreground)]">Faltan ingredientes de algunos platos</h2>
+          <ul className="mt-2 max-w-xl space-y-1 text-base leading-7 text-[color:var(--color-foreground)]">
             {pendingDishes.map((dish) => (
               <li key={`${dish.day}-${dish.meal}`}>
                 Faltan ingredientes de «{dish.title}» ({mealLabel(dish)})
@@ -252,15 +276,8 @@ function ListNotices({ change, pendingDishes, aiError, fromCards, calculating, o
             ))}
           </ul>
           {aiError ? <p className="t-meta mt-2 max-w-xl">{aiError}</p> : null}
-          <button
-            type="button"
-            onClick={onCalculate}
-            disabled={calculating}
-            className="mt-4 min-h-11 rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white hover:bg-[color:var(--color-accent-strong-hover)] disabled:opacity-60"
-          >
-            {calculating ? "Calculando…" : "Calcular (IA)"}
-          </button>
-        </StateMessage>
+          {calculateButton("Calcular (IA)")}
+        </Card>
       ) : null}
       {fromCards ? (
         <p className="t-meta px-1">
@@ -281,12 +298,9 @@ export default function ShoppingListPage() {
   const [isLoadingList, setIsLoadingList] = useState(false);
   // C4: updating an existing list in place (not generating a new one).
   const [isUpdatingList, setIsUpdatingList] = useState(false);
-  const [listNotes, setListNotes] = useState<Omit<ListNoticesProps, "calculating" | "onCalculate">>({
-    change: null,
-    pendingDishes: [],
-    aiError: null,
-    fromCards: false,
-  });
+  const [listNotes, setListNotes] = useState<Omit<ListNoticesProps, "calculating" | "onCalculate">>(emptyNotes);
+  // Which step failed: generating a new list or updating the existing one.
+  const [errorTitle, setErrorTitle] = useState("No se pudo generar la lista.");
   const [calculating, setCalculating] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [needsLogin, setNeedsLogin] = useState(false);
@@ -334,7 +348,7 @@ export default function ShoppingListPage() {
 
       setHasLoadedWeek(false);
       setGeneratedItems([]);
-      setListNotes({ change: null, pendingDishes: [], aiError: null, fromCards: false });
+      setListNotes(emptyNotes);
       setCheckedItems([]);
       setErrorMessage("");
       setNeedsLogin(false);
@@ -391,6 +405,7 @@ export default function ShoppingListPage() {
         pendingDishes: loaded.view.pendingDishes,
         aiError: loaded.view.aiError,
         fromCards: loaded.view.fromCards,
+        notUpdated: loaded.view.notUpdated,
       }));
       setListSyncState({
         offline: loaded.view.offline,
@@ -433,9 +448,14 @@ export default function ShoppingListPage() {
         setErrorMessage("");
         try {
           const updated = await reconcileShoppingList(dataIdentity, currentIsoWeek, currentWeekDays);
+          // Never read again on its own: an update that cannot finish shows the list as it is.
           if (!show(updated) && !isCancelled) {
             if (updated.status === "no_week") setWeekDays(null);
-            else setListReload((value) => value + 1);
+            else if (updated.status === "missing" && updated.offline) setAccountUnreachable(true);
+            else {
+              setErrorTitle("No se pudo actualizar la lista.");
+              setErrorMessage("Ha fallado la actualización de la lista de la compra.");
+            }
           }
         } catch (error) {
           if (isCancelled) return;
@@ -443,6 +463,7 @@ export default function ShoppingListPage() {
             setNeedsLogin(true);
             return;
           }
+          setErrorTitle("No se pudo actualizar la lista.");
           setErrorMessage(
             error instanceof ShoppingListApiError
               ? error.message
@@ -464,6 +485,7 @@ export default function ShoppingListPage() {
       }
 
       // 2. Generate with AI only when the account has no list for this week's dishes.
+      setErrorTitle("No se pudo generar la lista.");
       setNeedsLogin(false);
       setIsLoadingList(true);
       setErrorMessage("");
@@ -517,7 +539,8 @@ export default function ShoppingListPage() {
     void reconcileShoppingList(dataIdentity, isoWeek, weekDays, { retryPending: true })
       .then((loaded) => {
         if (loaded.status !== "ready") {
-          setListReload((value) => value + 1);
+          if (loaded.status === "no_week") setWeekDays(null);
+          else setListNotes((current) => ({ ...current, aiError: "No se ha podido comprobar tu lista. Revisa la conexión." }));
           return;
         }
         setGeneratedItems(loaded.view.items);
@@ -527,6 +550,7 @@ export default function ShoppingListPage() {
           pendingDishes: loaded.view.pendingDishes,
           aiError: loaded.view.aiError,
           fromCards: loaded.view.fromCards,
+          notUpdated: loaded.view.notUpdated,
         });
       })
       .catch((error: unknown) => {
@@ -662,6 +686,13 @@ export default function ShoppingListPage() {
         ) : null}
         {identity.userId ? <SyncNotice state={syncState} /> : null}
 
+        {/* Persistent live region: the list's notices appear and change inside it. */}
+        <ListNotices
+          {...(generatedItems.length > 0 && !isUpdatingList && !errorMessage ? listNotes : emptyNotes)}
+          calculating={calculating}
+          onCalculate={calculatePendingDishes}
+        />
+
         <section className="transition-opacity duration-200 ease-out motion-reduce:transition-none">
           {!hasLoadedWeek ? (
             <Card className="p-6 sm:p-7">
@@ -687,7 +718,7 @@ export default function ShoppingListPage() {
                 Actualizando tu lista con el menú
               </h2>
               <p className="t-meta mt-3 max-w-xl">
-                Solo calculamos los platos que han cambiado. Lo que ya has comprado sigue marcado.
+                Recalculamos los ingredientes de tu menú. Lo que ya has comprado sigue marcado.
               </p>
             </Card>
           ) : isLoadingList ? (
@@ -730,7 +761,7 @@ export default function ShoppingListPage() {
           ) : errorMessage ? (
             <StateMessage
               className="p-6 sm:p-7"
-              title="No se pudo generar la lista."
+              title={errorTitle}
               variant="error"
             >
               <p className="max-w-xl text-base leading-7">{errorMessage}</p>
@@ -743,16 +774,13 @@ export default function ShoppingListPage() {
               </button>
             </StateMessage>
           ) : selectedGroup ? (
-            <div className="space-y-3">
-              <ListNotices {...listNotes} calculating={calculating} onCalculate={calculatePendingDishes} />
-              <ShoppingItemsForCategory
-                group={selectedGroup}
-                checkedItems={checkedItems}
-                onToggleCheckedItem={toggleCheckedItem}
-                pantryItems={pantryItems}
-                dishes={dishes}
-              />
-            </div>
+            <ShoppingItemsForCategory
+              group={selectedGroup}
+              checkedItems={checkedItems}
+              onToggleCheckedItem={toggleCheckedItem}
+              pantryItems={pantryItems}
+              dishes={dishes}
+            />
           ) : (
             <StateMessage title="No hay lista de la compra." variant="empty">
               <p className="t-meta max-w-xl">

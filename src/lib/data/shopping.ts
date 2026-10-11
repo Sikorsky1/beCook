@@ -69,6 +69,8 @@ export type ShoppingView = {
   fromCards: boolean;
   change: ReconcileSummary | null;
   aiError: string | null;
+  // The list is still the one of an earlier menu: it could not be updated now (aiError says why).
+  notUpdated: boolean;
 };
 
 export type ShoppingLoad =
@@ -153,7 +155,7 @@ function listToCache(list: ShoppingList, signature: string): ShoppingCache {
   };
 }
 
-type ViewExtras = { change?: ReconcileSummary | null; aiError?: string | null };
+type ViewExtras = { change?: ReconcileSummary | null; aiError?: string | null; notUpdated?: boolean };
 
 function cacheToView(
   cache: ShoppingCache,
@@ -181,6 +183,7 @@ function cacheToView(
     fromCards: cache.items.some((item) => !item.removed && item.origins?.some((origin) => origin.kind !== "ai_title")),
     change: extras.change ?? null,
     aiError: extras.aiError ?? null,
+    notUpdated: extras.notUpdated ?? false,
   };
 }
 
@@ -301,6 +304,15 @@ async function storeList(
   return { status: "missing", offline: false };
 }
 
+// The account could not be reached: this device's copy if it is for these dishes; otherwise
+// nothing (generating now could duplicate a list that already exists).
+function offlineLoad(identity: DataIdentity, isoWeek: IsoWeek, weekDays: WeekDay[]): ShoppingLoad {
+  const cache = readShoppingCache(identity, isoWeek);
+  return cache?.items.length && matchesShoppingSignature(cache.weekSignature, isoWeek, weekDays)
+    ? { status: "ready", view: cacheToView(cache, "cache", true, weekDays) }
+    : { status: "missing", offline: true };
+}
+
 export async function loadShoppingList(
   identity: DataIdentity,
   isoWeek: IsoWeek,
@@ -322,9 +334,7 @@ export async function loadShoppingList(
   try {
     state = await remote.fetch();
   } catch {
-    return deviceListMatches(weekDays)
-      ? { status: "ready", view: cacheToView(cache!, "cache", true, weekDays) }
-      : { status: "missing", offline: true };
+    return offlineLoad(identity, isoWeek, weekDays);
   }
 
   if (!state.week) return { status: "no_week" };
@@ -388,42 +398,57 @@ type ComputedList = {
   legacyItems: GeneratedShoppingListItem[] | null;
 };
 
+// AI answers of one update, kept across its retries: a list or week that moved meanwhile never
+// pays the same dishes twice, and a failed call is not repeated within the same update.
+type AiMemo = { items: Map<string, DishIngredient[]>; asked: Set<string>; error: unknown; legacyItems: GeneratedShoppingListItem[] | null };
+const newAiMemo = (): AiMemo => ({ items: new Map(), asked: new Set(), error: null, legacyItems: null });
+
+type ComputeOptions = { memo?: AiMemo; contextKey?: string; askAi?: boolean };
+
 // Cards first (no AI), then the list's own AI ingredients (reuse), then one AI call for the rest.
+// askAi false: no call (this update already failed in this session); those dishes stay pending.
 async function computeList(
   identity: DataIdentity,
   isoWeek: IsoWeek,
   days: WeekDay[],
   servings: number,
   reuse: ShoppingList["items"] | null,
+  { memo = newAiMemo(), contextKey = "", askAi = true }: ComputeOptions = {},
 ): Promise<ComputedList> {
   const dishes = plannedDishes(days);
   const cards = await loadRecipeCards(dishes.flatMap((dish) => (dish.versionId ? [dish.versionId] : [])));
   const aiItems = reuse ? aiItemsFromList(reuse, dishes) : new Map<string, DishIngredient[]>();
+  const memoKey = (dish: PlannedDish) => `${contextKey}|${slotKey(dish.day, dish.meal)}|${dish.dish}`;
   const missing = dishes.filter((dish) => !(dish.versionId && cards.has(dish.versionId)) && !aiItems.has(slotKey(dish.day, dish.meal)));
-  let aiError: unknown = null;
-  let legacyItems: GeneratedShoppingListItem[] | null = null;
+  for (const dish of missing) {
+    const known = memo.items.get(memoKey(dish));
+    if (known) aiItems.set(slotKey(dish.day, dish.meal), known);
+  }
+  const toAsk = missing.filter((dish) => !memo.items.has(memoKey(dish)) && !memo.asked.has(memoKey(dish)));
 
-  if (missing.length) {
+  if (toAsk.length && askAi) {
+    for (const dish of toAsk) memo.asked.add(memoKey(dish));
     try {
       // The server reads the week's servings and restrictions itself (never sent from here).
-      const answer = await generateShoppingBreakdownForWeek(weekForDishes(days, missing), identity.userId ? isoWeek : undefined);
+      const answer = await generateShoppingBreakdownForWeek(weekForDishes(days, toAsk), identity.userId ? isoWeek : undefined);
       if (answer.dishes === null) {
-        legacyItems = answer.items;
+        memo.legacyItems = answer.items;
       } else {
         for (const dish of answer.dishes) {
-          const target = missing.find((candidate) => candidate.day === getDayPosition(dish.day) && candidate.meal === dish.meal);
+          const target = toAsk.find((candidate) => candidate.day === getDayPosition(dish.day) && candidate.meal === dish.meal);
           if (!target) continue;
-          const key = slotKey(target.day, target.meal);
-          aiItems.set(key, [...(aiItems.get(key) ?? []), ...dish.items]);
+          const items = [...(memo.items.get(memoKey(target)) ?? []), ...dish.items];
+          memo.items.set(memoKey(target), items);
+          aiItems.set(slotKey(target.day, target.meal), items);
         }
       }
     } catch (error) {
-      aiError = error;
+      memo.error = error;
     }
   }
 
   const built = buildDesiredList({ dishes, servings, cards, aiItems });
-  return { items: built.items, pending: built.pending, aiError, legacyItems };
+  return { items: built.items, pending: built.pending, aiError: built.pending.length ? memo.error : null, legacyItems: memo.legacyItems };
 }
 
 const nothingKnown = (computed: ComputedList) =>
@@ -494,31 +519,53 @@ function sameFoodContext(first: string | null, second: string) {
 
 // One update per identity and week at a time (the page and «Usar este menú» share it).
 const reconciliations = new Map<string, Promise<ShoppingLoad>>();
+// Updates whose AI call failed (or had no quota) in this session, by identity and week content:
+// opening Compra again does not pay for the same failure; the user asks again with the button.
+const failedUpdates = new Map<string, string>();
+
+// Forgets those failures (another identity, or a fresh start in tests).
+export function forgetShoppingUpdateFailures() {
+  failedUpdates.clear();
+}
+
+const pendingKey = (dish: Pick<PlannedDish, "day" | "meal" | "dish">) => `${slotKey(dish.day, dish.meal)}|${dish.dish}`;
 
 // Brings the week's current list up to date in place (C4): only what changed is added, removed or
 // changed; bought items stay (as «Comprado, ya no hace falta» or «Revisar» when they are no longer
-// enough). retryPending: also when the list is current, to compute the dishes still pending
-// («Calcular (IA)»). Lists of guests are never in the account: they are read as before.
+// enough). userAsked («Calcular (IA)», «Actualizar lista»): also when the list is current (dishes
+// still pending), and the AI is asked again even if it failed before. Lists of guests are never in
+// the account: they are read as before. Never answers «outdated»: when the list cannot be updated
+// now it is shown as it is, with notUpdated and the reason.
 export async function reconcileShoppingList(
   identity: DataIdentity,
   isoWeek: IsoWeek,
   weekDays: WeekDay[],
-  { retryPending = false }: { retryPending?: boolean } = {},
+  { retryPending: userAsked = false }: { retryPending?: boolean } = {},
 ): Promise<ShoppingLoad> {
   const remote = shoppingRemote(identity, isoWeek);
   if (!remote) return loadShoppingList(identity, isoWeek, weekDays);
-  const key = `${queueKey(identity, isoWeek)}|${retryPending ? "pending" : "update"}`;
+  const key = `${queueKey(identity, isoWeek)}|${userAsked ? "asked" : "update"}`;
   const running = reconciliations.get(key);
   if (running) return running;
 
   const task = (async (): Promise<ShoppingLoad> => {
+    const memo = newAiMemo();
     let pushedMarks = false;
+    let lastSeen: { list: ShoppingList; days: WeekDay[] } | null = null;
+    // The list as the account has it, signed with its own signature (never with the new one: this
+    // device must not take it for the list of the new dishes).
+    const asItIs = (list: ShoppingList, days: WeekDay[], aiError: string | null): ShoppingLoad => {
+      const next = listToCache(list, list.weekSignature ?? "");
+      writeShoppingCache(identity, isoWeek, next);
+      return { status: "ready", view: cacheToView(next, "remote", false, days, false, { aiError, notUpdated: true }) };
+    };
+
     for (let attempt = 0; attempt < 3; attempt++) {
       let state: RemoteShoppingState;
       try {
         state = await remote.fetch();
       } catch {
-        return loadShoppingList(identity, isoWeek, weekDays);
+        return offlineLoad(identity, isoWeek, weekDays);
       }
       if (!state.week) return { status: "no_week" };
       const days = state.week.days;
@@ -526,6 +573,7 @@ export async function reconcileShoppingList(
       const signature = getShoppingSignature(isoWeek, days, context);
       const list = state.list;
       if (!list) return generateShoppingList(identity, isoWeek, days);
+      lastSeen = { list, days };
 
       // Marks this device made offline on this same list are sent first: they decide what is bought.
       const cache = readShoppingCache(identity, isoWeek);
@@ -545,13 +593,23 @@ export async function reconcileShoppingList(
         writeShoppingCache(identity, isoWeek, next);
         return { status: "ready", view: cacheToView(next, "remote", false, days, false, extras) };
       };
-      if (current && (!retryPending || !withOrigins || pendingDishesOf(activeRows, plannedDishes(days)).length === 0)) {
+      if (current && (!userAsked || !withOrigins || pendingDishesOf(activeRows, plannedDishes(days)).length === 0)) {
         return shown();
       }
 
-      const computed = await computeList(identity, isoWeek, days, context?.servings ?? 2,
-        withOrigins && sameFoodContext(list.weekSignature, signature) ? activeRows : null);
-      const aiError = computed.aiError ? aiErrorMessage(computed.aiError) : null;
+      const failureKey = `${identity.scope}|${signature}`;
+      if (userAsked) failedUpdates.delete(failureKey);
+      const knownFailure = failedUpdates.get(failureKey) ?? null;
+      const reuse = withOrigins && sameFoodContext(list.weekSignature, signature) ? activeRows : null;
+      const computed = await computeList(identity, isoWeek, days, context?.servings ?? 2, reuse, {
+        memo,
+        contextKey: `${context?.servings ?? 2}|${context?.version ?? ""}`,
+        askAi: knownFailure === null,
+      });
+      const failed = computed.pending.length > 0 && (computed.aiError !== null || knownFailure !== null);
+      const aiError = failed ? knownFailure ?? aiErrorMessage(computed.aiError) : null;
+      if (failed) failedUpdates.set(failureKey, aiError!);
+      else failedUpdates.delete(failureKey);
 
       // The server could not break the list down (before C4) or the database cannot update a list
       // in place: a new list, as before C4.
@@ -560,17 +618,27 @@ export async function reconcileShoppingList(
         if (items.length === 0) throw nothingKnown(computed);
         return storeList(identity, isoWeek, signature, items, state.week.version, days, [], { aiError });
       }
-      // A list made from titles only has no origins: if the AI failed, nothing of it can be kept
-      // apart, so it is left as it is (never emptied because of a failed call).
-      if (computed.aiError && !withOrigins && computed.pending.length) throw computed.aiError;
-      // «Calcular (IA)» failed again: the list stays as it is.
-      if (retryPending && current && computed.aiError) return shown({ aiError });
+      if (failed) {
+        // «Calcular (IA)» failed again: the current list stays as it is.
+        if (current) return shown({ aiError });
+        // Without origins (list before C4), or with origins for other servings or restrictions,
+        // nothing of the list can be kept apart from the dishes that failed: it is left as it is.
+        if (!reuse) return asItIs(list, days, aiError);
+      }
+
+      const ops = diffShoppingList(toExistingRows(list), computed.items);
+      if (failed) {
+        // Never remove what a pending dish may still need.
+        const pending = new Set(computed.pending.map(pendingKey));
+        const needed = new Set(list.items.filter((row) => row.origins?.some((origin) => pending.has(pendingKey(origin)))).map((row) => row.id));
+        ops.remove = ops.remove.filter((op) => !needed.has(op.id));
+      }
 
       const result = await remote.reconcile({
         listId: list.id,
         fromSignature: list.weekSignature,
         toSignature: signature,
-        ops: diffShoppingList(toExistingRows(list), computed.items),
+        ops,
         expectedWeekVersion: state.week.version,
       });
 
@@ -591,7 +659,10 @@ export async function reconcileShoppingList(
         }),
       };
     }
-    return loadShoppingList(identity, isoWeek, weekDays);
+    // The list or the week kept changing while it was being updated: shown as it is now.
+    return lastSeen
+      ? asItIs(lastSeen.list, lastSeen.days, "La lista ha cambiado mientras se actualizaba. Inténtalo de nuevo.")
+      : offlineLoad(identity, isoWeek, weekDays);
   })().finally(() => reconciliations.delete(key));
 
   reconciliations.set(key, task);
