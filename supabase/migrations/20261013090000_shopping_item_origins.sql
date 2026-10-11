@@ -7,8 +7,8 @@
 -- accepts «al gusto» rows); set_shopping_items_checked is not modified. No existing row is modified:
 -- lists made before C4 keep NULL keys and origins and are reconciled in place by the new client.
 -- Applied remotely only by Sergio (becook-preview first, then becook with explicit OK).
--- The last function of this file (shopping_items_discard_unbought) is the only one that removes
--- rows; it is kept apart so that it can be applied on its own (SQL Editor).
+-- shopping_items_discard_unbought is the only function that removes rows; it is created before
+-- reconcile_shopping_list, which calls it.
 -- One explicit transaction, so that the SET LOCAL limits below apply to every statement.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
@@ -142,6 +142,28 @@ AS $$
   WHERE l.id = p_list_id;
 $$;
 
+-- The only function of this migration that removes rows. Called by reconcile_shopping_list (below)
+-- for items of the list that are not marked (a marked item is never removed: it stays as «Comprado,
+-- ya no hace falta»). SECURITY INVOKER: RLS applies exactly as for a direct client write
+-- (shopping_items_delete_own). Returns how many rows went.
+CREATE FUNCTION public.shopping_items_discard_unbought(p_list_id uuid, p_item_ids uuid[])
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  v_count integer;
+BEGIN
+  DELETE FROM public.shopping_items
+  WHERE shopping_list_id = p_list_id AND id = ANY (p_item_ids) AND NOT checked;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.shopping_items_discard_unbought(uuid, uuid[]) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.shopping_items_discard_unbought(uuid, uuid[]) TO authenticated;
+
 -- Same signature and results as B6 (20261009090000_shopping_list_per_week). Changes: each item may
 -- carry item_key and origins (absent for the deployed client), a quantity may be NULL with the unit
 -- «al gusto», and the list records its ingredient basis ('mixed-v1' when every item has a key).
@@ -241,8 +263,9 @@ $$;
 -- Result: {status, week_version, list, current_list_id, summary}.
 --   applied: written; summary {added, removed, keptBought, changed, review}.
 --   existing: the list already has p_to_signature (another device did it); nothing is written.
---   stale: the list is not the week's current list, its signature is not p_from_signature, or an
---          item of p_ops is not in it; nothing is written (the client reads the list again).
+--   stale: the list is not the week's current list, its signature is not p_from_signature, an
+--          item of p_ops is not in it, or an item key is already taken; nothing is written (the
+--          client reads the list again).
 --   week_changed: p_expected_week_version is not the week's version; nothing is written.
 --   no_week: the caller has no such week; nothing is written.
 -- The week row is locked (FOR UPDATE), like save_shopping_list and apply_week; marks
@@ -345,6 +368,10 @@ BEGIN
 
   v_now := clock_timestamp();
 
+  -- Every write below is undone together if a key is already taken (two devices adding the same
+  -- item at once with the same signature): the answer is then stale and the client reads again.
+  BEGIN
+
   -- Removes: a bought item stays, marked as no longer needed; an unbought one goes.
   IF v_remove_ids IS NOT NULL THEN
     UPDATE public.shopping_items
@@ -361,26 +388,28 @@ BEGIN
   LOOP
     SELECT * INTO v_item FROM public.shopping_items WHERE id = v_op.id;
     v_review := false;
+    -- What was bought: recorded at marking time, or (rows marked before C4) the amount it had then.
+    v_bought := CASE WHEN v_item.checked
+      THEN coalesce(v_item.checked_quantity, public.shopping_quantity_base(v_item.quantity, v_item.unit)) END;
     IF v_item.checked THEN
       v_review := v_item.needs_review;
-      IF v_op.quantity IS NOT NULL THEN
-        v_bought := coalesce(v_item.checked_quantity, public.shopping_quantity_base(v_item.quantity, v_item.unit));
-        IF v_bought IS NULL OR public.shopping_quantity_base(v_op.quantity, v_op.unit) > v_bought THEN
-          v_review := true;
-        END IF;
+      IF v_op.quantity IS NOT NULL
+         AND (v_bought IS NULL OR public.shopping_quantity_base(v_op.quantity, v_op.unit) > v_bought) THEN
+        v_review := true;
       END IF;
     END IF;
     IF v_review AND NOT v_item.needs_review THEN
       v_reviews := v_reviews + 1;
     END IF;
-    IF v_item.quantity IS DISTINCT FROM v_op.quantity OR v_item.unit IS DISTINCT FROM btrim(v_op.unit)
+    -- 1 kg → 1000 g is the same amount: compared in base units.
+    IF public.shopping_quantity_base(v_item.quantity, v_item.unit) IS DISTINCT FROM public.shopping_quantity_base(v_op.quantity, v_op.unit)
        OR v_item.name IS DISTINCT FROM btrim(v_op.name) OR v_item.removed_at IS NOT NULL THEN
       v_changed := v_changed + 1;
     END IF;
     UPDATE public.shopping_items
     SET name = btrim(v_op.name), quantity = v_op.quantity, unit = btrim(v_op.unit), category = v_op.category,
         item_key = v_op.item_key, origins = v_op.origins, removed_at = NULL, needs_review = v_review,
-        updated_at = v_now
+        checked_quantity = v_bought, updated_at = v_now
     WHERE id = v_op.id;
   END LOOP;
 
@@ -393,6 +422,11 @@ BEGIN
   UPDATE public.shopping_lists
   SET week_signature = p_to_signature, ingredient_basis = 'mixed-v1', reconciled_at = v_now, updated_at = v_now
   WHERE id = v_list.id;
+
+  EXCEPTION WHEN unique_violation THEN
+    RETURN jsonb_build_object('status', 'stale', 'list', NULL, 'week_version', v_week.version,
+      'current_list_id', v_list.id);
+  END;
 
   RETURN jsonb_build_object(
     'status', 'applied',
@@ -414,28 +448,5 @@ REVOKE ALL ON FUNCTION public.reconcile_shopping_list(integer, integer, uuid, te
   FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.reconcile_shopping_list(integer, integer, uuid, text, text, jsonb, bigint)
   TO authenticated;
-
--- ---------------------------------------------------------------------------------------------
--- Separate part: the only function of this migration that removes rows. Called by
--- reconcile_shopping_list for items of the list that are not marked (a marked item is never
--- removed: it stays as «Comprado, ya no hace falta»). SECURITY INVOKER: RLS applies exactly as for
--- a direct client write (shopping_items_delete_own). Returns how many rows went.
-CREATE FUNCTION public.shopping_items_discard_unbought(p_list_id uuid, p_item_ids uuid[])
-RETURNS integer
-LANGUAGE plpgsql
-SECURITY INVOKER
-SET search_path = ''
-AS $$
-DECLARE
-  v_count integer;
-BEGIN
-  DELETE FROM public.shopping_items
-  WHERE shopping_list_id = p_list_id AND id = ANY (p_item_ids) AND NOT checked;
-  GET DIAGNOSTICS v_count = ROW_COUNT;
-  RETURN v_count;
-END;
-$$;
-REVOKE ALL ON FUNCTION public.shopping_items_discard_unbought(uuid, uuid[]) FROM PUBLIC, anon, service_role;
-GRANT EXECUTE ON FUNCTION public.shopping_items_discard_unbought(uuid, uuid[]) TO authenticated;
 
 COMMIT;

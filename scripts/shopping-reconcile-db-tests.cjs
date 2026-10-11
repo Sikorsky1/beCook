@@ -209,6 +209,27 @@ async function runShoppingReconcileTests({ check: baseCheck, sql, id, supabase, 
       assert.equal(afterRemove.items.find((row) => row.name === "sal").unit, "al gusto");
     });
 
+    // A row marked before C4 (no checked_quantity): what it had then is kept as bought, so a lower
+    // and then equal amount is never a false «Revisar»; 1 kg → 1000 g is not a change. A key already
+    // taken by an active row (two devices adding at once) → stale, nothing written.
+    const preC4 = json("WITH r AS (INSERT INTO public.shopping_items (shopping_list_id,name,quantity,unit,category,checked) VALUES ('" + list1.id + "','avena',1,'kg','despensa',true) RETURNING id) SELECT json_build_object('id', id) FROM r;").id;
+    const same = await call({ ops: { add: [], update: [{ id: preC4, ...op("avena", 1000, "g", "despensa", "despensa|avena|mass") }], remove: [] } });
+    const down = await call({ ops: { add: [], update: [{ id: preC4, ...op("avena", 800, "g", "despensa", "despensa|avena|mass") }], remove: [] } });
+    const backUp = await call({ ops: { add: [], update: [{ id: preC4, ...op("avena", 1000, "g", "despensa", "despensa|avena|mass") }], remove: [] } });
+    const avena = item(1, "avena");
+    const beforeTaken = JSON.stringify(listsOf(1));
+    const taken = await call({ ops: { add: [op("avena", 5, "g", "despensa", "despensa|avena|mass")], update: [], remove: [{ id: item(1, "garbanzos").id }] } });
+    const afterTaken = JSON.stringify(listsOf(1));
+    observed = { same: same.summary, down: down.summary, backUp: backUp.summary, avena, taken: taken.status };
+    check("C4 reconcile: a row marked before C4 keeps what was bought (no false review); kg ↔ g is not a change; a taken key is stale and writes nothing", () => {
+      assert.equal(same.summary.changed, 0, "1 kg → 1000 g");
+      assert.equal(Number(avena.bought), 1000);
+      assert.equal(backUp.summary.review, 0, "1000 g needed, 1 kg bought");
+      assert.equal(avena.review, false);
+      assert.equal(taken.status, "stale");
+      assert.equal(afterTaken, beforeTaken, "the remove before the failed add was undone too");
+    });
+
     // Unique active key per list; permissions.
     const duplicateRow = outcome(1, "INSERT INTO public.shopping_items (shopping_list_id,name,quantity,unit,category,item_key) VALUES ('" + list1.id + "','lentejas',1,'g','despensa','despensa|lenteja|mass')");
     const otherUser = createClient(api.url, api.key, options);

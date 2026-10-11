@@ -7,7 +7,7 @@ const factors = { kg: 1000, kilo: 1000, kilos: 1000, kilogramo: 1000, kilogramos
 const base = (quantity, unit) => (quantity === null ? null : quantity * (factors[String(unit ?? "").trim().toLowerCase()] ?? 1));
 
 function createShoppingAccount() {
-  const st = { weeks: new Map(), lists: [], cards: new Map(), down: false, seq: 0, calls: { fetch: 0, save: 0, setChecked: 0, reconcile: 0, cards: 0 } };
+  const st = { weeks: new Map(), lists: [], cards: new Map(), down: false, seq: 0, forceStale: 0, calls: { fetch: 0, save: 0, setChecked: 0, reconcile: 0, cards: 0 } };
   const tick = () => ++st.seq;
   const current = (k) => st.lists.filter((l) => l.week === k).sort((x, y) => y.at - x.at)[0] ?? null;
   const asList = (l) => ({
@@ -57,6 +57,8 @@ function createShoppingAccount() {
       },
       async reconcile({ listId, fromSignature, toSignature, ops, expectedWeekVersion }) {
         st.calls.reconcile++; offline();
+        // Another device updates the list first (forced, for tests): stale without writing.
+        if (st.forceStale > 0) { st.forceStale--; return { status: "stale", weekVersion: st.weeks.get(k)?.version ?? null }; }
         const week = st.weeks.get(k);
         if (!week) return { status: "no_week" };
         if (expectedWeekVersion !== null && expectedWeekVersion !== week.version) return { status: "week_changed", weekVersion: week.version };
@@ -66,6 +68,8 @@ function createShoppingAccount() {
         const ids = [...ops.update, ...ops.remove].map((op) => op.id);
         if (list.signature !== fromSignature || !ids.every((id) => list.items.some((i) => i.id === id))) return { status: "stale", weekVersion: week.version };
         const summary = { added: 0, removed: 0, keptBought: 0, changed: 0, review: 0 };
+        // All or nothing, like the function's exception block (a key taken → stale).
+        const snapshot = structuredClone(list.items);
         for (const { id } of ops.remove) {
           const item = list.items.find((i) => i.id === id);
           if (item.checked) { if (!item.removedAt) { item.removedAt = "now"; item.needsReview = false; summary.keptBought++; } }
@@ -74,20 +78,18 @@ function createShoppingAccount() {
         for (const op of ops.update) {
           const item = list.items.find((i) => i.id === op.id);
           let review = false;
+          const bought = item.checked ? item.checkedQuantity ?? base(item.quantity, item.unit) : null;
           if (item.checked) {
             review = item.needsReview;
-            if (op.quantity !== null) {
-              const bought = item.checkedQuantity ?? base(item.quantity, item.unit);
-              if (bought === null || base(op.quantity, op.unit) > bought) review = true;
-            }
+            if (op.quantity !== null && (bought === null || base(op.quantity, op.unit) > bought)) review = true;
           }
           if (review && !item.needsReview) summary.review++;
-          if (item.quantity !== op.quantity || item.unit !== op.unit || item.name !== op.name || item.removedAt) summary.changed++;
-          Object.assign(item, { name: op.name, quantity: op.quantity, unit: op.unit, category: op.category, itemKey: op.item_key, origins: op.origins, removedAt: null, needsReview: review });
+          if (base(item.quantity, item.unit) !== base(op.quantity, op.unit) || item.name !== op.name || item.removedAt) summary.changed++;
+          Object.assign(item, { name: op.name, quantity: op.quantity, unit: op.unit, category: op.category, itemKey: op.item_key, origins: op.origins, removedAt: null, needsReview: review, checkedQuantity: bought });
         }
         for (const op of ops.add) { list.items.push(row(op)); summary.added++; }
         const active = list.items.filter((i) => i.itemKey && !i.removedAt).map((i) => i.itemKey);
-        if (new Set(active).size !== active.length) throw new Error("duplicate key value violates unique constraint");
+        if (new Set(active).size !== active.length) { list.items = snapshot; return { status: "stale", weekVersion: week.version }; }
         Object.assign(list, { signature: toSignature, basis: "mixed-v1" });
         return { status: "applied", list: asList(list), weekVersion: week.version, summary };
       },

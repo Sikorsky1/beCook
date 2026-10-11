@@ -97,8 +97,16 @@
   ],
   "functions": [
     {
+      "proname": "shopping_items_discard_unbought",
+      "definition": "CREATE OR REPLACE FUNCTION public.shopping_items_discard_unbought(p_list_id uuid, p_item_ids uuid[])\n RETURNS integer\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_count integer;\nBEGIN\n  DELETE FROM public.shopping_items\n  WHERE shopping_list_id = p_list_id AND id = ANY (p_item_ids) AND NOT checked;\n  GET DIAGNOSTICS v_count = ROW_COUNT;\n  RETURN v_count;\nEND;\n$function$\n"
+    },
+    {
       "proname": "shopping_items_check_state",
       "definition": "CREATE OR REPLACE FUNCTION public.shopping_items_check_state()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nBEGIN\n  IF NEW.checked IS DISTINCT FROM OLD.checked THEN\n    NEW.needs_review := false;\n    NEW.checked_quantity := CASE WHEN NEW.checked THEN public.shopping_quantity_base(NEW.quantity, NEW.unit) END;\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+    },
+    {
+      "proname": "save_shopping_list",
+      "definition": "CREATE OR REPLACE FUNCTION public.save_shopping_list(p_iso_year integer, p_iso_week integer, p_week_signature text, p_items jsonb, p_expected_week_version bigint DEFAULT NULL::bigint)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_week public.weeks%ROWTYPE;\n  v_list public.shopping_lists%ROWTYPE;\n  v_count integer;\n  v_keys integer;\n  v_keyed integer;\n  v_now timestamptz;\n  v_status text;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'save_shopping_list: authentication required';\n  END IF;\n  IF p_week_signature IS NULL OR char_length(p_week_signature) NOT BETWEEN 1 AND 8000 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_shopping_list: week signature required';\n  END IF;\n  IF jsonb_typeof(p_items) IS DISTINCT FROM 'array' OR jsonb_array_length(p_items) NOT BETWEEN 1 AND 300 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_shopping_list: 1 to 300 items required';\n  END IF;\n\n  SELECT count(*) FILTER (WHERE public.shopping_item_valid(i.name, i.quantity, i.unit, i.category, i.item_key, i.origins)),\n         count(DISTINCT i.item_key), count(i.item_key)\n  INTO v_count, v_keys, v_keyed\n  FROM jsonb_to_recordset(p_items) AS i(name text, quantity numeric, unit text, category text, item_key text, origins jsonb);\n  IF v_count <> jsonb_array_length(p_items) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_shopping_list: invalid item';\n  END IF;\n  IF v_keys <> v_keyed THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_shopping_list: duplicate item key';\n  END IF;\n\n  SELECT * INTO v_week FROM public.weeks\n  WHERE user_id = v_user AND iso_year = p_iso_year AND iso_week = p_iso_week\n  FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'no_week', 'list', NULL, 'week_version', NULL);\n  END IF;\n  IF p_expected_week_version IS NOT NULL AND v_week.version <> p_expected_week_version THEN\n    RETURN jsonb_build_object('status', 'week_changed', 'list', NULL, 'week_version', v_week.version);\n  END IF;\n\n  SELECT * INTO v_list FROM public.shopping_lists\n  WHERE week_id = v_week.id\n  ORDER BY created_at DESC, id DESC\n  LIMIT 1;\n  IF FOUND AND v_list.week_signature IS NOT DISTINCT FROM p_week_signature THEN\n    v_status := 'existing';\n  ELSE\n    -- clock_timestamp, not now(): a save that waited for the lock is newer than the one it waited for.\n    v_now := clock_timestamp();\n    INSERT INTO public.shopping_lists (week_id, generated_at, created_at, updated_at, week_signature, ingredient_basis)\n    VALUES (v_week.id, v_now, v_now, v_now, p_week_signature,\n      CASE WHEN v_keyed = jsonb_array_length(p_items) THEN 'mixed-v1' END)\n    RETURNING * INTO v_list;\n\n    INSERT INTO public.shopping_items (shopping_list_id, name, quantity, unit, category, checked, item_key, origins)\n    SELECT v_list.id, btrim(i.name), i.quantity, btrim(i.unit), i.category, false, i.item_key, i.origins\n    FROM jsonb_to_recordset(p_items) AS i(name text, quantity numeric, unit text, category text, item_key text, origins jsonb);\n    v_status := 'created';\n  END IF;\n\n  RETURN jsonb_build_object(\n    'status', v_status,\n    'week_version', v_week.version,\n    'list', public.shopping_list_json(v_list.id));\nEND;\n$function$\n"
     },
     {
       "proname": "shopping_quantity_base",
@@ -114,15 +122,7 @@
     },
     {
       "proname": "reconcile_shopping_list",
-      "definition": "CREATE OR REPLACE FUNCTION public.reconcile_shopping_list(p_iso_year integer, p_iso_week integer, p_list_id uuid, p_from_signature text, p_to_signature text, p_ops jsonb, p_expected_week_version bigint DEFAULT NULL::bigint)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_week public.weeks%ROWTYPE;\n  v_list public.shopping_lists%ROWTYPE;\n  v_item public.shopping_items%ROWTYPE;\n  v_op record;\n  v_add jsonb := coalesce(p_ops -> 'add', '[]'::jsonb);\n  v_update jsonb := coalesce(p_ops -> 'update', '[]'::jsonb);\n  v_remove jsonb := coalesce(p_ops -> 'remove', '[]'::jsonb);\n  v_ids uuid[];\n  v_remove_ids uuid[];\n  v_count integer;\n  v_keys integer;\n  v_now timestamptz;\n  v_bought numeric;\n  v_review boolean;\n  v_added integer := 0;\n  v_removed integer := 0;\n  v_kept integer := 0;\n  v_changed integer := 0;\n  v_reviews integer := 0;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'reconcile_shopping_list: authentication required';\n  END IF;\n  IF p_list_id IS NULL OR p_to_signature IS NULL OR char_length(p_to_signature) NOT BETWEEN 1 AND 8000\n     OR (p_from_signature IS NOT NULL AND char_length(p_from_signature) NOT BETWEEN 1 AND 8000) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'reconcile_shopping_list: list and signatures required';\n  END IF;\n  IF jsonb_typeof(p_ops) IS DISTINCT FROM 'object'\n     OR jsonb_typeof(v_add) IS DISTINCT FROM 'array' OR jsonb_array_length(v_add) > 300\n     OR jsonb_typeof(v_update) IS DISTINCT FROM 'array' OR jsonb_array_length(v_update) > 300\n     OR jsonb_typeof(v_remove) IS DISTINCT FROM 'array' OR jsonb_array_length(v_remove) > 300 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'reconcile_shopping_list: invalid operations';\n  END IF;\n\n  -- Every added or updated item is valid and has a key; keys and ids are not repeated.\n  SELECT count(*) INTO v_count\n  FROM jsonb_to_recordset(v_add || v_update) AS i(name text, quantity numeric, unit text, category text, item_key text, origins jsonb)\n  WHERE i.item_key IS NOT NULL AND public.shopping_item_valid(i.name, i.quantity, i.unit, i.category, i.item_key, i.origins);\n  SELECT count(DISTINCT i.item_key) INTO v_keys\n  FROM jsonb_to_recordset(v_add || v_update) AS i(item_key text);\n  IF v_count <> jsonb_array_length(v_add) + jsonb_array_length(v_update)\n     OR v_keys <> jsonb_array_length(v_add) + jsonb_array_length(v_update) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'reconcile_shopping_list: invalid item';\n  END IF;\n  SELECT array_agg(o.id) INTO v_ids FROM jsonb_to_recordset(v_update || v_remove) AS o(id uuid);\n  SELECT array_agg(o.id) INTO v_remove_ids FROM jsonb_to_recordset(v_remove) AS o(id uuid);\n  IF array_position(v_ids, NULL) IS NOT NULL\n     OR cardinality(v_ids) <> (SELECT count(DISTINCT x) FROM unnest(v_ids) AS x) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'reconcile_shopping_list: invalid item ids';\n  END IF;\n\n  SELECT * INTO v_week FROM public.weeks\n  WHERE user_id = v_user AND iso_year = p_iso_year AND iso_week = p_iso_week\n  FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'no_week', 'list', NULL, 'week_version', NULL);\n  END IF;\n  IF p_expected_week_version IS NOT NULL AND v_week.version <> p_expected_week_version THEN\n    RETURN jsonb_build_object('status', 'week_changed', 'list', NULL, 'week_version', v_week.version);\n  END IF;\n\n  SELECT * INTO v_list FROM public.shopping_lists\n  WHERE week_id = v_week.id\n  ORDER BY created_at DESC, id DESC\n  LIMIT 1;\n  IF NOT FOUND OR v_list.id <> p_list_id THEN\n    RETURN jsonb_build_object('status', 'stale', 'list', NULL, 'week_version', v_week.version,\n      'current_list_id', v_list.id);\n  END IF;\n  IF p_from_signature IS DISTINCT FROM p_to_signature AND v_list.week_signature IS NOT DISTINCT FROM p_to_signature THEN\n    RETURN jsonb_build_object('status', 'existing', 'week_version', v_week.version,\n      'list', public.shopping_list_json(v_list.id), 'current_list_id', v_list.id);\n  END IF;\n  IF v_list.week_signature IS DISTINCT FROM p_from_signature\n     OR coalesce(cardinality(v_ids), 0) <> (SELECT count(*) FROM public.shopping_items\n                                           WHERE shopping_list_id = v_list.id AND id = ANY (v_ids)) THEN\n    RETURN jsonb_build_object('status', 'stale', 'list', NULL, 'week_version', v_week.version,\n      'current_list_id', v_list.id);\n  END IF;\n\n  v_now := clock_timestamp();\n\n  -- Removes: a bought item stays, marked as no longer needed; an unbought one goes.\n  IF v_remove_ids IS NOT NULL THEN\n    UPDATE public.shopping_items\n    SET removed_at = v_now, needs_review = false, updated_at = v_now\n    WHERE shopping_list_id = v_list.id AND id = ANY (v_remove_ids) AND checked AND removed_at IS NULL;\n    GET DIAGNOSTICS v_kept = ROW_COUNT;\n    v_removed := public.shopping_items_discard_unbought(v_list.id, v_remove_ids);\n  END IF;\n\n  -- Updates, one by one: a marked item that now needs more than what was bought is to review.\n  FOR v_op IN\n    SELECT * FROM jsonb_to_recordset(v_update)\n      AS u(id uuid, name text, quantity numeric, unit text, category text, item_key text, origins jsonb)\n  LOOP\n    SELECT * INTO v_item FROM public.shopping_items WHERE id = v_op.id;\n    v_review := false;\n    IF v_item.checked THEN\n      v_review := v_item.needs_review;\n      IF v_op.quantity IS NOT NULL THEN\n        v_bought := coalesce(v_item.checked_quantity, public.shopping_quantity_base(v_item.quantity, v_item.unit));\n        IF v_bought IS NULL OR public.shopping_quantity_base(v_op.quantity, v_op.unit) > v_bought THEN\n          v_review := true;\n        END IF;\n      END IF;\n    END IF;\n    IF v_review AND NOT v_item.needs_review THEN\n      v_reviews := v_reviews + 1;\n    END IF;\n    IF v_item.quantity IS DISTINCT FROM v_op.quantity OR v_item.unit IS DISTINCT FROM btrim(v_op.unit)\n       OR v_item.name IS DISTINCT FROM btrim(v_op.name) OR v_item.removed_at IS NOT NULL THEN\n      v_changed := v_changed + 1;\n    END IF;\n    UPDATE public.shopping_items\n    SET name = btrim(v_op.name), quantity = v_op.quantity, unit = btrim(v_op.unit), category = v_op.category,\n        item_key = v_op.item_key, origins = v_op.origins, removed_at = NULL, needs_review = v_review,\n        updated_at = v_now\n    WHERE id = v_op.id;\n  END LOOP;\n\n  INSERT INTO public.shopping_items (shopping_list_id, name, quantity, unit, category, checked, item_key, origins,\n    created_at, updated_at)\n  SELECT v_list.id, btrim(i.name), i.quantity, btrim(i.unit), i.category, false, i.item_key, i.origins, v_now, v_now\n  FROM jsonb_to_recordset(v_add) AS i(name text, quantity numeric, unit text, category text, item_key text, origins jsonb);\n  GET DIAGNOSTICS v_added = ROW_COUNT;\n\n  UPDATE public.shopping_lists\n  SET week_signature = p_to_signature, ingredient_basis = 'mixed-v1', reconciled_at = v_now, updated_at = v_now\n  WHERE id = v_list.id;\n\n  RETURN jsonb_build_object(\n    'status', 'applied',\n    'week_version', v_week.version,\n    'current_list_id', v_list.id,\n    'list', public.shopping_list_json(v_list.id),\n    'summary', jsonb_build_object('added', v_added, 'removed', v_removed, 'keptBought', v_kept,\n      'changed', v_changed, 'review', v_reviews));\nEND;\n$function$\n"
-    },
-    {
-      "proname": "shopping_items_discard_unbought",
-      "definition": "CREATE OR REPLACE FUNCTION public.shopping_items_discard_unbought(p_list_id uuid, p_item_ids uuid[])\n RETURNS integer\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_count integer;\nBEGIN\n  DELETE FROM public.shopping_items\n  WHERE shopping_list_id = p_list_id AND id = ANY (p_item_ids) AND NOT checked;\n  GET DIAGNOSTICS v_count = ROW_COUNT;\n  RETURN v_count;\nEND;\n$function$\n"
-    },
-    {
-      "proname": "save_shopping_list",
-      "definition": "CREATE OR REPLACE FUNCTION public.save_shopping_list(p_iso_year integer, p_iso_week integer, p_week_signature text, p_items jsonb, p_expected_week_version bigint DEFAULT NULL::bigint)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_week public.weeks%ROWTYPE;\n  v_list public.shopping_lists%ROWTYPE;\n  v_count integer;\n  v_keys integer;\n  v_keyed integer;\n  v_now timestamptz;\n  v_status text;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'save_shopping_list: authentication required';\n  END IF;\n  IF p_week_signature IS NULL OR char_length(p_week_signature) NOT BETWEEN 1 AND 8000 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_shopping_list: week signature required';\n  END IF;\n  IF jsonb_typeof(p_items) IS DISTINCT FROM 'array' OR jsonb_array_length(p_items) NOT BETWEEN 1 AND 300 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_shopping_list: 1 to 300 items required';\n  END IF;\n\n  SELECT count(*) FILTER (WHERE public.shopping_item_valid(i.name, i.quantity, i.unit, i.category, i.item_key, i.origins)),\n         count(DISTINCT i.item_key), count(i.item_key)\n  INTO v_count, v_keys, v_keyed\n  FROM jsonb_to_recordset(p_items) AS i(name text, quantity numeric, unit text, category text, item_key text, origins jsonb);\n  IF v_count <> jsonb_array_length(p_items) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_shopping_list: invalid item';\n  END IF;\n  IF v_keys <> v_keyed THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'save_shopping_list: duplicate item key';\n  END IF;\n\n  SELECT * INTO v_week FROM public.weeks\n  WHERE user_id = v_user AND iso_year = p_iso_year AND iso_week = p_iso_week\n  FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'no_week', 'list', NULL, 'week_version', NULL);\n  END IF;\n  IF p_expected_week_version IS NOT NULL AND v_week.version <> p_expected_week_version THEN\n    RETURN jsonb_build_object('status', 'week_changed', 'list', NULL, 'week_version', v_week.version);\n  END IF;\n\n  SELECT * INTO v_list FROM public.shopping_lists\n  WHERE week_id = v_week.id\n  ORDER BY created_at DESC, id DESC\n  LIMIT 1;\n  IF FOUND AND v_list.week_signature IS NOT DISTINCT FROM p_week_signature THEN\n    v_status := 'existing';\n  ELSE\n    -- clock_timestamp, not now(): a save that waited for the lock is newer than the one it waited for.\n    v_now := clock_timestamp();\n    INSERT INTO public.shopping_lists (week_id, generated_at, created_at, updated_at, week_signature, ingredient_basis)\n    VALUES (v_week.id, v_now, v_now, v_now, p_week_signature,\n      CASE WHEN v_keyed = jsonb_array_length(p_items) THEN 'mixed-v1' END)\n    RETURNING * INTO v_list;\n\n    INSERT INTO public.shopping_items (shopping_list_id, name, quantity, unit, category, checked, item_key, origins)\n    SELECT v_list.id, btrim(i.name), i.quantity, btrim(i.unit), i.category, false, i.item_key, i.origins\n    FROM jsonb_to_recordset(p_items) AS i(name text, quantity numeric, unit text, category text, item_key text, origins jsonb);\n    v_status := 'created';\n  END IF;\n\n  RETURN jsonb_build_object(\n    'status', v_status,\n    'week_version', v_week.version,\n    'list', public.shopping_list_json(v_list.id));\nEND;\n$function$\n"
+      "definition": "CREATE OR REPLACE FUNCTION public.reconcile_shopping_list(p_iso_year integer, p_iso_week integer, p_list_id uuid, p_from_signature text, p_to_signature text, p_ops jsonb, p_expected_week_version bigint DEFAULT NULL::bigint)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_week public.weeks%ROWTYPE;\n  v_list public.shopping_lists%ROWTYPE;\n  v_item public.shopping_items%ROWTYPE;\n  v_op record;\n  v_add jsonb := coalesce(p_ops -> 'add', '[]'::jsonb);\n  v_update jsonb := coalesce(p_ops -> 'update', '[]'::jsonb);\n  v_remove jsonb := coalesce(p_ops -> 'remove', '[]'::jsonb);\n  v_ids uuid[];\n  v_remove_ids uuid[];\n  v_count integer;\n  v_keys integer;\n  v_now timestamptz;\n  v_bought numeric;\n  v_review boolean;\n  v_added integer := 0;\n  v_removed integer := 0;\n  v_kept integer := 0;\n  v_changed integer := 0;\n  v_reviews integer := 0;\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'reconcile_shopping_list: authentication required';\n  END IF;\n  IF p_list_id IS NULL OR p_to_signature IS NULL OR char_length(p_to_signature) NOT BETWEEN 1 AND 8000\n     OR (p_from_signature IS NOT NULL AND char_length(p_from_signature) NOT BETWEEN 1 AND 8000) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'reconcile_shopping_list: list and signatures required';\n  END IF;\n  IF jsonb_typeof(p_ops) IS DISTINCT FROM 'object'\n     OR jsonb_typeof(v_add) IS DISTINCT FROM 'array' OR jsonb_array_length(v_add) > 300\n     OR jsonb_typeof(v_update) IS DISTINCT FROM 'array' OR jsonb_array_length(v_update) > 300\n     OR jsonb_typeof(v_remove) IS DISTINCT FROM 'array' OR jsonb_array_length(v_remove) > 300 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'reconcile_shopping_list: invalid operations';\n  END IF;\n\n  -- Every added or updated item is valid and has a key; keys and ids are not repeated.\n  SELECT count(*) INTO v_count\n  FROM jsonb_to_recordset(v_add || v_update) AS i(name text, quantity numeric, unit text, category text, item_key text, origins jsonb)\n  WHERE i.item_key IS NOT NULL AND public.shopping_item_valid(i.name, i.quantity, i.unit, i.category, i.item_key, i.origins);\n  SELECT count(DISTINCT i.item_key) INTO v_keys\n  FROM jsonb_to_recordset(v_add || v_update) AS i(item_key text);\n  IF v_count <> jsonb_array_length(v_add) + jsonb_array_length(v_update)\n     OR v_keys <> jsonb_array_length(v_add) + jsonb_array_length(v_update) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'reconcile_shopping_list: invalid item';\n  END IF;\n  SELECT array_agg(o.id) INTO v_ids FROM jsonb_to_recordset(v_update || v_remove) AS o(id uuid);\n  SELECT array_agg(o.id) INTO v_remove_ids FROM jsonb_to_recordset(v_remove) AS o(id uuid);\n  IF array_position(v_ids, NULL) IS NOT NULL\n     OR cardinality(v_ids) <> (SELECT count(DISTINCT x) FROM unnest(v_ids) AS x) THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'reconcile_shopping_list: invalid item ids';\n  END IF;\n\n  SELECT * INTO v_week FROM public.weeks\n  WHERE user_id = v_user AND iso_year = p_iso_year AND iso_week = p_iso_week\n  FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'no_week', 'list', NULL, 'week_version', NULL);\n  END IF;\n  IF p_expected_week_version IS NOT NULL AND v_week.version <> p_expected_week_version THEN\n    RETURN jsonb_build_object('status', 'week_changed', 'list', NULL, 'week_version', v_week.version);\n  END IF;\n\n  SELECT * INTO v_list FROM public.shopping_lists\n  WHERE week_id = v_week.id\n  ORDER BY created_at DESC, id DESC\n  LIMIT 1;\n  IF NOT FOUND OR v_list.id <> p_list_id THEN\n    RETURN jsonb_build_object('status', 'stale', 'list', NULL, 'week_version', v_week.version,\n      'current_list_id', v_list.id);\n  END IF;\n  IF p_from_signature IS DISTINCT FROM p_to_signature AND v_list.week_signature IS NOT DISTINCT FROM p_to_signature THEN\n    RETURN jsonb_build_object('status', 'existing', 'week_version', v_week.version,\n      'list', public.shopping_list_json(v_list.id), 'current_list_id', v_list.id);\n  END IF;\n  IF v_list.week_signature IS DISTINCT FROM p_from_signature\n     OR coalesce(cardinality(v_ids), 0) <> (SELECT count(*) FROM public.shopping_items\n                                           WHERE shopping_list_id = v_list.id AND id = ANY (v_ids)) THEN\n    RETURN jsonb_build_object('status', 'stale', 'list', NULL, 'week_version', v_week.version,\n      'current_list_id', v_list.id);\n  END IF;\n\n  v_now := clock_timestamp();\n\n  -- Every write below is undone together if a key is already taken (two devices adding the same\n  -- item at once with the same signature): the answer is then stale and the client reads again.\n  BEGIN\n\n  -- Removes: a bought item stays, marked as no longer needed; an unbought one goes.\n  IF v_remove_ids IS NOT NULL THEN\n    UPDATE public.shopping_items\n    SET removed_at = v_now, needs_review = false, updated_at = v_now\n    WHERE shopping_list_id = v_list.id AND id = ANY (v_remove_ids) AND checked AND removed_at IS NULL;\n    GET DIAGNOSTICS v_kept = ROW_COUNT;\n    v_removed := public.shopping_items_discard_unbought(v_list.id, v_remove_ids);\n  END IF;\n\n  -- Updates, one by one: a marked item that now needs more than what was bought is to review.\n  FOR v_op IN\n    SELECT * FROM jsonb_to_recordset(v_update)\n      AS u(id uuid, name text, quantity numeric, unit text, category text, item_key text, origins jsonb)\n  LOOP\n    SELECT * INTO v_item FROM public.shopping_items WHERE id = v_op.id;\n    v_review := false;\n    -- What was bought: recorded at marking time, or (rows marked before C4) the amount it had then.\n    v_bought := CASE WHEN v_item.checked\n      THEN coalesce(v_item.checked_quantity, public.shopping_quantity_base(v_item.quantity, v_item.unit)) END;\n    IF v_item.checked THEN\n      v_review := v_item.needs_review;\n      IF v_op.quantity IS NOT NULL\n         AND (v_bought IS NULL OR public.shopping_quantity_base(v_op.quantity, v_op.unit) > v_bought) THEN\n        v_review := true;\n      END IF;\n    END IF;\n    IF v_review AND NOT v_item.needs_review THEN\n      v_reviews := v_reviews + 1;\n    END IF;\n    -- 1 kg → 1000 g is the same amount: compared in base units.\n    IF public.shopping_quantity_base(v_item.quantity, v_item.unit) IS DISTINCT FROM public.shopping_quantity_base(v_op.quantity, v_op.unit)\n       OR v_item.name IS DISTINCT FROM btrim(v_op.name) OR v_item.removed_at IS NOT NULL THEN\n      v_changed := v_changed + 1;\n    END IF;\n    UPDATE public.shopping_items\n    SET name = btrim(v_op.name), quantity = v_op.quantity, unit = btrim(v_op.unit), category = v_op.category,\n        item_key = v_op.item_key, origins = v_op.origins, removed_at = NULL, needs_review = v_review,\n        checked_quantity = v_bought, updated_at = v_now\n    WHERE id = v_op.id;\n  END LOOP;\n\n  INSERT INTO public.shopping_items (shopping_list_id, name, quantity, unit, category, checked, item_key, origins,\n    created_at, updated_at)\n  SELECT v_list.id, btrim(i.name), i.quantity, btrim(i.unit), i.category, false, i.item_key, i.origins, v_now, v_now\n  FROM jsonb_to_recordset(v_add) AS i(name text, quantity numeric, unit text, category text, item_key text, origins jsonb);\n  GET DIAGNOSTICS v_added = ROW_COUNT;\n\n  UPDATE public.shopping_lists\n  SET week_signature = p_to_signature, ingredient_basis = 'mixed-v1', reconciled_at = v_now, updated_at = v_now\n  WHERE id = v_list.id;\n\n  EXCEPTION WHEN unique_violation THEN\n    RETURN jsonb_build_object('status', 'stale', 'list', NULL, 'week_version', v_week.version,\n      'current_list_id', v_list.id);\n  END;\n\n  RETURN jsonb_build_object(\n    'status', 'applied',\n    'week_version', v_week.version,\n    'current_list_id', v_list.id,\n    'list', public.shopping_list_json(v_list.id),\n    'summary', jsonb_build_object('added', v_added, 'removed', v_removed, 'keptBought', v_kept,\n      'changed', v_changed, 'review', v_reviews));\nEND;\n$function$\n"
     }
   ],
   "triggers": [
@@ -132,6 +132,46 @@
     }
   ],
   "function_grants": [
+    {
+      "routine_name": "shopping_items_discard_unbought",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "shopping_quantity_base",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "shopping_item_valid",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "shopping_list_json",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "reconcile_shopping_list",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "shopping_quantity_base",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "shopping_item_valid",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "shopping_items_discard_unbought",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
     {
       "routine_name": "shopping_items_check_state",
       "grantee": "postgres",
@@ -143,28 +183,8 @@
       "privilege_type": "EXECUTE"
     },
     {
-      "routine_name": "shopping_quantity_base",
-      "grantee": "authenticated",
-      "privilege_type": "EXECUTE"
-    },
-    {
-      "routine_name": "shopping_quantity_base",
-      "grantee": "service_role",
-      "privilege_type": "EXECUTE"
-    },
-    {
       "routine_name": "shopping_item_valid",
       "grantee": "postgres",
-      "privilege_type": "EXECUTE"
-    },
-    {
-      "routine_name": "shopping_item_valid",
-      "grantee": "authenticated",
-      "privilege_type": "EXECUTE"
-    },
-    {
-      "routine_name": "shopping_item_valid",
-      "grantee": "service_role",
       "privilege_type": "EXECUTE"
     },
     {
@@ -173,28 +193,8 @@
       "privilege_type": "EXECUTE"
     },
     {
-      "routine_name": "shopping_list_json",
-      "grantee": "authenticated",
-      "privilege_type": "EXECUTE"
-    },
-    {
       "routine_name": "reconcile_shopping_list",
       "grantee": "postgres",
-      "privilege_type": "EXECUTE"
-    },
-    {
-      "routine_name": "reconcile_shopping_list",
-      "grantee": "authenticated",
-      "privilege_type": "EXECUTE"
-    },
-    {
-      "routine_name": "shopping_items_discard_unbought",
-      "grantee": "postgres",
-      "privilege_type": "EXECUTE"
-    },
-    {
-      "routine_name": "shopping_items_discard_unbought",
-      "grantee": "authenticated",
       "privilege_type": "EXECUTE"
     }
   ]
