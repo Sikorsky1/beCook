@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-11 · Rama: `audit-opt` (= `main` tras PR #15: C1 y D3 en producción) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-11 · Rama: `audit-opt` (= `main` tras PR #16: C2 y paso 33 en producción) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -428,7 +428,7 @@ Pasos 26, 27 y 28 del roadmap (UX 05-08, 10; Backend H8-H10, §9-10). Rama `audi
 | Validación | Recorrido en navegador en local de D3 1–7 y C1 antes y después de las correcciones; Preview de `audit-opt` sin sesión (páginas 200, rutas de IA 401) |
 | Despliegue be-cook | `dpl_5obRzbZ6ExPacZGXwkdUxK6c4FKn` READY en `www.becook.xyz` y `becook.xyz` (anterior para rollback: `dpl_9VuF8fxMN6EvNp22pL2tkge8zeEh`). `/login`, `/week`, `/create-menu`, `/shopping/list` 200 · `/` 307 · `POST` de las 4 rutas de IA sin sesión 401 |
 | Pendiente | Generación real con IA en producción y en Preview con sesión (Sergio): no se pudo probar sin cuenta propia. `audit-opt` = `main` por fast-forward antes de este commit |
-## Iteración C2 — Fichas de plato versionadas ✅ local (2026-10-11, integrada en `audit/ola5` el 2026-10-11; falta remoto)
+## Iteración C2 — Fichas de plato versionadas ✅ (2026-10-11, en producción el 2026-10-11)
 Paso 17 del roadmap (Backend H6 fase 3; UX 11). Rama `audit/c2-fichas` desde `audit-opt` (02aa5b8), en paralelo con el agente de accesibilidad (paso 33).
 
 | Elemento | Detalle |
@@ -457,7 +457,7 @@ Paso 17 del roadmap (Backend H6 fase 3; UX 11). Rama `audit/c2-fichas` desde `au
 ### Pendiente
 Revisión del borrador del catálogo, migración en becook-preview y producción con OK, CI tras el push. Fuera de alcance (C3/C4): validar restricciones contra ingredientes, compra desde las fichas, escalado y firma de compra.
 
-## Iteración D6 (parcial) — Paso 33: legibilidad, interacción táctil y accesibilidad ✅ local (2026-10-11, integrada en `audit/ola5` el 2026-10-11; sin push)
+## Iteración D6 (parcial) — Paso 33: legibilidad, interacción táctil y accesibilidad ✅ (2026-10-11, en producción el 2026-10-11)
 Paso 33 del roadmap. Rama `audit/a11y` desde `audit-opt` (02aa5b8), en paralelo con C2. Plan de componentes compartidos `design-plans/2026-10-11-accesibilidad-paso-33.md`, **aprobado por Sergio y aplicado el 2026-10-11** con los ajustes del revisor.
 
 | Elemento | Detalle |
@@ -487,6 +487,15 @@ Paso 33 del roadmap. Rama `audit/a11y` desde `audit-opt` (02aa5b8), en paralelo 
 | Observaciones menores | La celda de hoy de la tira, sin menú, queda `disabled:opacity-45` (blanco sobre naranja atenuado; exento por WCAG). Los chips de Crear menú usan `outline` en `--accent` (≈ 3:1), no en `--focus-ring`. El `aria-label` de las categorías va en minúscula («despensa: 1 de 2 comprados»). Un 500 de configuración (sin OpenAI) se muestra como error genérico reintentable |
 | Pendiente | Migración `20261012090000_recipe_cards` en becook-preview (el `apply_week` reemplazado contiene `DELETE`: SQL Editor si el conector se bloquea) y validación en la Preview con OpenAI real; producción con OK y backup **antes** del merge a `main`. Sigue pendiente también `20261011090000_week_food_context`. VoiceOver/iPhone físico. CI tras el push |
 
+## C2 y accesibilidad (paso 33) en producción ✅ (2026-10-11)
+| Elemento | Resultado |
+|---|---|
+| PR | [#16](https://github.com/Sikorsky1/beCook/pull/16) `audit-opt` → `main`, merge commit `5363eb2` (2026-10-11); checks en verde (application, database, Vercel) |
+| Migración | `recipe_cards` aplicada antes del merge con el conector de Supabase en dos partes (la parte 2 redefine `apply_week`, cuyo cuerpo tiene `DELETE`, y el conector no se bloqueó): becook-preview `20261011204724` + `20261011204749`; becook `20261011205123` + `20261011205211`, tras backup completo en `~/Backups/becook/2026-10-11-ola5` (aditiva: sin filas modificadas) |
+| Validación | Revisión de código de C2 y del plan de a11y (cambios aplicados); recorrido en navegador en local; Preview sin sesión (páginas 200, `viewport-fit=cover`, rutas de IA y `/api/dish-card` 401) |
+| Despliegue be-cook | `dpl_4rua8BAPVUcbXYtww9Xb3F9rquJZ` READY en `www.becook.xyz` y `becook.xyz` (anterior para rollback: `dpl_5obRzbZ6ExPacZGXwkdUxK6c4FKn`). Páginas principales 200 · `/` 307 · `POST` de las 5 rutas de IA sin sesión 401 |
+| Pendiente | Ficha estimada por IA real con sesión (Sergio); revisión del borrador `catalog-v1.json` por la nutricionista; VoiceOver y Safari en iPhone físico (paso 36). `audit-opt` = `main` por fast-forward antes de este commit |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
@@ -506,7 +515,7 @@ Paso 33 del roadmap. Rama `audit/a11y` desde `audit-opt` (02aa5b8), en paralelo 
 | 14 Firma de compra estable | B6 | ✅ | En producción desde 2026-10-09 (PR #12): firma canónica sin fechas ni versión; mismo menú → misma lista; ver B6 |
 | 15 Estados de sincronización visibles | B5 | ✅ | En `audit-opt` desde 2026-10-10, en producción desde 2026-10-10 (PR #14): `SyncStatus` en Semana, Compra, Despensa, Perfil y onboarding; ver B5 e integración |
 | 16 Contexto alimentario por semana | C1 | ✅ | En producción 2026-10-11 (PR #15): perfil leído en servidor, contexto congelado por semana; ver C1 |
-| 17 Fichas de plato versionadas | C2 | 🟡 | En `audit/ola5` desde 2026-10-11 (local): ficha de plato en Semana, `/api/dish-card` (IA bajo demanda, cuota `shopping`), catálogo sin fichas revisadas; falta migración `20261012090000` en preview y producción; ver C2 |
+| 17 Fichas de plato versionadas | C2 | ✅ | En producción 2026-10-11 (PR #16): ficha de plato en Semana, `/api/dish-card`, catálogo sin fichas revisadas (borrador pendiente de revisión); ver C2 |
 | 18 Validación de restricciones | C3 | ⏳ | |
 | 19 Compra desde recetas y despensa | C4 | ⏳ | |
 | 20 Reconciliar cambios de plato | C4 | ⏳ | |
@@ -522,7 +531,7 @@ Paso 33 del roadmap. Rama `audit/a11y` desde `audit-opt` (02aa5b8), en paralelo 
 | 30 Compra completa y despensa | D5 | ⏳ | |
 | 31 Despensa con acciones claras | D5 | ⏳ | |
 | 32 Navegación y estados vacíos | D6 | ⏳ | |
-| 33 Legibilidad y accesibilidad | D6 | 🟡 | En `audit/ola5` desde 2026-10-11 (local): plan aprobado aplicado (`--accent-strong`, foco 3,9:1, 44 px, 12 px mínimo); falta Preview y VoiceOver/iPhone; ver paso 33 |
+| 33 Legibilidad y accesibilidad | D6 | ✅ | En producción 2026-10-11 (PR #16); falta iPhone físico/VoiceOver (paso 36); ver paso 33 |
 | 34 Consolidar componentes | D6 | ⏳ | |
 | 35 Tests de recorridos críticos | E1 | ⏳ | Se adelantan tests en cada iteración |
 | 36 Usabilidad en dispositivos | E2 | ⏳ | Requiere a Sergio |
