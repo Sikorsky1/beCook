@@ -43,6 +43,10 @@ type WeekDayCardProps = {
   // «Otra idea» (step 21). Without it the card only offers manual editing.
   onRequestIdea?: RequestDishIdea;
   loginReturnPath?: string;
+  // C2: tapping a planned dish opens its card. Without it, tapping edits the meal (as before).
+  onOpenDish?: (dayName: string, mealKey: MealKey) => void;
+  // «Cambiar plato» from the card: opens this card's editor for that meal (a new key each time).
+  editRequest?: { meal: MealKey; key: number } | null;
 };
 
 // What the «Otra idea» helper shows for the meal being edited.
@@ -70,12 +74,15 @@ export function WeekDayCard({
   onMealChange,
   onRequestIdea,
   loginReturnPath = "/week",
+  onOpenDish,
+  editRequest = null,
 }: WeekDayCardProps) {
   const [editingMeal, setEditingMeal] = useState<MealKey | null>(null);
   const [draftValue, setDraftValue] = useState("");
   const [idea, setIdea] = useState<IdeaState>(emptyIdeaState(""));
   const ideaAbortRef = useRef<AbortController | null>(null);
   const headingId = `${useId()}-day`;
+  const [handledEditKey, setHandledEditKey] = useState<number | null>(null);
 
   const startEditing = (mealKey: MealKey) => {
     const current = day[mealKey] === "LIBRE" ? "" : day[mealKey];
@@ -83,6 +90,22 @@ export function WeekDayCard({
     setDraftValue(current);
     setIdea(emptyIdeaState(current));
   };
+
+  // «Cambiar plato» in the dish card: adjust state while rendering (no effect needed).
+  if (editRequest && editRequest.key !== handledEditKey) {
+    setHandledEditKey(editRequest.key);
+    startEditing(editRequest.meal);
+  }
+
+  // A planned dish opens its card (C2); a free meal opens the editor to add one.
+  const openMeal = (mealKey: MealKey) => {
+    if (onOpenDish && day[mealKey] !== "LIBRE") {
+      onOpenDish(day.day, mealKey);
+      return;
+    }
+    startEditing(mealKey);
+  };
+  const mealAction = (mealKey: MealKey) => (onOpenDish && day[mealKey] !== "LIBRE" ? "Ver ficha" : "Editar");
 
   const cancelEditing = () => {
     ideaAbortRef.current?.abort();
@@ -154,6 +177,7 @@ export function WeekDayCard({
           }
         }}
         autoFocus
+        aria-label={`${meal.label} del ${day.day}`}
         placeholder={`Escribe la ${meal.label.toLowerCase()}`}
         className="block w-full text-base font-semibold"
       />
@@ -225,9 +249,10 @@ export function WeekDayCard({
     </div>
   );
 
-  // Tapping a dish edits that meal only (saved per slot, B4). The dish sheet arrives with C2.
+  // Tapping a planned dish opens its card (C2); editing that meal (saved per slot, B4) is
+  // «Cambiar plato» inside the card. A free meal is edited directly.
   const mealButtonClass = (isFree: boolean, size: string) =>
-    `flex w-full rounded-[var(--radius-input)] text-left transition-[background-color,color,transform] duration-200 ease-out active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 ${size} ${
+    `flex w-full rounded-[var(--radius-input)] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)] transition-[background-color,color,transform] duration-200 ease-out active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 ${size} ${
       isFree
         ? "border border-dashed border-[color:var(--color-border-strong)] bg-transparent hover:bg-[color:var(--color-accent-soft)]/45"
         : "bg-[color:var(--color-surface-muted)] hover:bg-[color:var(--color-accent-soft)]"
@@ -244,7 +269,7 @@ export function WeekDayCard({
         className="rounded-[var(--radius-card)] border-2 border-[color:var(--color-accent)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-card)] sm:p-5"
       >
         <div className="flex items-baseline gap-2">
-          <span className="rounded-full bg-[color:var(--color-accent)] px-2.5 py-1 text-xs font-semibold leading-none text-white">
+          <span className="t-meta rounded-full bg-[color:var(--color-accent)] px-2.5 py-1 font-semibold leading-none text-white">
             Hoy
           </span>
           <h2 id={headingId} className="t-h2 text-[color:var(--color-foreground)]">
@@ -267,8 +292,9 @@ export function WeekDayCard({
                 ) : (
                   <button
                     type="button"
-                    onClick={() => startEditing(meal.key)}
-                    aria-label={`${meal.label} de hoy: ${isFree ? "sin plato, añadir" : value}. Editar`}
+                    onClick={() => openMeal(meal.key)}
+                    aria-haspopup={onOpenDish && !isFree ? "dialog" : undefined}
+                    aria-label={`${meal.label} de hoy: ${isFree ? "sin plato, añadir" : value}. ${mealAction(meal.key)}`}
                     className={`mt-1.5 ${mealButtonClass(isFree, "min-h-16 items-center px-4 py-3")}`}
                   >
                     <span
@@ -299,7 +325,7 @@ export function WeekDayCard({
           <span aria-hidden="true" className="block text-sm font-semibold text-[color:var(--color-foreground)]">
             {shortDayName(day.day)}
           </span>
-          <span aria-hidden="true" className="t-meta block text-xs">
+          <span aria-hidden="true" className="t-meta block">
             {day.date}
           </span>
           <span className="sr-only">
@@ -315,8 +341,9 @@ export function WeekDayCard({
               <button
                 key={meal.key}
                 type="button"
-                onClick={() => startEditing(meal.key)}
-                aria-label={`${meal.label} del ${day.day}: ${isFree ? "sin plato, añadir" : value}. Editar`}
+                onClick={() => openMeal(meal.key)}
+                aria-haspopup={onOpenDish && !isFree ? "dialog" : undefined}
+                aria-label={`${meal.label} del ${day.day}: ${isFree ? "sin plato, añadir" : value}. ${mealAction(meal.key)}`}
                 aria-expanded={editingMeal === meal.key}
                 className={`${mealButtonClass(isFree, "min-h-11 flex-col items-start gap-1 px-2.5 py-1.5")} ${
                   editingMeal === meal.key ? "ring-2 ring-[color:var(--color-border-strong)]" : ""
