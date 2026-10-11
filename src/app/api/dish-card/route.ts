@@ -213,16 +213,15 @@ export async function POST(request: Request) {
 
     const promptTokens = response.usage?.input_tokens ?? null;
     const completionTokens = response.usage?.output_tokens ?? null;
+    // The model that really answered (server side, never from the client): stored with the card
+    // and used for the cost; the configured model prices a dated name that is not in the table.
+    const usedModel = response.model || OPENAI_MODEL;
+    const tokens = { promptTokens, cachedPromptTokens: response.usage?.input_tokens_details?.cached_tokens ?? null, completionTokens };
     Object.assign(outcome, {
-      model: response.model || OPENAI_MODEL,
+      model: usedModel,
       promptTokens,
       completionTokens,
-      costUsd: estimateOpenAICostUsd({
-        model: OPENAI_MODEL,
-        promptTokens,
-        cachedPromptTokens: response.usage?.input_tokens_details?.cached_tokens ?? null,
-        completionTokens,
-      }),
+      costUsd: estimateOpenAICostUsd({ model: usedModel, ...tokens }) ?? estimateOpenAICostUsd({ model: OPENAI_MODEL, ...tokens }),
     });
 
     if (response.status !== "completed" || !response.output_text) {
@@ -257,7 +256,7 @@ export async function POST(request: Request) {
       const saved = await saveInferredRecipeInSupabase(client, {
         title: body.dish,
         card: content.card,
-        model: response.model || OPENAI_MODEL,
+        model: usedModel,
         requestKey: body.requestKey,
       });
       card = await getRecipeCardFromSupabase(saved.versionId, client);

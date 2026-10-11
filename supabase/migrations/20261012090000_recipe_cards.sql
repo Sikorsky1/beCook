@@ -5,6 +5,8 @@
 -- The catalogue identities (27 recipes of src/data/nutritionist-recipes.json) are inserted WITHOUT
 -- a reviewed version: there are no reviewed ingredients yet and none are invented here.
 -- Applied remotely only by Sergio (becook-preview first, then becook with explicit OK).
+-- One explicit transaction, so that the SET LOCAL limits below apply to every statement.
+BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '120s';
 
@@ -542,7 +544,8 @@ $$;
 -- always owned by auth.uid(); never reviewed. p_card: {baseServings, totalMinutes|null,
 -- ingredients, steps, possibleAllergens, model?}. Reuses the caller's recipe with the same title
 -- key: same content → that version (existing); different content → version + 1 (new_version).
--- A repeated p_request_key returns what it saved (duplicate). Result:
+-- A repeated p_request_key returns what it saved (duplicate). Limits: 300 recipes per user and
+-- 5 versions per recipe (54000). Result:
 --   {status: created | new_version | existing | duplicate, recipe_id, version_id, version}.
 -- SECURITY DEFINER (search_path ''): users have no write grants on recipes / recipe_versions, so
 -- this function is the only way to write them and it fixes owner and review status itself.
@@ -609,7 +612,12 @@ BEGIN
   -- Canonical content: trimmed texts, allergens sorted without duplicates.
   v_servings := (p_card ->> 'baseServings')::integer;
   v_minutes := CASE WHEN jsonb_typeof(p_card -> 'totalMinutes') = 'number' THEN (p_card ->> 'totalMinutes')::integer END;
-  v_model := nullif(left(btrim(coalesce(p_card ->> 'model', '')), 80), '');
+  -- The model is only a label for audits (set by /api/dish-card from the OpenAI answer); it is never
+  -- shown to users. Anything that does not look like a model name is ignored (NULL).
+  v_model := btrim(coalesce(p_card ->> 'model', ''));
+  IF v_model !~ '^[A-Za-z0-9._:-]{1,80}$' THEN
+    v_model := NULL;
+  END IF;
   SELECT jsonb_agg(jsonb_build_object(
       'name', btrim(i.item ->> 'name'),
       'quantity', i.item -> 'quantity',
@@ -624,7 +632,10 @@ BEGIN
   FROM jsonb_array_elements_text(p_card -> 'possibleAllergens') AS a;
   v_hash := public.recipe_content_hash(v_servings, v_minutes, v_ingredients, v_steps, v_allergens);
 
-  -- One recipe per title of this user; concurrent saves of the same title wait here.
+  -- Saves of one user run one at a time (the recipe count below cannot be raced past the limit).
+  PERFORM pg_advisory_xact_lock(hashtextextended('save_inferred_recipe:' || v_user::text, 0));
+
+  -- One recipe per title of this user.
   INSERT INTO public.recipes (owner_user_id, title, origin)
   VALUES (v_user, v_title, 'ai')
   ON CONFLICT ON CONSTRAINT recipes_owner_title_key DO NOTHING
@@ -645,6 +656,9 @@ BEGIN
         'version_id', v_latest.id, 'version', v_latest.version);
     END IF;
     v_status := CASE WHEN FOUND THEN 'new_version' ELSE 'created' END;
+    IF coalesce(v_latest.version, 0) >= 5 THEN
+      RAISE EXCEPTION USING ERRCODE = '54000', MESSAGE = 'save_inferred_recipe: too many versions of this recipe';
+    END IF;
   END IF;
 
   INSERT INTO public.recipe_versions (recipe_id, version, base_servings, total_minutes, ingredients, steps,
@@ -674,3 +688,5 @@ GRANT EXECUTE ON FUNCTION public.update_week_slot_recipe(integer, integer, integ
   TO authenticated;
 REVOKE ALL ON FUNCTION public.save_inferred_recipe(text, jsonb, uuid) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.save_inferred_recipe(text, jsonb, uuid) TO authenticated;
+
+COMMIT;
