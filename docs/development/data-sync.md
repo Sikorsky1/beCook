@@ -445,6 +445,48 @@ C2 y el contexto alimentario de C1.
 - Pruebas: `tests/restriction-check.test.cjs` (léxico, `checkDish`, texto libre, defectos del
   filtro anterior), más casos en `menu-generation`, `dish-substitution` y `recipe-cards`.
 
+## Importación y borradores de Crear menú (C6)
+
+Sin cambios de esquema ni de datos remotos: todo vive en el navegador y en `/api/import-menu`.
+
+- **Parser local primero** (`parseMenuTextLocally`, `src/lib/importMenu.ts`). Un texto es
+  inequívoco si cada línea no vacía es una cabecera de día, una línea «Comida:»/«Cena:» bajo un
+  día, una fila de 3 columnas (día, comida, cena; tabuladores, `|` o 2+ espacios) o la cabecera
+  DÍA|COMIDA|CENA; sin días ni comidas repetidos y títulos de ≤ 120 caracteres. Entonces se ordena
+  en el dispositivo, sin petición, sin cuota y también para invitados. Una comida que falta en un
+  bloque de día queda libre y se avisa. Cualquier otra cosa es ambigua y va a la IA (solo con
+  sesión; el invitado ve el aviso de inicio de sesión con su texto conservado).
+- **Ruta** (`/api/import-menu`, tras el guard de A3). Orden: 400 con `reason` (`not_text`, `empty`,
+  `too_long` > 8.000 caracteres, `too_many_lines` > 80 líneas no vacías) → el mismo parser local
+  (responde `parsedBy: "local"` sin abrir registro de uso: protege a clientes anteriores) → 422
+  `no_menu_found` si el texto no nombra ningún día (gratis) → cuota (A4) → OpenAI con esfuerzo bajo y
+  `max_completion_tokens` 2.000 → 422 `empty_menu` si la IA no encuentra ningún plato (cuenta: hubo
+  tokens) → 502 con `reason` (`invalid_output`, `truncated_output`, `empty_output`, `timeout`,
+  `ai_failed`). Un 422 local con todos los huecos libres también es `empty_menu`, sin IA. El
+  cliente traduce cada `reason` (`importErrorMessage`) y no ofrece «Reintentar» en 400/422.
+- **Borrador del formulario** (`becook:<scope>:menu-draft:YYYY-Www`): modo, texto pegado y
+  preferencias de esa semana, por identidad. Se guarda solo si el usuario tocó el formulario (o si
+  ya había borrador), para que los comensales del perfil sigan mandando en visitas posteriores. Se
+  borra al guardar el menú de esa semana, al cerrar sesión con el resto del ámbito y al pasar la
+  semana. El borrador de `sessionStorage` sin ámbito se mantiene solo para el viaje invitado →
+  login (tiene prioridad al volver).
+- **Propuesta** (`menu-proposal`, B5) guarda además `source` (`import`/`generate`), `parsedBy`,
+  `contextVersion` (`foodContext.version` de C1; null en importados) y `createdAt`. Las de antes de
+  C6 se leen deduciendo el origen de su `foodContext`.
+- **Semanas pasadas**: al cargar Crear menú se borran borradores y propuestas sin aplicar de
+  semanas anteriores a la actual (solo de la identidad en pantalla).
+- **«Usar este menú»**: se rechaza en el manejador mientras haya otra generación activa de esa
+  identidad y semana (`activeGenerationRun`). En una propuesta generada con sesión se compara su
+  `contextVersion` con `week_food_context_status.current.version`; si difiere (o ya no hay perfil)
+  se avisa en la barra con «Usar igualmente» / «Ahora no», sin bloquear. Si la cuenta no responde,
+  no se afirma nada y se sigue.
+- **Avisos en menús importados** (`src/lib/importWarnings.ts`): por plato, la comprobación de C3
+  solo por el nombre (conflicto o posible conflicto, con su base) y las reglas culinarias de C5
+  (salsa sin concretar, «especial»…). Nunca cambian el plato ni bloquean el guardado. Sin perfil, o
+  con un perfil ilegible, solo se aplican las reglas culinarias y se dice.
+- Pruebas: `tests/import-local.test.cjs`, más casos en `ai-routes`, `ai-usage`, `openai-retry` y
+  `create-menu-proposal`.
+
 ## Datos anteriores a B1 (sin ámbito)
 
 Al arrancar, las claves `becook-profile`, `becook-pantry-base` y
