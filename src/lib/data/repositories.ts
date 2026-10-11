@@ -31,7 +31,16 @@ import type {
 import type { UserProfile } from "@/lib/supabase/profiles";
 import type { SaveShoppingListResult, SetShoppingItemsCheckedResult, ShoppingList } from "@/lib/supabase/shopping-lists";
 import type { MealKind, WeekWriteResult } from "@/lib/supabase/weeks";
-import { mealSlotToSupabase, supabaseWeekToWeekDays, weekDaysToSupabaseWeek } from "@/lib/weekStorage";
+import type { RecipeCard } from "@/lib/recipes/card";
+import { recipeTitleKey } from "@/lib/recipes/card";
+import type { WeekRecipeLink } from "@/data/mockWeek";
+import {
+  mealRecipeLink,
+  mealSlotToSupabase,
+  supabaseWeekToWeekDays,
+  weekDaysToSupabaseWeek,
+  withMealRecipe,
+} from "@/lib/weekStorage";
 
 export type DataIdentity = { scope: StorageScope; userId: string | null };
 
@@ -39,7 +48,8 @@ export type WeekSlot = { day: string; meal: MealKind };
 
 // requestKey: one per user attempt (e.g. one click on «Usar este menú»), reused if that attempt is
 // sent again, so the database applies it once. slot: only that meal changed (dish edit).
-export type WeekPushOptions = { generationRequestId?: string | null; requestKey?: string; slot?: WeekSlot };
+// recipe (C2): only the card link of that meal changed (update_week_slot_recipe).
+export type WeekPushOptions = { generationRequestId?: string | null; requestKey?: string; slot?: WeekSlot; recipe?: WeekSlot };
 
 export function newRequestKey() {
   return crypto.randomUUID();
@@ -105,6 +115,10 @@ export type Remotes = {
   foodContext?: (userId: string, isoWeek: IsoWeek) => Promise<WeekFoodContextStatus>;
   // D-1: the generation request the week's frozen servings came from (null: none).
   planningRequest?: (userId: string, isoWeek: IsoWeek) => Promise<string | null>;
+  // C2: one card version (catalogue for everyone, own cards for their owner) and the catalogue
+  // recipes that have a reviewed version, by title key.
+  recipeCard?: (versionId: string) => Promise<RecipeCard | null>;
+  catalogRecipes?: () => Promise<Map<string, WeekRecipeLink>>;
 };
 
 // C1: right after a whole-week write, the week keeps the food context it was planned with (saved
@@ -158,12 +172,45 @@ const supabaseRemotes: Remotes = {
         const slotDay = options.slot ? weekDays.find((day) => day.day === options.slot?.day) : undefined;
         // A dish edit touches only its slot; without a known remote week it is a whole-week write.
         if (options.slot && slotDay && expectedVersion !== null && !overwrite) {
-          return weekWriteToPush(await updateWeekSlotInSupabase({
+          const written = weekWriteToPush(await updateWeekSlotInSupabase({
             isoYear: isoWeek.isoYear,
             isoWeek: isoWeek.isoWeek,
             dayName: slotDay.day,
             meal: options.slot.meal,
             slot: mealSlotToSupabase(slotDay[options.slot.meal]),
+            expectedVersion,
+            requestKey,
+          }));
+          // C2: the new title is a catalogue dish with a reviewed card: link it right after.
+          // Best effort; without it the slot simply has no card (the title is saved).
+          const link = mealRecipeLink(slotDay, options.slot.meal);
+          if (!link || written.duplicate || written.version === null) return written;
+          try {
+            const { updateWeekSlotRecipeInSupabase } = await import("@/lib/supabase/recipes");
+            const linked = await updateWeekSlotRecipeInSupabase({
+              isoYear: isoWeek.isoYear,
+              isoWeek: isoWeek.isoWeek,
+              dayName: slotDay.day,
+              meal: options.slot.meal,
+              versionId: link.versionId,
+              expectedVersion: Number(written.version),
+              requestKey: newRequestKey(),
+            });
+            return linked.status === "applied" ? { version: String(linked.version) } : written;
+          } catch {
+            return written;
+          }
+        }
+        const recipeDay = options.recipe ? weekDays.find((day) => day.day === options.recipe?.day) : undefined;
+        // C2: linking a card changes nothing else of the week.
+        if (options.recipe && recipeDay && expectedVersion !== null && !overwrite) {
+          const { updateWeekSlotRecipeInSupabase } = await import("@/lib/supabase/recipes");
+          return weekWriteToPush(await updateWeekSlotRecipeInSupabase({
+            isoYear: isoWeek.isoYear,
+            isoWeek: isoWeek.isoWeek,
+            dayName: recipeDay.day,
+            meal: options.recipe.meal,
+            versionId: mealRecipeLink(recipeDay, options.recipe.meal)?.versionId ?? null,
             expectedVersion,
             requestKey,
           }));
@@ -248,11 +295,23 @@ supabaseRemotes.planningRequest = async (userId, isoWeek) => {
   return getWeekPlanningRequestFromSupabase({ isoYear: isoWeek.isoYear, isoWeek: isoWeek.isoWeek, userId });
 };
 
+supabaseRemotes.recipeCard = async (versionId) => {
+  const { getRecipeCardFromSupabase } = await import("@/lib/supabase/recipes");
+  return getRecipeCardFromSupabase(versionId);
+};
+
+supabaseRemotes.catalogRecipes = async () => {
+  const { getCatalogReviewedVersionsFromSupabase } = await import("@/lib/supabase/recipes");
+  return getCatalogReviewedVersionsFromSupabase();
+};
+
 let remotes: Remotes = supabaseRemotes;
+let catalogRecipesRead: Promise<Map<string, WeekRecipeLink>> | null = null;
 
 // Tests replace the Supabase adapters with in-memory ones.
 export function configureRemotes(next: Remotes | null) {
   remotes = next ?? supabaseRemotes;
+  catalogRecipesRead = null;
 }
 
 const weekKey = (isoWeek: IsoWeek) => getIsoWeekStorageId(isoWeek);
@@ -315,16 +374,58 @@ export async function readWeekPlanningRequest(identity: DataIdentity, isoWeek: I
 }
 
 // Dish edit: only that meal is written, if the account week is still the one this copy is based on.
-export function saveWeekSlot(
+// C2: the edited meal keeps its card only if the title did not change (same title key); a title
+// that is exactly a catalogue dish with a reviewed card gets that card (e.g. «Otra idea»).
+export async function saveWeekSlot(
   identity: DataIdentity,
   isoWeek: IsoWeek,
   weekDays: WeekDay[],
   slot: WeekSlot,
 ): Promise<SaveResult<WeekDay[]>> {
+  const target = { scope: identity.scope, entity: "week" as const, week: weekKey(isoWeek) };
+  const before = readCached<WeekDay[]>(target)?.data?.find((day) => day.day === slot.day);
+  const day = weekDays.find((candidate) => candidate.day === slot.day);
+  let next = weekDays;
+  if (day) {
+    const title = day[slot.meal];
+    const previousTitle = before?.[slot.meal];
+    const keep = mealRecipeLink(day, slot.meal) && previousTitle !== undefined && recipeTitleKey(previousTitle) === recipeTitleKey(title);
+    const catalog = keep || title === "LIBRE" ? null : (await loadCatalogRecipeIndex()).get(recipeTitleKey(title)) ?? null;
+    next = keep ? weekDays : withMealRecipe(weekDays, slot.day, slot.meal, catalog);
+  }
+  return saveEntity(target, next, identity.userId ? remotes.week(identity.userId, isoWeek, { slot }) : null);
+}
+
+// --- Dish cards (C2) -------------------------------------------------------
+// Catalogue recipes with a reviewed card, read once per page load. Empty when unreachable (no
+// card is ever guessed). Today the catalogue has no reviewed version: always empty.
+export function loadCatalogRecipeIndex(): Promise<Map<string, WeekRecipeLink>> {
+  if (!remotes.catalogRecipes) return Promise.resolve(new Map());
+  catalogRecipesRead ??= remotes.catalogRecipes().catch(() => {
+    catalogRecipesRead = null;
+    return new Map<string, WeekRecipeLink>();
+  });
+  return catalogRecipesRead;
+}
+
+// One card version. null: not found or not readable; throws when the account cannot be reached.
+export async function loadRecipeCard(versionId: string): Promise<RecipeCard | null> {
+  return remotes.recipeCard ? remotes.recipeCard(versionId) : null;
+}
+
+// Links (or unlinks) the card of one planned meal. Only that link is written (signed in:
+// update_week_slot_recipe with the week version of this copy; guest: this device).
+export function saveWeekRecipe(
+  identity: DataIdentity,
+  isoWeek: IsoWeek,
+  weekDays: WeekDay[],
+  slot: WeekSlot,
+  link: WeekRecipeLink | null,
+): Promise<SaveResult<WeekDay[]>> {
   return saveEntity(
     { scope: identity.scope, entity: "week", week: weekKey(isoWeek) },
-    weekDays,
-    identity.userId ? remotes.week(identity.userId, isoWeek, { slot }) : null,
+    withMealRecipe(weekDays, slot.day, slot.meal, link),
+    identity.userId ? remotes.week(identity.userId, isoWeek, { recipe: slot }) : null,
   );
 }
 

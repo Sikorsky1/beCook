@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
+import { DishCard } from "@/components/features/DishCard";
 import { type RequestDishIdea, WeekDayCard } from "@/components/features/WeekDayCard";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { OnboardingGate } from "@/components/session/OnboardingGate";
@@ -81,6 +82,9 @@ function WeekPageContent() {
   // C1: the food context this week was planned with, compared with the profile now.
   const [foodContextEntry, setFoodContextEntry] = useState<{ key: string; status: WeekFoodContextStatus | null } | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
+  // C2: the dish card open (one meal), and «Cambiar plato» handed to that day's editor.
+  const [dishCardSlot, setDishCardSlot] = useState<{ day: string; meal: MealKey } | null>(null);
+  const [dishEditRequest, setDishEditRequest] = useState<{ day: string; meal: MealKey; key: number } | null>(null);
 
   const isCurrentWeek =
     selectedIsoWeek && today ? isSameIsoWeek(selectedIsoWeek, today.week) : false;
@@ -501,6 +505,17 @@ function WeekPageContent() {
         ) : null}
 
         <section>
+          <DishCard
+            slot={dishCardSlot}
+            weekDays={weekDays}
+            identity={{ scope: identity.scope, userId: identity.userId }}
+            isoWeek={selectedIsoWeek}
+            weekServings={foodContextEntry?.key === foodContextKey ? (foodContextEntry.status?.frozen?.servings ?? null) : null}
+            loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
+            onClose={() => setDishCardSlot(null)}
+            onChangeDish={(slot) => setDishEditRequest({ ...slot, key: Date.now() })}
+            onWeekChanged={(days) => setWeekDays(days?.length && selectedIsoWeek ? withWeekDates(days, selectedIsoWeek) : null)}
+          />
           {weekDays && layout ? (
             <div className="flex flex-col gap-4">
               {layout.todayPosition !== null ? (
@@ -512,6 +527,9 @@ function WeekPageContent() {
                       variant="today"
                       onMealChange={handleMealChange}
                       onRequestIdea={handleRequestIdea}
+                      onOpenDish={(dayName, meal) => setDishCardSlot({ day: dayName, meal })}
+                      editRequest={dishEditRequest?.day === layout.todayDay.day ? dishEditRequest : null}
+                      onEditRequestHandled={() => setDishEditRequest(null)}
                       loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
                     />
                   ) : (
@@ -541,6 +559,9 @@ function WeekPageContent() {
                         variant="compact"
                         onMealChange={handleMealChange}
                         onRequestIdea={handleRequestIdea}
+                        onOpenDish={(dayName, meal) => setDishCardSlot({ day: dayName, meal })}
+                        editRequest={dishEditRequest?.day === day.day ? dishEditRequest : null}
+                        onEditRequestHandled={() => setDishEditRequest(null)}
                         loginReturnPath={selectedIsoWeek ? buildWeekHref("/week", selectedIsoWeek) : "/week"}
                       />
                     </div>

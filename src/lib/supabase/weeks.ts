@@ -5,6 +5,9 @@ export type MealStatus = "planned" | "free";
 export type SupabaseMealSlot = {
   status: MealStatus;
   dishName: string;
+  // C2: week_days.*_recipe_version_id. null: no card (sent only for free meals). undefined: not
+  // sent, apply_week keeps the slot's current link (see recipeLinkToSend in weekStorage.ts).
+  recipeVersionId?: string | null;
 };
 
 export type SupabaseWeekDay = {
@@ -41,6 +44,8 @@ type WeekDayRow = {
   lunch_dish_name: string | null;
   dinner_status: string | null;
   dinner_dish_name: string | null;
+  lunch_recipe_version_id?: string | null;
+  dinner_recipe_version_id?: string | null;
 };
 
 const orderedDayNames = [
@@ -69,13 +74,22 @@ function buildMealSlot(
   status: string | null,
   dishName: string | null,
   columnName: string,
+  recipeVersionId?: string | null,
 ): SupabaseMealSlot {
   const parsedStatus = parseMealStatus(status, columnName);
 
   return {
     status: parsedStatus,
     dishName: parsedStatus === "free" ? "" : dishName ?? "",
+    recipeVersionId: parsedStatus === "free" ? null : (recipeVersionId ?? null),
   };
+}
+
+// The link sent to apply_week for one meal: only planned meals have a card; an unknown link
+// (undefined) is not sent, so the database keeps it.
+function recipeLinkForStorage(slot: SupabaseMealSlot) {
+  if (slot.recipeVersionId === undefined) return undefined;
+  return slot.status === "free" ? null : slot.recipeVersionId;
 }
 
 export type MealKind = "lunch" | "dinner";
@@ -125,6 +139,9 @@ export function weekToApplyWeekDays(week: SupabaseWeek) {
         throw new Error(`Cannot save an unknown day: ${day.dayName}.`);
       }
 
+      const lunchRecipe = recipeLinkForStorage(day.lunch);
+      const dinnerRecipe = recipeLinkForStorage(day.dinner);
+
       return {
         position,
         day_name: day.dayName,
@@ -132,6 +149,8 @@ export function weekToApplyWeekDays(week: SupabaseWeek) {
         lunch_dish_name: getDishNameForStorage(day.lunch),
         dinner_status: day.dinner.status,
         dinner_dish_name: getDishNameForStorage(day.dinner),
+        ...(lunchRecipe === undefined ? {} : { lunch_recipe_version_id: lunchRecipe }),
+        ...(dinnerRecipe === undefined ? {} : { dinner_recipe_version_id: dinnerRecipe }),
       };
     })
     .sort((a, b) => a.position - b.position);
@@ -229,30 +248,40 @@ export async function updateWeekSlotInSupabase({
   return parseWeekWriteResult(data);
 }
 
+const weekDayColumns = "day_name,position,lunch_status,lunch_dish_name,dinner_status,dinner_dish_name";
+
+async function selectWeekDays(weekId: string, columns: string) {
+  return supabase!.from("week_days").select(columns).eq("week_id", weekId).order("position", { ascending: true });
+}
+
 async function readWeekDays(weekId: string) {
-  const { data: weekDays, error: daysError } = await supabase!
-    .from("week_days")
-    .select(
-      "day_name,position,lunch_status,lunch_dish_name,dinner_status,dinner_dish_name",
-    )
-    .eq("week_id", weekId)
-    .order("position", { ascending: true });
+  // C2 columns. If the database does not have them yet (code deployed before the migration),
+  // the week is read without cards instead of failing (42703: undefined column).
+  let { data: weekDays, error: daysError } = await selectWeekDays(
+    weekId,
+    `${weekDayColumns},lunch_recipe_version_id,dinner_recipe_version_id`,
+  );
+  if (daysError?.code === "42703") {
+    ({ data: weekDays, error: daysError } = await selectWeekDays(weekId, weekDayColumns));
+  }
 
   if (daysError) {
     throw new Error(`Could not read week days: ${daysError.message}`);
   }
 
-  return ((weekDays ?? []) as WeekDayRow[]).map((day) => ({
+  return ((weekDays ?? []) as unknown as WeekDayRow[]).map((day) => ({
     dayName: day.day_name ?? "",
     lunch: buildMealSlot(
       day.lunch_status,
       day.lunch_dish_name,
       "week_days.lunch_status",
+      day.lunch_recipe_version_id,
     ),
     dinner: buildMealSlot(
       day.dinner_status,
       day.dinner_dish_name,
       "week_days.dinner_status",
+      day.dinner_recipe_version_id,
     ),
   }));
 }

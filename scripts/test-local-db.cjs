@@ -13,6 +13,7 @@ const { runShoppingTests } = require("./shopping-db-tests.cjs");
 const { runPantryTests } = require("./pantry-db-tests.cjs");
 const { runOnboardingTests } = require("./onboarding-db-tests.cjs");
 const { runFoodContextTests } = require("./food-context-db-tests.cjs");
+const { runRecipeCardTests } = require("./recipe-cards-db-tests.cjs");
 const { createClient } = require("@supabase/supabase-js");
 const id = (prefix, n) => prefix + "0000000-0000-4000-8000-00000000000" + n;
 let failures = 0, passed = 0;
@@ -170,6 +171,8 @@ async function main() {
   await runOnboardingTests({check, sql, id, api, createClient, supabase});
   // C1: food context frozen per week, server reads with the caller's session, RLS and rollout.
   await runFoodContextTests({check, sql, id, api, createClient, supabase});
+  // C2: versioned dish cards, week slot links, RLS, RPCs through the application and rollout.
+  await runRecipeCardTests({check, sql, id, api, createClient, supabase, outcome});
   console.log(passed + " passed; " + failures + " failed. No production connection; SQL probes rolled back.");
   process.exitCode = failures ? 1 : 0;
 }
