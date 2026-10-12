@@ -13,8 +13,10 @@ async function runAiUsageTests({ check, sql, id, api, createClient, userClient }
   const finish = (expr, status = "succeeded", tokens = 10, cost = 0.01) =>
     `public.ai_finish_request((${expr}->>'id')::uuid, '${status}', 'gpt-test', ${tokens}, ${tokens}, ${cost}, 100)`;
   // Setup runs as postgres; the functions are called as service_role, like the server does.
+  // P37: since account deletion keeps usage rows without owner, other local runs (e2e) may leave
+  // rows behind; inside the rolled-back transaction the ledger starts empty.
   function scenario(setup, ...results) {
-    const out = sql("BEGIN;\n" + setup + "\nSET LOCAL ROLE service_role;\n" +
+    const out = sql("BEGIN;\nDELETE FROM public.ai_usage_events;\n" + setup + "\nSET LOCAL ROLE service_role;\n" +
       results.map(r => "SELECT 'R:' || coalesce((" + r + ")::text, 'null');").join("\n") + "\nROLLBACK;");
     return out.split("\n").filter(line => line.startsWith("R:")).map(line => line.slice(2));
   }
@@ -149,7 +151,7 @@ async function runAiUsageTests({ check, sql, id, api, createClient, userClient }
     });
   }
   check("ai usage Data API: refused calls left no rows", () =>
-    assert.equal(sql("SELECT count(*) FROM public.ai_usage_events;").trim(), "0"));
+    assert.equal(sql("SELECT count(*) FROM public.ai_usage_events WHERE ip_hash='x';").trim(), "0"));
 
   // Real parallel begins with the service key: the advisory lock admits exactly one.
   const service = createClient(api.url, api.serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -168,7 +170,7 @@ async function runAiUsageTests({ check, sql, id, api, createClient, userClient }
     sql("DELETE FROM public.ai_usage_events WHERE request_id IN (" + requestIds.map(r => "'" + r + "'").join(",") + ");");
   }
   check("ai usage: parallel scenario cleaned up", () =>
-    assert.equal(sql("SELECT count(*) FROM public.ai_usage_events;").trim(), "0"));
+    assert.equal(sql("SELECT count(*) FROM public.ai_usage_events WHERE ip_hash='parallel-ip';").trim(), "0"));
 }
 
 module.exports = { runAiUsageTests };

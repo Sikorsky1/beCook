@@ -171,7 +171,8 @@ async function runOnboardingTests({ check, sql, id, api, createClient, supabase 
   }
   check("D2: fixture profile restored and test accounts removed (with their progress)", () => {
     assert.equal(sql("SELECT row_to_json(p) FROM public.profiles p WHERE id='" + profileA + "';").trim(), snapshot);
-    assert.equal(sql("SELECT count(*) FROM public.onboarding_progress;").trim(), "0");
+    // Only this suite's accounts: other local runs (e2e) may have accounts in onboarding.
+    assert.equal(newUsers.length ? sql("SELECT count(*) FROM public.onboarding_progress WHERE user_id IN ('" + newUsers.join("','") + "');").trim() : "0", "0");
   });
 }
 

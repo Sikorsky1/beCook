@@ -5,6 +5,8 @@ import { createHmac, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+import { sendOpsAlert } from "@/lib/server/ops-alert";
+
 export type AiFlow = "menu" | "import" | "shopping";
 
 type FlowLimits = { daily: number | null; monthly: number | null };
@@ -149,6 +151,7 @@ export async function beginAiUsage(
   // Fail closed: without the ledger there is no quota and no budget control.
   if (!supabase || !salt) {
     logUsage({ flow, requestId, status: "rejected", reason: "ledger_unconfigured" });
+    await sendOpsAlert("ai_ledger_unavailable", { flow, requestId });
     return { ok: false, response: unavailable(requestId) };
   }
 
@@ -169,6 +172,7 @@ export async function beginAiUsage(
 
   if (error || !begin || typeof begin.allowed !== "boolean" || !begin.id) {
     logUsage({ flow, requestId, status: "rejected", reason: "ledger_unavailable" });
+    await sendOpsAlert("ai_ledger_unavailable", { flow, requestId });
     return { ok: false, response: unavailable(requestId) };
   }
 
@@ -178,6 +182,7 @@ export async function beginAiUsage(
     logUsage({ flow, requestId, status: "rejected", reason });
     if (reason === "budget_exhausted") {
       console.warn("ai_budget_exhausted", { flow, requestId });
+      await sendOpsAlert("ai_budget_exhausted", { flow, requestId, monthlyBudgetUsd: config.monthlyBudgetUsd });
     }
     return {
       ok: false,
@@ -225,6 +230,7 @@ export async function beginAiUsage(
         if (finishError || !finishData) {
           // The row expires after two minutes; the request result is unaffected.
           console.warn("ai_usage_finish_failed", { flow, requestId });
+          await sendOpsAlert("ai_usage_finish_failed", { flow, requestId });
           return;
         }
         const totals = finishData as { month_cost_usd?: number; previous_month_cost_usd?: number };
@@ -233,11 +239,13 @@ export async function beginAiUsage(
         for (const threshold of budgetThresholds) {
           const limit = config.monthlyBudgetUsd * threshold;
           if (before < limit && after >= limit) {
-            console.warn("ai_budget_threshold", {
+            const alert = {
               threshold: `${threshold * 100}%`,
               monthCostUsd: after,
               monthlyBudgetUsd: config.monthlyBudgetUsd,
-            });
+            };
+            console.warn("ai_budget_threshold", alert);
+            await sendOpsAlert("ai_budget_threshold", { ...alert, requestId });
           }
         }
       },
