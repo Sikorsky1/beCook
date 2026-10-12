@@ -131,3 +131,45 @@ test("login next path only allows same-origin paths", () => {
  }
  assert.equal(loginHrefFor("/create-menu?isoYear=2026&isoWeek=41"), "/login?next=%2Fcreate-menu%3FisoYear%3D2026%26isoWeek%3D41");
 });
+
+// P37: the account routes share the guard battery (session verified by Auth, cheap checks first,
+// nothing destructive or costly before a valid request).
+const accountRoutes = {
+ "account/export": {method: "GET", handler: () => require("../src/app/api/account/export/route.ts").GET},
+ "account/delete": {method: "POST", handler: () => require("../src/app/api/account/delete/route.ts").POST, body: {confirmation: "ELIMINAR"}},
+};
+const accountRequest = (path, {method, body, token, contentType = "application/json", raw, contentLength} = {}) => {
+ const headers = new Headers();
+ if (token) headers.set("authorization", `Bearer ${token}`);
+ if (method === "POST" && contentType) headers.set("content-type", contentType);
+ if (contentLength !== undefined) headers.set("content-length", String(contentLength));
+ return new Request(`http://localhost/api/${path}`, {method, headers, body: method === "POST" ? raw ?? JSON.stringify(body) : undefined});
+};
+for (const [path, spec] of Object.entries(accountRoutes)) {
+ test(`${path}: no token -> 401 without contacting Auth`, async () => {
+  const response = await spec.handler()(accountRequest(path, {method: spec.method, body: spec.body}));
+  assert.equal(response.status, 401);
+  assert.equal(fakes.authCalls, 0);
+ });
+ test(`${path}: invalid token -> 401; Auth unreachable -> 503`, async () => {
+  assert.equal((await spec.handler()(accountRequest(path, {method: spec.method, body: spec.body, token: "header.forged.signature"}))).status, 401);
+  assert.equal(fakes.authCalls, 1);
+  fakes.authMode = "down";
+  assert.equal((await spec.handler()(accountRequest(path, {method: spec.method, body: spec.body, token: validToken}))).status, 503);
+  assert.equal(fakes.openAICalls, 0, "no other backend contacted");
+ });
+}
+test("account/delete: 415, 413 (header before Auth, and streamed), 400 and wrong confirmation before any deletion", async () => {
+ const {POST} = require("../src/app/api/account/delete/route.ts");
+ const send = options => POST(accountRequest("account/delete", {method: "POST", token: validToken, ...options}));
+ assert.equal((await send({body: {confirmation: "ELIMINAR"}, contentType: "text/plain"})).status, 415);
+ const big = JSON.stringify({confirmation: "ELIMINAR", padding: "x".repeat(2048)});
+ assert.equal((await send({raw: big, contentLength: big.length})).status, 413);
+ assert.equal(fakes.authCalls, 0, "declared size is rejected before verifying the token");
+ assert.equal((await send({raw: big})).status, 413);
+ assert.equal((await send({raw: "{not json"})).status, 400);
+ assert.equal((await send({body: [1]})).status, 400);
+ assert.equal((await send({body: {confirmation: "eliminar"}})).status, 400);
+ // The admin API is not a known backend of the fakes: any call to it would count here.
+ assert.equal(fakes.openAICalls, 0);
+});
