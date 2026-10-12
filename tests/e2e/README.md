@@ -38,7 +38,8 @@ npm run test:e2e      # build + servidores + Playwright (2–3 min en un Mac; ~1
      `AI_QUOTA_IMPORT_DAILY=1` (para el 429) y el resto de cuotas como en D3.
    - **budget**: igual con `AI_MONTHLY_BUDGET_USD=0` (para el 503 por presupuesto).
 5. Mantiene despierto el reloj de PostgREST (ver «Problemas conocidos») y lanza Playwright.
-6. Si todo pasa, vuelve a borrar las identidades sintéticas (en un fallo se conservan para depurar).
+6. Si todo pasa, vuelve a borrar las identidades sintéticas y las filas sin dueño del registro de IA
+   creadas en la ejecución (en un fallo se conservan para depurar).
 
 ## OpenAI simulado
 
@@ -60,11 +61,13 @@ variable está prohibida: `next.config.ts` hace fallar el build si existen `VERC
 | `invitado-importa.spec.ts` | Invitado pega una tabla, se ordena sin IA (cero peticiones a `/api/*`), «Solo en este dispositivo», recarga | 390 y 320 |
 | `aislamiento.spec.ts` | A y B: RLS (B no lee semana, días ni listas de A), otro navegador como B y cambio de cuenta en el mismo dispositivo | 390 |
 | `sincronizacion.spec.ts` | Sin red (`route.abort` sobre `/rest/v1/**`) → «Pendiente de sincronizar» + «Reintentar» → guardado; conflicto de versión entre dos contextos; doble clic en «Usar este menú» (una semana, versión 1, misma clave) | 390 |
+| `cabecera.spec.ts` | Paso 34: Semana, Compra, Despensa y Perfil con la cabecera fija ≤ 120 px tras desplazarse (medida: 113), el h1 sale de la vista, sin desplazamiento horizontal; en Compra (hacia atrás desde la última casilla y hacia delante desde el h1) y en Perfil, cada elemento enfocado con el teclado queda entre la cabecera fija y la barra inferior | 390 y 320 |
+| `datos-cuenta.spec.ts` | Paso 37: Perfil → «Tus datos» → «Descargar mis datos» (JSON con email, id y semana, sin `ip_hash`) → «ELIMINAR» (con «eliminar» el botón sigue desactivado) → «Eliminar mi cuenta» → Semana con «Tu cuenta se ha eliminado.» una sola vez, sin sesión ni caché de esa cuenta en el dispositivo, y la contraseña ya no sirve | 390 |
 | `api.spec.ts` | `request`: 401 sin sesión en las 5 rutas de IA, token falsificado, 429 por cuota diaria con `Retry-After`, 503 por presupuesto | sin navegador |
 
 Las identidades se crean con la API de administración local y **un** inicio de sesión por
 contraseña cada una: Auth local admite 30 altas/inicios cada 5 minutos por IP. Una ejecución usa
-unas 9; tres ejecuciones seguidas en menos de 5 minutos pueden llegar al límite.
+unas 13; dos ejecuciones seguidas caben, una tercera en menos de 5 minutos puede llegar al límite.
 
 ## Selectores y nombres accesibles
 
@@ -86,6 +89,13 @@ aquí. Nombres en los que se apoyan (lista de P34 «nombres congelados» incluid
   el nombre del plato, «Crear ficha estimada (IA)», regiones «Ingredientes» y «Pasos», «Cerrar»,
   «Cambiar plato de la comida del Martes», cuadro «Comida del Martes», «Guardar comida de Martes».
   Vacía: «No hay menú para esta semana».
+- Cabecera (P34): barra fija con el eyebrow; Semana «Semana anterior», «Semana siguiente», grupo
+  «Ir a un día de la semana», h1 con el título completo de la semana; h1 «Tu despensa», «Lo que
+  necesita tu menú»; navegaciones «Secciones de compra» (enlaces «Lista de la compra», «Despensa»)
+  y «Secciones de la lista».
+- Tus datos (P37): enlace «Tus datos: descargar o eliminar la cuenta», h1 «Tus datos», «Descargar
+  mis datos», campo «Escribe ELIMINAR para confirmar», «Eliminar mi cuenta», aviso «Tu cuenta se ha
+  eliminado.».
 - Compra: casillas «Huevos, 14 ud» (se busca por el nombre, no la cantidad), «N/M comprados»,
   «2 raciones por comida», vacía «No hay una semana guardada.».
 - Estados (B5): «Guardado en tu cuenta», «Solo en este dispositivo», «Pendiente de sincronizar» /
@@ -99,4 +109,6 @@ aquí. Nombres en los que se apoyan (lista de P34 «nombres congelados» incluid
   El orquestador hace una petición anónima cada 250 ms para evitarlo; si aun así pasa en la
   primera carga, el test pulsa «Reintentar» (como haría una persona) y lo deja anotado como
   `postgrest-iat` en el informe.
-- Pendiente tras integrar P37: recorrido de exportación y borrado de cuenta.
+- Desde P37 el registro de IA conserva sus filas (`user_id` NULL) al borrar una cuenta. La limpieza
+  borra antes las filas de las identidades `e2e-…` y, tras una ejecución verde, las filas sin dueño
+  creadas durante la ejecución (las del recorrido de borrado).

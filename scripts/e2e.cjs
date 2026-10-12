@@ -153,8 +153,22 @@ function runPlaywright(args, env) {
 }
 
 function cleanupUsers() {
-  // Only the synthetic identities created by the E2E (e2e-…@example.invalid); FKs cascade.
-  local.sql(`delete from auth.users where email like '${E2E_EMAIL_PATTERN}';`);
+  // Only the synthetic identities created by the E2E (e2e-…@example.invalid); FKs cascade. Since
+  // P37 the AI ledger keeps its rows (user_id NULL) when an account goes, so theirs go first.
+  local.sql(`delete from public.ai_usage_events where user_id in (select id from auth.users where email like '${E2E_EMAIL_PATTERN}');
+delete from auth.users where email like '${E2E_EMAIL_PATTERN}';`);
+}
+
+function databaseNow() {
+  const value = local.sql("select now();").trim();
+  if (!/^\d{4}-\d{2}-\d{2} /.test(value)) throw new Error("Unexpected database clock value.");
+  return value;
+}
+
+function cleanupOrphanLedgerRows(since) {
+  // The account deletion journey deletes its user through the app: its ledger rows stay without
+  // owner, as in production. Only rows without owner created during this run are removed.
+  local.sql(`delete from public.ai_usage_events where user_id is null and created_at >= '${since}'::timestamptz;`);
 }
 
 async function main() {
@@ -171,6 +185,7 @@ async function main() {
   else build(env);
 
   cleanupUsers();
+  const runStartedAt = databaseNow();
   const mock = createMockOpenAI();
   const mockUrl = await mock.listen(await freePort(Number(process.env.E2E_MOCK_PORT ?? 4010)));
   const mainPort = await freePort(Number(process.env.E2E_PORT ?? 3100), [3000]);
@@ -225,7 +240,10 @@ async function main() {
     const started = Date.now();
     exitCode = await runPlaywright(playwrightArgs, testEnv);
     console.log(`Playwright terminó con código ${exitCode} en ${Math.round((Date.now() - started) / 1000)} s. OpenAI simulado: ${JSON.stringify(mock.calls)}`);
-    if (exitCode === 0) cleanupUsers();
+    if (exitCode === 0) {
+      cleanupUsers();
+      cleanupOrphanLedgerRows(runStartedAt);
+    }
   } finally {
     await stop();
   }
