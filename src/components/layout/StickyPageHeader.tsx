@@ -19,7 +19,7 @@ type StickyPageHeaderProps = {
 // (a sticky element only sticks inside its parent): the bar (56 px + top safe area) and the pinned
 // row (57 px) stick; the h1 block between them scrolls. At most 113 px stay fixed.
 // The pinned row sticks right under the bar: its `top` is the bar's height.
-// The scrolling block cancels the column's gap (gap-4 sm:gap-5) to sit close to the bar.
+// The scrolling block cancels the gap of pageStickyColumnClass (gap-4 sm:gap-5) to sit close to the bar.
 export function StickyPageHeader({
   title,
   heading,
@@ -33,6 +33,7 @@ export function StickyPageHeader({
   return (
     <>
       <div
+        data-sticky-header
         className={`sticky top-0 z-30 shrink-0 pt-[env(safe-area-inset-top)] ${pageBleedClass} ${surface} ${
           pinned ? "" : "border-b border-[color:var(--color-border)]"
         }`}
