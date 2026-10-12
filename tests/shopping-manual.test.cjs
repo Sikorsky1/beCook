@@ -347,6 +347,16 @@ test("guest: manual items and quantities live on this device only", async () => 
  assert.equal(account.st.calls.edit, 0);
 });
 
+test("step 34 defect: the week's servings are shown right after generating the list, not only after reloading", async () => {
+ account.writeWeek(W41, week(), {servings: 4, version: "fc1:x"});
+ const generated = await open();
+ assert.equal(generated.status, "ready");
+ assert.equal(account.listsOf(W41).length, 1, "the list was generated now");
+ assert.equal(generated.view.servings, 4);
+ // Reading it again says the same.
+ assert.equal((await open()).view.servings, 4);
+});
+
 // --- markup -----------------------------------------------------------------------------------
 
 test("Compra: one continuous list with section anchors, the usual-at-home group folded, week and servings shown", () => {

@@ -833,13 +833,16 @@ export async function generateShoppingList(
   const generation = (async () => {
     const computed = await computeList(identity, isoWeek, weekDays, context?.servings ?? 2, null);
     const weekVersion = readCachedWeekVersion(identity, isoWeek);
+    // Step 34: the week's servings go with the new list, as when it is read again.
+    const servings = context?.servings ?? null;
     if (computed.legacyItems && computed.items.length === 0) {
-      return storeList(identity, isoWeek, signature, computed.legacyItems, weekVersion, weekDays);
+      return storeList(identity, isoWeek, signature, computed.legacyItems, weekVersion, weekDays, [], { servings });
     }
     // Nothing known (no card, the AI failed): nothing to save; the page shows why.
     if (computed.items.length === 0) throw nothingKnown(computed);
     return storeList(identity, isoWeek, signature, computed.items, weekVersion, weekDays, [], {
       aiError: computed.aiError ? aiErrorMessage(computed.aiError) : null,
+      servings,
     });
   })().finally(() => generations.delete(key));
 
@@ -986,7 +989,7 @@ export async function reconcileShoppingList(
       if (computed.legacyItems || !remote.reconcile) {
         const items = computed.legacyItems && computed.items.length === 0 ? computed.legacyItems : computed.items;
         if (items.length === 0) throw nothingKnown(computed);
-        return storeList(identity, isoWeek, signature, items, state.week.version, days, [], { aiError });
+        return storeList(identity, isoWeek, signature, items, state.week.version, days, [], { aiError, servings });
       }
       if (failed) {
         // «Calcular (IA)» failed again: the current list stays as it is.
@@ -1018,7 +1021,7 @@ export async function reconcileShoppingList(
       if (result.status === "stale" || result.status === "week_changed") continue;
       if (result.status === "unavailable") {
         if (computed.items.length === 0) throw nothingKnown(computed);
-        return storeList(identity, isoWeek, signature, computed.items, state.week.version, days, [], { aiError });
+        return storeList(identity, isoWeek, signature, computed.items, state.week.version, days, [], { aiError, servings });
       }
 
       const next = listToCache(result.list, signature);
