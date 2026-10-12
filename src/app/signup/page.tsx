@@ -137,7 +137,7 @@ function SignupForm() {
         </p>
       }
     >
-      <OAuthButtons next={next} />
+      <OAuthButtons next={next} context="signup" onBusyChange={setIsSubmitting} />
       <form onSubmit={handleSubmit} className="space-y-3" noValidate>
         <div className="space-y-1.5">
           <FieldLabel htmlFor="signup-email">Email</FieldLabel>

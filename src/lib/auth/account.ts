@@ -57,6 +57,9 @@ const messageByCode: Record<string, string> = {
     "Tu cuenta de ese proveedor no tiene el email verificado. Verifícalo allí o entra con tu email.",
   identity_already_exists: "Esa cuenta ya está vinculada a otro usuario de beCook.",
   user_banned: "Esta cuenta no puede entrar ahora mismo.",
+  // Google's button on /login and /signup (Google Identity Services).
+  google_unavailable:
+    "No se pudo cargar el botón de Google. Comprueba tu conexión (o si un bloqueador lo impide) o entra con tu email.",
 };
 
 // Errors that only come back from a provider sign-in: the callback offers to try again, not
@@ -265,10 +268,11 @@ export function enabledOAuthProviders(value: string | null | undefined): OAuthPr
 }
 
 // Leaves for the provider's screen (the auth client changes the page); it comes back to
-// `redirectTo` (/auth/callback) with the session or with an error in the address.
+// `redirectTo` (/auth/callback) with the session or with an error in the address. Apple only:
+// Google signs in on the page itself (signInWithGoogleIdToken), never through Auth's domain.
 export async function signInWithProvider(
   client: AuthClient | null,
-  provider: OAuthProvider,
+  provider: "apple",
   { redirectTo }: { redirectTo: string },
 ): Promise<{ ok: true } | AccountFailure> {
   if (!client) return unavailable;
@@ -276,6 +280,30 @@ export async function signInWithProvider(
     const { error } = await client.auth.signInWithOAuth({ provider, options: { redirectTo } });
     return error ? describeAccountError(error, "oauth") : { ok: true as const };
   });
+}
+
+// Google's button hands the page an ID token; Auth checks it against Google with the plain nonce
+// (Google signed its hash) and opens the session here. An existing account with the same verified
+// email gets Google linked to it, as with the redirection.
+export async function signInWithGoogleIdToken(
+  client: AuthClient | null,
+  { token, nonce }: { token: string | null | undefined; nonce: string },
+): Promise<{ ok: true } | AccountFailure> {
+  if (!client) return unavailable;
+  if (!token) return describeAccountError(null, "oauth");
+  return attempt("oauth", async () => {
+    const { data, error } = await client.auth.signInWithIdToken({ provider: "google", token, nonce });
+    if (error) return describeAccountError(error, "oauth");
+    if (!data.session) return describeAccountError(null, "oauth");
+    return { ok: true as const };
+  });
+}
+
+// Google's script did not load: no connection, or a blocker or network filter stopped it.
+export function googleUnavailableFailure(online: boolean): AccountFailure {
+  return online
+    ? { ok: false, message: messageByCode.google_unavailable, code: "google_unavailable" }
+    : { ok: false, message: "No hay conexión. Comprueba tu red e inténtalo de nuevo.", code: "offline" };
 }
 
 // How the account signs in, from `user.identities` (email first, then providers in display order).

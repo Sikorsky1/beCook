@@ -11,5 +11,5 @@ export const metadata: Metadata = {
 };
 
 export default function TermsPage() {
-  return <LegalPage file="condiciones.md" related={{ href: "/privacidad", label: "Política de privacidad" }} />;
+  return <LegalPage file="condiciones.md" related={[{ href: "/privacidad", label: "Política de privacidad" }, { href: "/sobre", label: "Qué es beCook" }]} />;
 }

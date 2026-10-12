@@ -1,19 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import { FormError } from "@/components/session/AuthPageShell";
 import {
   enabledOAuthProviders,
+  googleUnavailableFailure,
   oauthProviderLabels,
+  signInWithGoogleIdToken,
   signInWithProvider,
   type OAuthProvider,
 } from "@/lib/auth/account";
-import { oauthRedirectUrl } from "@/lib/navigation";
+import { createNonce, googleButtonWidth, googleClientId, loadGoogleIdentity } from "@/lib/auth/google";
+import { defaultAfterLoginPath, oauthRedirectUrl } from "@/lib/navigation";
 import { supabase } from "@/lib/supabase/client";
 
-// Inlined at build time: each Vercel environment decides which providers it shows.
-const providers = enabledOAuthProviders(process.env.NEXT_PUBLIC_AUTH_PROVIDERS);
+// Inlined at build time: each Vercel environment decides which providers it shows. Google also
+// needs its public client ID (NEXT_PUBLIC_GOOGLE_CLIENT_ID); without it there is no Google button.
+const clientId = googleClientId(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+const providers = enabledOAuthProviders(process.env.NEXT_PUBLIC_AUTH_PROVIDERS).filter(
+  (provider) => provider !== "google" || clientId !== null,
+);
 
 // Same height and shape as the app buttons; colours follow each provider's brand rules
 // (Google: white with a grey border and the four-colour «G»; Apple: black with the white logo).
@@ -44,16 +52,135 @@ function AppleLogo() {
   );
 }
 
-const logos: Record<OAuthProvider, () => React.JSX.Element> = { google: GoogleLogo, apple: AppleLogo };
+type GoogleStatus = "loading" | "ready" | "signing-in" | "failed";
+
+// Google's own button (Google Identity Services, popup): it gives this page an ID token and Auth
+// opens the session with it, without leaving becook.xyz. A new nonce and a fresh button for every
+// attempt. Closing Google's window just leaves the button as it was.
+function GoogleSignIn({
+  context,
+  next,
+  onBusyChange,
+  onError,
+}: {
+  context: "signin" | "signup";
+  next: string | null;
+  onBusyChange?: (busy: boolean) => void;
+  onError: (message: string) => void;
+}) {
+  const router = useRouter();
+  const container = useRef<HTMLDivElement>(null);
+  const [status, setStatus] = useState<GoogleStatus>("loading");
+  const [attempt, setAttempt] = useState(0);
+  // The latest callbacks, read from Google's callback without setting the button up again.
+  const latest = useRef({ next, onBusyChange, onError, router });
+  useEffect(() => {
+    latest.current = { next, onBusyChange, onError, router };
+  });
+
+  useEffect(() => {
+    if (!clientId) return;
+    let active = true;
+    (async () => {
+      try {
+        const identity = await loadGoogleIdentity();
+        const nonce = await createNonce();
+        const parent = container.current;
+        if (!active || !parent) return;
+        identity.initialize({
+          client_id: clientId,
+          nonce: nonce.hashed,
+          ux_mode: "popup",
+          context,
+          auto_select: false,
+          itp_support: true,
+          callback: async ({ credential }) => {
+            const { onBusyChange, onError } = latest.current;
+            setStatus("signing-in");
+            onBusyChange?.(true);
+            onError("");
+            const result = await signInWithGoogleIdToken(supabase, { token: credential, nonce: nonce.raw });
+            if (result.ok) {
+              // replace: going back must not return to the login form.
+              latest.current.router.replace(latest.current.next ?? defaultAfterLoginPath);
+              return;
+            }
+            onBusyChange?.(false);
+            onError(result.message);
+            // A new nonce and button for the next try.
+            setStatus("loading");
+            setAttempt((value) => value + 1);
+          },
+        });
+        parent.replaceChildren();
+        identity.renderButton(parent, {
+          type: "standard",
+          theme: "outline",
+          size: "large",
+          text: "continue_with",
+          shape: "rectangular",
+          logo_alignment: "left",
+          width: googleButtonWidth(parent.clientWidth),
+          locale: "es",
+        });
+        setStatus("ready");
+      } catch {
+        if (!active) return;
+        setStatus("failed");
+        latest.current.onError(googleUnavailableFailure(navigator.onLine).message);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [attempt, context]);
+
+  return (
+    <div aria-busy={status === "loading" || status === "signing-in"}>
+      {/* Google draws its button here (an iframe); same height as its «large» button. */}
+      <div
+        ref={container}
+        className={status === "ready" ? "flex min-h-10 justify-center" : "hidden"}
+        data-testid="google-button"
+      />
+      {status === "loading" ? (
+        <div aria-hidden="true" className="min-h-10 rounded-[var(--radius-control)] border border-[color:var(--color-border)]" />
+      ) : null}
+      {status === "signing-in" || status === "failed" ? (
+        <button
+          type="button"
+          className={`${baseClass} ${providerClass.google}`}
+          disabled={status === "signing-in"}
+          onClick={() => {
+            latest.current.onError("");
+            setStatus("loading");
+            setAttempt((value) => value + 1);
+          }}
+        >
+          <GoogleLogo />
+          {status === "signing-in" ? "Entrando con Google…" : "Continuar con Google"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 // «Continuar con Google/Apple» above the email form of /login and /signup, with the
 // «o con tu email» divider. Renders nothing when no provider is enabled.
-export function OAuthButtons({ next }: { next: string | null }) {
+export function OAuthButtons({
+  next,
+  context = "signin",
+  onBusyChange,
+}: {
+  next: string | null;
+  context?: "signin" | "signup";
+  onBusyChange?: (busy: boolean) => void;
+}) {
   const [pending, setPending] = useState<OAuthProvider | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Back from the provider with «atrás»: the page may come from the back/forward cache with the
-  // button still busy.
+  // Back from Apple with «atrás»: the page may come from the back/forward cache with the button
+  // still busy.
   useEffect(() => {
     const reset = (event: PageTransitionEvent) => {
       if (event.persisted) setPending(null);
@@ -64,13 +191,14 @@ export function OAuthButtons({ next }: { next: string | null }) {
 
   if (!providers.length) return null;
 
-  async function handleClick(provider: OAuthProvider) {
-    setPending(provider);
+  // Apple still goes through Auth's redirection (it is not enabled anywhere yet).
+  async function handleApple() {
+    setPending("apple");
     setErrorMessage("");
-    const result = await signInWithProvider(supabase, provider, {
+    const result = await signInWithProvider(supabase, "apple", {
       redirectTo: oauthRedirectUrl(window.location.origin, next),
     });
-    // On success the page is already leaving for the provider; the button stays busy.
+    // On success the page is already leaving for Apple; the button stays busy.
     if (!result.ok) {
       setPending(null);
       setErrorMessage(result.message);
@@ -80,23 +208,29 @@ export function OAuthButtons({ next }: { next: string | null }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-2">
-        {providers.map((provider) => {
-          const Logo = logos[provider];
-          const label = oauthProviderLabels[provider];
-          return (
+        {providers.map((provider) =>
+          provider === "google" ? (
+            <GoogleSignIn
+              key={provider}
+              context={context}
+              next={next}
+              onBusyChange={onBusyChange}
+              onError={setErrorMessage}
+            />
+          ) : (
             <button
               key={provider}
               type="button"
               className={`${baseClass} ${providerClass[provider]}`}
               disabled={pending !== null}
               aria-busy={pending === provider}
-              onClick={() => void handleClick(provider)}
+              onClick={() => void handleApple()}
             >
-              <Logo />
-              {pending === provider ? `Abriendo ${label}…` : `Continuar con ${label}`}
+              <AppleLogo />
+              {pending === provider ? `Abriendo ${oauthProviderLabels[provider]}…` : `Continuar con ${oauthProviderLabels[provider]}`}
             </button>
-          );
-        })}
+          ),
+        )}
       </div>
       {providers.includes("apple") ? (
         <p className="t-meta leading-5">

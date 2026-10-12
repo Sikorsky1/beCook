@@ -21,6 +21,8 @@
 
 Si entras con Google, Google nos facilita tu email, tu nombre, la dirección de tu foto de perfil y un identificador de tu cuenta de Google, y nada más. No usamos la foto.
 
+El botón «Continuar con Google» de las pantallas de entrar y crear cuenta lo carga Google (desde accounts.google.com) en nuestra página. Solo pedimos los permisos básicos de Google (`openid`, `email` y `profile`). Si tienes la sesión de Google abierta en el navegador, Google usa sus propias cookies para mostrarte tu cuenta en el botón; si prefieres evitarlo, entra con tu email.
+
 ## 3. Para qué los usamos y con qué base
 
 | Finalidad | Base jurídica |
@@ -32,7 +34,7 @@ Si entras con Google, Google nos facilita tu email, tu nombre, la dirección de 
 | Emails de la cuenta (confirmación de alta, recuperación de contraseña) | Contrato |
 
 No vendemos tus datos, no hacemos publicidad ni perfiles comerciales, y no usamos herramientas de
-analítica ni cookies de terceros.
+analítica ni cookies de terceros (salvo las de Google en su botón, si lo usas: ver el apartado 2).
 
 ## 4. Inteligencia artificial
 
