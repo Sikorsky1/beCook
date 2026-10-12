@@ -819,7 +819,7 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | recipe_cards (`20261012090000`) | ✅ | ✅ 20261011204724 + 20261011204749 (`_apply_week`) | ✅ 20261011205123 + 20261011205211 (tras backup completo en ~/Backups/becook/2026-10-11-ola5) |
 | shopping_item_origins (`20261013090000`) | ✅ | ✅ 20261011223501 | ✅ 20261011223838 (tras backup completo en ~/Backups/becook/2026-10-12-ola6) |
 | shopping_manual_items (`20261014090000`) | ✅ | ✅ 20261012002220 | ✅ 20261012002444 (tras backup completo en ~/Backups/becook/2026-10-12-ola7) |
-| ai_usage_keep_on_account_delete (`20261015090000`) | ✅ | ⏳ | ⏳ (antes del merge a `main`, con backup completo) |
+| ai_usage_keep_on_account_delete (`20261015090000`) | ✅ | ✅ 20261012021426 | ✅ 20261012060819 (tras backup completo en ~/Backups/becook/2026-10-12-ola8) |
 
 ## Decisiones
 | # | Decisión | Fecha |
