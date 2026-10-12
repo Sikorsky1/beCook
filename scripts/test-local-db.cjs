@@ -112,8 +112,10 @@ async function main() {
   }
   runOwnershipTests({check, outcome, query, id, fixtureId});
   check("all new constraints validated and immediate", () => {
-    const names = delta.constraints.map(c => "'" + c.conname + "'").join(",");
-    assert.equal(sql("SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname IN (" + names + ") AND convalidated AND NOT condeferrable;").trim(), String(delta.constraints.length));
+    // A later migration may recreate a constraint with the same name (P37): count each name once.
+    const unique = [...new Set(delta.constraints.map(c => c.conname))];
+    const names = unique.map(name => "'" + name + "'").join(",");
+    assert.equal(sql("SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname IN (" + names + ") AND convalidated AND NOT condeferrable;").trim(), String(unique.length));
   });
   check("all public fixtures unchanged after SQL probes", () => assert.equal(sql(fingerprintSql), initialState));
   // Auth + Data API and the actual application's singleton/mapper contracts.

@@ -1,0 +1,30 @@
+{
+  "migration": "20261015090000_ai_usage_keep_on_account_delete",
+  "replaces": {
+    "columns": [{ "table_name": "ai_usage_events", "name": "user_id" }],
+    "constraints": [{ "conname": "ai_usage_events_user_id_fkey", "table_name": "ai_usage_events" }]
+  },
+  "supersedes": {
+    "schema": "ai_usage_events.user_id loses NOT NULL (same type, no default) and its foreign key to auth.users keeps its name but changes from ON DELETE CASCADE to ON DELETE SET NULL (added NOT VALID, validated in the same transaction). No row, function, policy, index or grant changes.",
+    "client": [
+      "Deleting an account (POST /api/account/delete, auth.admin.deleteUser) removed its AI usage rows with it, so the global monthly budget forgot money already spent. Now the rows stay without owner and keep counting for the budget and the per-IP limit; they count for no user's quota."
+    ],
+    "rollout": "The deployed code keeps working with this migration applied: ai_begin_request and ai_finish_request are unchanged, begin still requires a user and finish closes a row by id even if its owner was deleted meanwhile (scripts/account-data-db-tests.cjs). Order: migration -> code (without the migration, deleting an account still works but erases its usage rows)."
+  },
+  "columns": [
+    {
+      "table_name": "ai_usage_events",
+      "name": "user_id",
+      "type": "uuid",
+      "not_null": false,
+      "default_expr": null
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "ai_usage_events_user_id_fkey",
+      "table_name": "ai_usage_events",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL"
+    }
+  ]
+}
