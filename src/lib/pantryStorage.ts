@@ -1,4 +1,5 @@
 import { pantryBaseItems } from "@/data/mockPantry";
+import type { SupermarketCategory } from "@/lib/shoppingList";
 
 // Pure pantry helpers. Persistence lives in @/lib/data/repositories (scoped by identity).
 
@@ -206,4 +207,57 @@ export function activePantryNames(items: PantryStorageItem[]): string[] {
 
 export function pantryHasItem(pantryItems: string[], itemName: string) {
   return pantryItems.includes(normalizePantryItemName(itemName));
+}
+
+// Order of the pantry sections on screen.
+export const pantryCategoryOrder: PantryCategory[] = [
+  "básicos",
+  "especias",
+  "aceites y vinagres",
+  "salsas",
+  "conservas",
+  "congelados",
+  "otros",
+];
+
+// D5 (roadmap step 31): basics people usually keep at home, offered to add several at once.
+export const pantryBasicsCatalog: { name: string; category: PantryCategory }[] = [
+  { name: "Sal", category: "básicos" },
+  { name: "Azúcar", category: "básicos" },
+  { name: "Harina", category: "básicos" },
+  { name: "Arroz", category: "básicos" },
+  { name: "Pasta", category: "básicos" },
+  { name: "Lentejas", category: "básicos" },
+  { name: "Garbanzos", category: "básicos" },
+  { name: "Pan rallado", category: "básicos" },
+  { name: "Pimienta", category: "especias" },
+  { name: "Pimentón", category: "especias" },
+  { name: "Comino", category: "especias" },
+  { name: "Orégano", category: "especias" },
+  { name: "Laurel", category: "especias" },
+  { name: "Ajo en polvo", category: "especias" },
+  { name: "Aceite de oliva", category: "aceites y vinagres" },
+  { name: "Aceite de girasol", category: "aceites y vinagres" },
+  { name: "Vinagre", category: "aceites y vinagres" },
+  { name: "Mostaza", category: "salsas" },
+  { name: "Salsa de soja", category: "salsas" },
+  { name: "Tomate frito", category: "salsas" },
+  { name: "Tomate triturado", category: "conservas" },
+  { name: "Atún en lata", category: "conservas" },
+  { name: "Caldo de verduras", category: "conservas" },
+  { name: "Guisantes congelados", category: "congelados" },
+  { name: "Espinacas congeladas", category: "congelados" },
+];
+
+// The basics of the catalogue the pantry does not have yet (in any section; case and accents ignored).
+export function pantryBasicsToOffer(items: Pick<PantryStorageItem, "name">[]) {
+  const present = new Set(items.map((item) => normalizePantryItemName(item.name)));
+  return pantryBasicsCatalog.filter((basic) => !present.has(normalizePantryItemName(basic.name)));
+}
+
+// Section of the pantry for an item bought in Compra («Añadir a despensa»).
+export function pantryCategoryForShopping(category: SupermarketCategory): PantryCategory {
+  if (category === "congelados") return "congelados";
+  if (category === "despensa") return "básicos";
+  return "otros";
 }

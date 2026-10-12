@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-12 · Rama: `audit/ola6` (= `audit-opt` + C3 + C4, local sin push; `audit-opt` = `main` tras PR #16) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-12 · Rama: `audit-opt` (= `main` tras PR #17: C3 y C4 en producción); ola 7 (C6, D5, NAV) integrada en `audit/ola7`, sin push · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -496,7 +496,7 @@ Paso 33 del roadmap. Rama `audit/a11y` desde `audit-opt` (02aa5b8), en paralelo 
 | Despliegue be-cook | `dpl_4rua8BAPVUcbXYtww9Xb3F9rquJZ` READY en `www.becook.xyz` y `becook.xyz` (anterior para rollback: `dpl_5obRzbZ6ExPacZGXwkdUxK6c4FKn`). Páginas principales 200 · `/` 307 · `POST` de las 5 rutas de IA sin sesión 401 |
 | Pendiente | Ficha estimada por IA real con sesión (Sergio); revisión del borrador `catalog-v1.json` por la nutricionista; VoiceOver y Safari en iPhone físico (paso 36). `audit-opt` = `main` por fast-forward antes de este commit |
 
-## Iteración C3 — Restricciones contra ingredientes estructurados ✅ local (2026-10-12)
+## Iteración C3 — Restricciones contra ingredientes estructurados ✅ (2026-10-11, en producción el 2026-10-12)
 Paso 18 del roadmap. Rama `audit/c3-restricciones` desde `audit-opt` (6121e34), en paralelo con C4 (pasos 19–20). Sin migraciones ni cambios de BD. Plan de la ola 6, sección C3.
 
 | Elemento | Detalle |
@@ -521,7 +521,7 @@ Paso 18 del roadmap. Rama `audit/c3-restricciones` desde `audit-opt` (6121e34), 
 - Conectar `ReviewedCardLookup` cuando el catálogo tenga fichas revisadas (hoy ninguna; `nextCatalogIdea` es síncrona y la lectura por lotes es asíncrona: no es trivial). Tampoco en `/api/substitute-dish`.
 - Aviso al escribir un plato a mano en el editor (`WeekDayCard`): hoy se ve al abrir la ficha.
 
-## Iteración C4 — Compra desde las fichas y cambio de plato sin perder lo comprado ✅ local (2026-10-12)
+## Iteración C4 — Compra desde las fichas y cambio de plato sin perder lo comprado ✅ (2026-10-11, en producción el 2026-10-12)
 Pasos 19 y 20 del roadmap. Rama `audit/c4-compra` desde `audit-opt` (6121e34), en paralelo con C3 (paso 18). Única iteración de la ola 6 con migración.
 
 | Elemento | Detalle |
@@ -560,6 +560,110 @@ Revisión final; migración en becook-preview y producción (ver «Antes de remo
 | Observaciones | Sin clave de OpenAI, Compra muestra el texto del servidor «Falta configurar OPENAI_API_KEY en el servidor.» (solo pasa en local). El nombre accesible de las casillas de Compra sale como «on» en el árbol de accesibilidad del navegador integrado (la casilla va dentro de su `label`; pendiente de comprobar con VoiceOver). Datos de prueba eliminados con `db:reset` + `db:seed` |
 | Pendiente | Migración `20261013090000_shopping_item_origins` en becook-preview (conector, sin `BEGIN`/`COMMIT` ni `SET LOCAL`; registrar en `applied-preview.json`) y validación en la Preview con OpenAI real (medir el desglose); producción con OK, backup completo y copia `backup_AAAAMMDD` **antes** del merge a `main`. CI tras el push |
 
+## C3 y C4 en producción ✅ (2026-10-12)
+| Elemento | Resultado |
+|---|---|
+| PR | [#17](https://github.com/Sikorsky1/beCook/pull/17) `audit-opt` → `main`, merge commit `f810818` (2026-10-12); checks en verde (application, database, Vercel) |
+| Migración | `shopping_item_origins` aplicada antes del merge con el conector de Supabase (una parte, sin `BEGIN`/`COMMIT`): becook-preview `20261011223501`; becook `20261011223838`, tras backup completo en `~/Backups/becook/2026-10-12-ola6`. Aditiva: 70 listas, 2217 artículos y 85 marcados antes y después. Cuerpos de `save_shopping_list` y `reconcile_shopping_list` idénticos a los de local (md5 sin comentarios) |
+| Validación | Revisión de código de C3 y C4 con sus cambios aplicados; recorrido en navegador en local (compatibilidad en la ficha, compra mixta escalada, cambio de plato con comprados conservados, fallo de IA); Preview sin sesión (rutas de IA 401) |
+| Despliegue be-cook | `dpl_GdXzGVQ4Th2uLJPmweME8kxTeBNQ` READY en `www.becook.xyz` y `becook.xyz` (anterior para rollback: `dpl_4rua8BAPVUcbXYtww9Xb3F9rquJZ`). Páginas principales 200 · `/` 307 · `POST` de las 5 rutas de IA sin sesión 401 |
+| Pendiente | Compra real con IA y desglose de una semana entera sin fichas (latencia) con sesión (Sergio); `ReviewedCardLookup` sin conectar; nombre accesible «on» en las casillas de Compra (paso 34/35). `audit-opt` = `main` por fast-forward antes de este commit |
+
+## Iteración C6 — Importación local, errores con motivo y borradores por identidad y semana 🟡 (2026-10-12, integrada en local)
+Paso 22 del roadmap y la parte de Crear menú del paso 32. Rama `audit/c6-importacion` (`a5d9ddc`) desde `audit-opt` (c1b9c1a), en paralelo con D5 y NAV (ola 7). Sin migraciones ni cambios de BD.
+
+| Elemento | Detalle |
+|---|---|
+| Defectos reproducidos | `tests/import-local.test.cjs` con el código anterior: 19 de 20 fallaban. Un menú inequívoco (`Lunes\tLentejas\tLIBRE`) **llamaba siempre a OpenAI** y abría registro de cuota; un texto sin ningún día respondía **200** tras pagar la IA (no había 422); la IA sin platos devolvía 200 con un menú vacío; los 400 no llevaban motivo; el borrador del formulario solo vivía en `sessionStorage` sin ámbito (cualquier identidad y semana del navegador lo leía) |
+| Parser local (`src/lib/importMenu.ts`) | `parseMenuTextLocally` → `parsed` (días + avisos) o `ambiguous` (motivo). Inequívoco: cabeceras de día con «Comida:»/«Cena:», filas de 3 columnas (un solo separador por línea: tabulador, si no `\|`; por espacios solo en tablas alineadas de 2+ filas) y cabecera DÍA\|COMIDA\|CENA; sin días ni comidas repetidos; títulos ≤ 120. Comida ausente o celda vacía → libre con aviso. `importErrorMessage` y `importTextLimits` compartidos con la ruta |
+| Ruta `/api/import-menu` | 400 `not_text`/`empty`/`too_long` (> 8.000)/`too_many_lines` (> 80, límite nuevo en `ai-limits.ts`) → parser local (`parsedBy: "local"`, sin `beginAiUsage`) → 422 `no_menu_found` sin coste → cuota → OpenAI (`max_completion_tokens` 2.000, `reasoning_effort: "low"`) → 422 `empty_menu` (cuenta, A4) → 502 con motivo (`invalid_output`, `truncated_output`, `empty_output`, `timeout`, `ai_failed`). Todos los errores `{error, reason}` |
+| Cliente | «Procesar menú» parsea en el dispositivo primero: inequívoco → propuesta sin petición (también invitados, decisión 2); ambiguo sin sesión → aviso de inicio de sesión con el texto conservado; con sesión → IA. Mensaje por `reason`, sin «Reintentar» en 400/422 |
+| Borradores y propuesta | `becook:<scope>:menu-draft:YYYY-Www` (solo si el usuario tocó el formulario); prioridad: generación interrumpida → en curso → borrador de login (`sessionStorage`, se mantiene) → borrador del dispositivo. `MenuProposal` gana `source`, `parsedBy`, `contextVersion`, `createdAt`. Borradores y propuestas de semanas pasadas se borran al cargar, salvo la semana seleccionada (decisión 10) |
+| «Usar este menú» | Rechazado con otra generación activa de esa identidad y semana. Propuesta generada con otra versión del contexto (C1): «Tu perfil ha cambiado…» con «Usar igualmente» / «Ahora no» (decisión 3: avisa, no bloquea) |
+| Avisos en importados | `src/lib/importWarnings.ts` + `ProposalDayCard`: C3 por el nombre y reglas culinarias de C5; nunca cambian el plato |
+| Paso 32 (Crear menú) | Sin pestañas: «Crea un menú con beCook» principal y «¿Ya tienes un menú? Pégalo» como desplegable (`aria-expanded`/`aria-controls`, panel siempre en el DOM con `hidden`); `?mode=import` lo abre (contrato con NAV); enlace «Volver a Semana» a la semana seleccionada. Retirado `src/lib/rovingTabs.ts` |
+| Revisión (apta con cambios) | 10 puntos aplicados: «Comida: X; Cena: Y» en una línea → ambiguo; un separador por línea; acciones bloqueadas mientras se guarda o dura «Deshacer»; la poda nunca borra la semana seleccionada; etiquetas de celda; `mentionsAnyDayName` con abreviaturas e inglés; `key={identity.scope}`; foco del aviso de contexto; claves locales en `data-sync.md` |
+| Tests | 367 → **391**: `tests/import-local.test.cjs` (parser, límites, ruta, borradores, viaje de login, poda, propuesta, bloqueo y aviso de contexto, avisos), `create-menu-proposal` +1 (invitado importa y aplica sin peticiones); adaptados `ai-routes`, `ai-usage`, `openai-retry` y `a11y-semantics` (sin tests de pestañas) |
+| Decisiones propias | 1) Esfuerzo bajo en la importación para que el tope de 2.000 tokens no se gaste en razonamiento. 2) Texto local con todos los huecos libres → 422 `empty_menu` sin IA. 3) La propuesta de un invitado no pasa a la cuenta al iniciar sesión (como B5); el formulario sí. 4) Los avisos usan el perfil que la página ya carga |
+| Política | `docs/development/data-sync.md`, «Importación y borradores de Crear menú (C6)» |
+
+### Qué probar (Sergio)
+1. Semana vacía → «Ya tengo un menú» → Crear menú con el desplegable abierto; pegar una tabla (día, comida, cena) → propuesta al momento, sin IA, con «Ordenado en este dispositivo, sin IA».
+2. Pegar prosa con sesión → IA (Preview); sin días → «No encontramos ningún día…» sin «Reintentar».
+3. Recargar Crear menú con texto a medias → el texto vuelve (por usuario y semana); otro usuario en el mismo navegador no lo ve.
+
+### Pendiente
+Importación con IA real (Preview) y el aviso de contexto con una cuenta real.
+
+## Iteración D5 — Compra completa y despensa con acciones claras 🟡 (2026-10-12, integrada en local)
+Pasos 30 y 31 del roadmap. Rama `audit/d5-compra` (`48825d4`) desde `audit-opt` (c1b9c1a). Única iteración de la ola 7 con migración.
+
+| Elemento | Detalle |
+|---|---|
+| Defectos reproducidos | `tests/shopping-manual.test.cjs` y `tests/pantry-actions.test.cjs` fallaban todas antes del código: no había artículos manuales ni edición de cantidad; **reconciliar borraba un manual** (`diffShoppingList` devolvía `remove` para `manual\|…`); la despensa no tenía «Tengo / Se acabó» (casilla con otro significado que en Compra), ni básicos en bloque, ni deshacer; **`fromCards` contaba cualquier origen ≠ `ai_title`** (`data/shopping.ts:183`). En la base local, sin el trigger, `shopping_items_discard_unbought` (ruta del cliente desplegado) borraba la fila manual; con el trigger, queda |
+| Migración `20261014090000_shopping_manual_items` | ✅ local. `BEGIN`/`COMMIT`, `lock_timeout` 5 s, `statement_timeout` 120 s. Aditiva: función + trigger `shopping_items_guard_manual` (BEFORE UPDATE OR DELETE) y función `edit_shopping_items` (INVOKER, solo `authenticated`). Sin columnas nuevas, sin redefinir funciones, no modifica filas. Expectativas en `supabase/expectations/20261014090000_shopping_manual_items.json` |
+| Convención | Manual: `item_key 'manual\|<nombre normalizado>'`, `origins [{kind:"manual", quantity}]`. Ajuste en fila de platos: orígenes de platos + `{kind:"user_adjust", quantity}` (se descarta y avisa si cambian los platos de ese ingrediente, decisión 5) |
+| `edit_shopping_items` | `add` (id del cliente; reenvío → `duplicate`; clave activa → `existing`), `set_quantity` (cualquier fila activa), `remove` (solo manuales). ≤ 50 por tipo, `shopping_item_valid`; semana `FOR SHARE`; lista no vigente → `stale`. No cambia firma, base ni `reconciled_at`. Único DELETE, con el permiso local `becook.shopping_edit` |
+| Trigger | Fuera de `edit_shopping_items`: DELETE de un manual → se ignora; UPDATE → se ignora salvo marcado (`checked`, `checked_quantity`, `needs_review`, `updated_at`). Cascadas (lista, semana, cuenta) → se borra (`pg_trigger_depth() > 1`) |
+| Cliente (datos) | `addManualShoppingItem`, `setShoppingItemQuantity`, `removeManualShoppingItem`, `readShoppingView`; cola `pendingEdits` en la misma cola que los marcados (antes que ellos), lotes cortados antes de repetir id o clave; rechazo 22023/42501 → vuelve a la lista de la cuenta y avisa. `diffShoppingList` excluye manuales; `parseShoppingOrigins` acepta `manual`/`user_adjust`; `fromCards` solo cuenta fichas. Despensa: `addPantryItems`, `markPantryItemUsedUp`, `ensurePantryItemInStock`, `createDeferredDeletes` |
+| Compra (`ShoppingListPage`) | Lista continua por secciones (`ShoppingSection`) con accesos rápidos en la cabecera (`nav` «Secciones de la lista», `scroll-mt-64`), progreso global, semana y raciones, «Ya lo tienes habitualmente» plegado con «Se me acabó», «Añadir a despensa» en lo comprado, formulario de manual (`ManualItemForm`) y cantidades (`QuantityEditor`). Casillas con nombre propio («Tomate, 4 ud»): resuelve el «on» de C4 |
+| Despensa (`PantryPage`) | «Tengo / Se acabó» (`PantryStockToggle`, `role="group"`, `aria-pressed`), básicos en bloque (`PantryBasicsPicker`, una sola `add_pantry_items`), borrar con «Deshacer» ~6 s (decisión 8; salir, `pagehide` o cambiar de identidad confirma) |
+| Compatibilidad con el cliente desplegado (f810818) | Lee los manuales como normales y puede marcarlos; su reconciliación pide quitarlos y el trigger los deja. Límites: en el respaldo de lista nueva los manuales se quedan en la lista anterior; sobrescribe una cantidad ajustada de una fila de platos al reconciliarla. Copias congeladas en `tests/fixtures/legacy-shopping-{client,reconcile,list}-f810818.ts` |
+| Revisión (apta con cambios) | Lotes seguros (add/remove/add del mismo artículo), rechazo del servidor sin bloquear la cola, un manual nunca va a «Ya lo tienes habitualmente», marca pendiente hasta que llega el alta, `pagehide`, mensajes por estado, foco devuelto tras las acciones, `aria-invalid` en Cantidad |
+| Tests | 367 → **397**: `tests/shopping-manual.test.cjs` (22), `tests/pantry-actions.test.cjs` (8), bloque de Compra/Despensa de `a11y-semantics`. `test:db` 421 → **432**: `scripts/shopping-manual-db-tests.cjs` (11) |
+| Decisiones | 1) Clave manual por nombre: «Leche» una vez por lista. 2) El manual es línea propia aunque coincida con un ingrediente. 3) En filas de platos solo se edita la cantidad. 4) Líneas con varias filas y «al gusto» no editables. 5) `missing` no invalida el lote; la lista no vigente sí. 6) Sin `needs_review` al ajustar. 7) «Se me acabó» y «Añadir a despensa» casan por nombre. 8) Progreso: pendiente + comprado. 9) Pastilla «x/y en casa» |
+| Política | `docs/development/data-sync.md`, «Compra completa, artículos manuales y acciones de despensa (D5)» |
+
+### Aplicación remota (cuando Sergio lo autorice)
+Orden: becook-preview → validar Preview → producción con OK explícito, **antes** del merge a `main` (sin la migración, el código nuevo guarda las ediciones como pendientes en el dispositivo y no hay protección frente al cliente desplegado).
+1. Verificar el ref contra `AGENTS.md` (preview `qdhpdhnpcsfhmygjofqb`; producción `wejvptpkxlllfpskyisu`).
+2. Precondición (solo lectura): `SELECT count(*) FROM public.shopping_items WHERE item_key LIKE 'manual|%';` = 0. Recuentos previos: `SELECT count(*) FROM public.shopping_lists;` y `SELECT count(*), count(*) FILTER (WHERE checked) FROM public.shopping_items;`.
+3. Conector de Supabase (`apply_migration`, nombre `shopping_manual_items`): el fichero quitando **solo** `BEGIN;` y `COMMIT;`; los dos `SET LOCAL` se mantienen (valen dentro de la transacción del conector). Si se aplica en dos partes: a) `shopping_items_guard_manual` (función, REVOKE y trigger); b) `edit_shopping_items` y sus REVOKE/GRANT, con los `SET LOCAL` al principio de cada una. El `DELETE` del cuerpo de `edit_shopping_items` no borra datos al aplicarla; si el conector se quedara esperando confirmación, pegar el SQL en el SQL Editor y registrar la versión a mano en el ledger (como en B7).
+4. Verificar: `SELECT proname FROM pg_proc WHERE proname IN ('shopping_items_guard_manual','edit_shopping_items');` (2), `SELECT tgname FROM pg_trigger WHERE tgname='shopping_items_guard_manual';` (1), `SELECT grantee FROM information_schema.routine_privileges WHERE routine_name='edit_shopping_items';` (`authenticated`, `postgres`) y recuentos del paso 2 iguales.
+5. Registrar en `supabase/hosted/applied-preview.json` (producción: `supabase/hosted/applied-production.json`) con la versión del ledger.
+6. Producción: avisar a Sergio, backup completo (esquema, datos y roles) fuera del repositorio y comprobarlo; copia interna `backup_AAAAMMDD` de `shopping_items` si se exige.
+7. Reversión (sin datos que recuperar): `DROP FUNCTION public.edit_shopping_items(integer, integer, uuid, jsonb);`, `DROP TRIGGER shopping_items_guard_manual ON public.shopping_items;`, `DROP FUNCTION public.shopping_items_guard_manual();`.
+
+### Qué probar (Sergio)
+1. Compra: añadir «Papel de cocina», cambiar su cantidad, marcarlo; cambiar un plato en Semana y volver → el manual sigue (y lo comprado, marcado).
+2. Cambiar la cantidad de un ingrediente de un plato → «Cantidad cambiada por ti»; cambiar ese plato → «Hemos recalculado cantidades que habías cambiado».
+3. «Ya lo tienes habitualmente» → «Se me acabó» → pasa a la lista y la despensa lo marca agotado; «Añadir a despensa» en un comprado.
+4. Despensa: «Tengo / Se acabó», varios básicos de una vez, borrar y «Deshacer».
+
+### Pendiente
+Migración en remoto (arriba); VoiceOver; cabecera compactable de Compra y Despensa (paso 34, decisión 6); en el respaldo de lista nueva el cliente nuevo tampoco copia los manuales a la lista nueva.
+
+## Paso 32 (NAV) — Navegación de 3 destinos y estados vacíos 🟡 (2026-10-12, integrado en local)
+Rama `audit/nav` (`a4724fc`) desde `audit-opt` (c1b9c1a). Sin migraciones ni cambios de BD. Plan `design-plans/2026-10-12-navegacion-paso-32.md`, aprobado por el revisor delegado y aplicado con sus 5 cambios.
+
+| Elemento | Detalle |
+|---|---|
+| Barra inferior | `BottomNavigation`: Semana, Compra, Perfil; `grid-cols-3`, `max-w-[22.5rem]`, etiquetas 13 px, misma altura (`min-h-[4.25rem]`), mismas áreas seguras y `pb` de `pageShellClass`; `aria-label="Navegación principal"`, iconos `aria-hidden`. «Crear menú» sale de la barra y su ruta marca Semana |
+| Lógica pura | `src/lib/navigation.ts` (solo añadidos): `appSections`, `activeSection(pathname)` (por segmento), `sectionAriaCurrent` (`"page"` en el destino, `"true"` en subrutas), `createMenuImportHref(week)` |
+| Rutas | `/import` → `/create-menu?mode=import` (conserva `week=YYYY-Www` válido o el antiguo `?isoYear=&isoWeek=`). Ninguna ruta desaparece |
+| Semana vacía | `src/app/week/page.tsx` (invitados incluidos): «Crear menú» (principal, `accent-strong`), «Repetir la semana N» si la anterior tiene algún plato, «Ya tengo un menú» (`/create-menu?mode=import&week=…`). Textos de invitado, 44 px, «Copiando…» con `aria-busy`, el aviso del resultado recibe el foco |
+| Repetir semana | `src/lib/repeatWeek.ts`: copia platos y fichas con `applyMenuToWeek`/`saveWeek` sin modificarlos, contexto del perfil actual, compra al abrir Compra (decisión 7); nunca reemplaza un menú existente |
+| Tests | 367 → **386**: `tests/navigation.test.cjs` (19); regresión del paso 33 sin cambios |
+| Decisiones | Lógica de repetir en un módulo propio (probada sin DOM); `/onboarding` no marca sección; en pendiente se relee la semana y el reintento es el de `SyncStatus` |
+
+### Qué probar (Sergio)
+1. Barra de 3 destinos: Crear menú marca Semana; Despensa marca Compra.
+2. Semana vacía con la anterior con menú → «Repetir la semana N» → la semana se llena y el aviso lo explica; Compra se prepara al abrirla.
+
+### Pendiente
+NAV no llega a `main` sin C6 (se integran juntos). Paso 34: el color fijo `text-[#8a4e2a]` de los avisos de Semana y `SyncStatus` a token. VoiceOver en iPhone físico (paso 36).
+
+## Integración C6 + D5 + NAV en `audit-opt` ✅ local (2026-10-12, sin push)
+| Elemento | Detalle |
+|---|---|
+| Merges | Rama `audit/ola7` = `audit-opt` (c1b9c1a) + `git merge --no-ff` de `audit/c6-importacion` (`f51ce6d`), `audit/d5-compra` (`4790baf`) y `audit/nav` (`86288b3`). Sin conflictos |
+| Revisión entre agentes | Contrato `?mode=import` (NAV → C6): «Ya tengo un menú» y `/import?week=` abren Crear menú con el desplegable abierto (`aria-expanded="true"`) y la semana correcta. Barra de 3 destinos: `ProposalActionBar` queda encima (a 390 px, barra 640–740 px y navegación desde 748 px) y el último día de la propuesta no queda tapado al final del scroll. Compra: con la cabecera de D5 sin cambios, la sección elegida queda bajo la cabecera fija (`scroll-mt-64` = 256 px; cabecera de 243 px) a 320 y 390 px. `00cc3c1`: el comentario de cabecera de la migración de D5 apunta a este fichero y dice que con el conector solo se quitan `BEGIN`/`COMMIT` (solo comentario); `a11y-semantics.test.cjs` describe el estado actual (sin pestañas) y aplica los mínimos de 12 px y 44 px también a las pantallas nuevas de la ola (`ImportMenuPanel`, `ShoppingSection`, `ManualItemForm`, `QuantityEditor`, `PantryStockToggle`, `PantryBasicsPicker`, `PantryPage`, `BottomNavigation`) |
+| Correcciones del recorrido | `6aa7c5f`: tras «Añadir a la lista» el foco caía al documento (botón desactivado mientras guarda); vuelve a «Artículo». `110419c`: «Se me acabó» en el último artículo de «Ya lo tienes habitualmente» dejaba el foco en el documento (el grupo desaparece); ahora sigue al artículo hasta su casilla en la lista. `37a36b9`: en Despensa a 320–390 px el nombre se estrechaba hasta partirse por letras junto a «Tengo / Se acabó»; ahora los botones pasan a la línea siguiente |
+| Comprobaciones | lint sin avisos; typecheck OK; `npm test` **440/440** (367 + 24 C6 + 30 D5 + 19 NAV, con `GITLEAKS_BIN`); `next build` OK en una copia sin `.env*` (variables sintéticas, 23 páginas; `/import` dinámica); `db:reset` + `db:seed` + `test:db` **432/432** (antes y después del recorrido) |
+| Recorrido en navegador (local, `npm run dev`) | **Invitado**: barra con estado activo correcto en Semana (`page`), Crear menú (`true`), Compra (`page`), Despensa (`true`) y Perfil (`page`); semana vacía con «Crear menú» y «Ya tengo un menú»; `/import?week=2026-W43` → `/create-menu?mode=import&week=2026-W43` con el desplegable abierto; tabla pegada → propuesta local sin ninguna petición a `/api/` (`read_network_requests`), «Volver a Semana» a `/week?week=2026-W42`; aplicada en el dispositivo; W43 vacía → «Repetir la semana 42» con texto de invitado y foco en el aviso. **Usuario ficticio A**: W41 desde «Ya tengo un menú» (local, sin red) y guardada en la cuenta; W42 vacía → «Repetir la semana 41» → copiada, «La lista de la compra se prepara cuando abras Compra», foco en el aviso. Compra (IA simulada con un parche de `fetch` con `breakdown`): lista continua por secciones con «Para: …» y «1 ración por comida»; manual «Leche de avena» (Lácteos) y «Papel de cocina»; cantidad del manual 1 → 2 l y de «Patata» (platos) 3 → 4 ud («Cantidad cambiada por ti»); marcados; cambiar la cena del martes → «Lista actualizada con tu menú», manuales intactos (el comprado sigue marcado), «Hemos recalculado cantidades que habías cambiado» para la patata, «Faltan ingredientes de «Lentejas con verduras»» + «Calcular (IA)» → 2 añadidos; «Añadir a despensa» y «Quitar» con foco devuelto. Despensa: 2 básicos de una vez («2 básicos añadidos»), «Tengo» con `aria-pressed`, borrar → «Deshacer» devuelve el artículo y el foco; sin «Deshacer», borrado confirmado a los ~6 s; «Se me acabó» desde Compra lo marca agotado. 320 y 390 px sin scroll horizontal (Semana, semana vacía, Crear menú con propuesta, Compra, Despensa, Perfil). Consola: sin errores de la app (solo los 500 esperados de la IA sin clave y los de mi parche de `fetch`) |
+| Observaciones | El aviso de una acción anterior puede seguir visible tras otra distinta (p. ej. «2 básicos añadidos a tu despensa» tras borrar, o «Papel de cocina añadido» con el formulario cerrado); la línea de raciones de Compra aparece al recargar, no justo tras generar la lista; a 320 px la cabecera fija de Despensa ocupa ~60 % de la altura (paso 34). Datos de prueba eliminados con `db:reset` + `db:seed` |
+| Pendiente | Migración `20261014090000_shopping_manual_items` en becook-preview (conector, quitando solo `BEGIN`/`COMMIT`; registrar en `applied-preview.json`) y validación en la Preview (importación con IA real, Compra con manuales); producción con OK, backup completo y copia `backup_AAAAMMDD` **antes** del merge a `main`. CI tras el push |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
@@ -580,11 +684,11 @@ Revisión final; migración en becook-preview y producción (ver «Antes de remo
 | 15 Estados de sincronización visibles | B5 | ✅ | En `audit-opt` desde 2026-10-10, en producción desde 2026-10-10 (PR #14): `SyncStatus` en Semana, Compra, Despensa, Perfil y onboarding; ver B5 e integración |
 | 16 Contexto alimentario por semana | C1 | ✅ | En producción 2026-10-11 (PR #15): perfil leído en servidor, contexto congelado por semana; ver C1 |
 | 17 Fichas de plato versionadas | C2 | ✅ | En producción 2026-10-11 (PR #16): ficha de plato en Semana, `/api/dish-card`, catálogo sin fichas revisadas (borrador pendiente de revisión); ver C2 |
-| 18 Validación de restricciones | C3 | 🟡 | Integrado en `audit/ola6` (local, 2026-10-12): léxico, `checkDish`, compatibilidad en la ficha y bloqueo en propuestas automáticas; ver C3 e integración |
-| 19 Compra desde recetas y despensa | C4 | 🟡 | Integrado en `audit/ola6` (local, 2026-10-12): compra mixta desde fichas escaladas + IA desglosada; migración `shopping_item_origins` solo en local; ver C4 e integración |
-| 20 Reconciliar cambios de plato | C4 | 🟡 | Integrado en `audit/ola6` (local, 2026-10-12): reconciliación en el sitio conservando lo comprado; ver C4 e integración |
+| 18 Validación de restricciones | C3 | ✅ | En producción 2026-10-12 (PR #17); ver C3/C4 |
+| 19 Compra desde recetas y despensa | C4 | ✅ | En producción 2026-10-12 (PR #17); ver C3/C4 |
+| 20 Reconciliar cambios de plato | C4 | ✅ | En producción 2026-10-12 (PR #17); ver C3/C4 |
 | 21 Reglas culinarias y sustitución | C5 | ✅ | En producción desde 2026-10-09 (PR #12): reglas de títulos, «Otra idea» con catálogo y luego IA (flujo `menu`); ver C5 |
-| 22 Importación y borradores | C6 | ⏳ | |
+| 22 Importación y borradores | C6 | 🟡 | Integrado en local (`audit/ola7`, 2026-10-12): parser local sin IA, errores con motivo, borradores por identidad y semana; ver C6 e integración |
 | 23 Alta, login y recuperación | D1 | ✅ | En producción desde 2026-10-09 (PR #12): alta, login con `next`, recuperación. Auth completado el 2026-10-11 en preview y producción: SMTP Resend, plantillas en español, mínimo 8, confirmación de email activada. Solo queda la protección de contraseñas filtradas; ver D1 |
 | 24 Perfil simplificado | D2 | ✅ | Primera mitad en producción (PR #13); resto en `audit-opt` desde 2026-10-10: datos corporales opcionales y `confirmed_sections`. Migración `20261010090000` en preview y producción (2026-10-10); en producción desde 2026-10-10 (PR #14); ver D2 (segunda mitad) |
 | 25 Onboarding y primer menú | D2 | ✅ | En `audit-opt` desde 2026-10-10: onboarding de 3 pasos con `onboarding_progress`; migración `20261010090000` en preview y producción (2026-10-10); en producción desde 2026-10-10 (PR #14); ver D2 (segunda mitad) |
@@ -592,9 +696,9 @@ Revisión final; migración en becook-preview y producción (ver «Antes de remo
 | 27 Generación honesta | D3 | ✅ | En producción 2026-10-11 (PR #15); ver D3 e integración |
 | 28 «Otra idea» por plato | D3 | ✅ | En producción 2026-10-11 (PR #15); ver D3 e integración |
 | 29 Semana con «Hoy» | D4 | ✅ | En producción desde 2026-10-09 (PR #13): bloque «Hoy» y días compactos; ficha de plato al llegar C2; ver D4 |
-| 30 Compra completa y despensa | D5 | ⏳ | |
-| 31 Despensa con acciones claras | D5 | ⏳ | |
-| 32 Navegación y estados vacíos | D6 | ⏳ | |
+| 30 Compra completa y despensa | D5 | 🟡 | Integrado en local (`audit/ola7`, 2026-10-12): lista continua, artículos manuales y cantidades; migración `20261014090000` solo en local; ver D5 |
+| 31 Despensa con acciones claras | D5 | 🟡 | Integrado en local (`audit/ola7`, 2026-10-12): «Tengo / Se acabó», básicos en bloque, borrar con «Deshacer»; ver D5 |
+| 32 Navegación y estados vacíos | D6 | 🟡 | Integrado en local (`audit/ola7`, 2026-10-12): barra de 3 destinos, semana vacía con «Repetir la semana N» y «Ya tengo un menú»; llega a `main` junto con C6; ver paso 32 (NAV) |
 | 33 Legibilidad y accesibilidad | D6 | ✅ | En producción 2026-10-11 (PR #16); falta iPhone físico/VoiceOver (paso 36); ver paso 33 |
 | 34 Consolidar componentes | D6 | ⏳ | |
 | 35 Tests de recorridos críticos | E1 | ⏳ | Se adelantan tests en cada iteración |
@@ -617,6 +721,7 @@ Revisión final; migración en becook-preview y producción (ver «Antes de remo
 | week_food_context (`20261011090000`) | ✅ | ✅ 20261011190843 | ✅ 20261011195740 (tras backup completo en ~/Backups/becook/2026-10-11-ola4) |
 | recipe_cards (`20261012090000`) | ✅ | ✅ 20261011204724 + 20261011204749 (`_apply_week`) | ✅ 20261011205123 + 20261011205211 (tras backup completo en ~/Backups/becook/2026-10-11-ola5) |
 | shopping_item_origins (`20261013090000`) | ✅ | ✅ 20261011223501 | ✅ 20261011223838 (tras backup completo en ~/Backups/becook/2026-10-12-ola6) |
+| shopping_manual_items (`20261014090000`) | ✅ | ✅ 20261012002220 | ✅ 20261012002444 (tras backup completo en ~/Backups/becook/2026-10-12-ola7) |
 
 ## Decisiones
 | # | Decisión | Fecha |

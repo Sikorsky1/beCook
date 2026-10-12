@@ -4,7 +4,8 @@ const {installFakeBackends, aiRequest, userId} = require("./helpers/fake-backend
 
 // A4: quota/budget ledger integration with synthetic Supabase RPCs and OpenAI. No network.
 const dish = "Lentejas estofadas secretas";
-const pastedText = `Lunes\t${dish}\tLIBRE`;
+// C6: prose with a day name, so the local parser leaves it to the AI.
+const pastedText = `El lunes comemos ${dish} y cenamos libre`;
 const importedMenu = {week: "Semana importada", days: [{dayName: "Lunes", lunch: {status: "planned", dishName: dish}, dinner: {status: "free", dishName: ""}}]};
 const shoppingList = {items: [{name: "lentejas", quantity: 500, unit: "g", category: "despensa"}]};
 const week = [{day: "Lunes", date: "5 oct", lunch: dish, dinner: "LIBRE"}];

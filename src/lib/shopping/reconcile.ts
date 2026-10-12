@@ -3,10 +3,13 @@
 // (a bought item is never removed, only marked «ya no hace falta» or «revisar»).
 // Items are matched by item_key; rows made before C4 have none and get the key computed with the
 // same rules (units.ts), so an old list is updated in place and keeps its marks.
-import type { ShoppingOrigin, SupermarketCategory } from "@/lib/shoppingList";
+// D5: items added by hand («manual|…» keys) are not the dishes' business: never updated or removed
+// here (the database refuses it too). A quantity the user adjusted (origin user_adjust) is kept
+// while the dishes of that ingredient stay the same; when they change it is recomputed and reported.
+import { dishOriginsOf, type ShoppingOrigin, type ShoppingRowOrigin, type SupermarketCategory } from "@/lib/shoppingList";
 
 import type { DesiredItem } from "./build";
-import { storedItemKey } from "./units";
+import { isManualKey, storedItemKey } from "./units";
 
 export type ExistingShoppingRow = {
   id: string;
@@ -16,7 +19,7 @@ export type ExistingShoppingRow = {
   category: SupermarketCategory;
   checked: boolean;
   itemKey: string | null;
-  origins: ShoppingOrigin[] | null;
+  origins: ShoppingRowOrigin[] | null;
   removedAt: string | null;
 };
 
@@ -52,15 +55,19 @@ const toItem = (desired: DesiredItem): ReconcileItem => ({
   origins: desired.origins,
 });
 
+const isAdjusted = (row: Pick<ExistingShoppingRow, "origins">) => Boolean(row.origins?.some((origin) => origin.kind === "user_adjust"));
+
 function sameItem(row: ExistingShoppingRow, desired: DesiredItem) {
+  const sameDishes = JSON.stringify(isAdjusted(row) ? dishOriginsOf(row.origins) : row.origins ?? null) === JSON.stringify(desired.origins);
   return (
     row.removedAt === null &&
     row.itemKey === desired.itemKey &&
     row.name === desired.name &&
-    row.quantity === desired.quantity &&
+    // An adjusted quantity is the user's while its dishes are the same.
+    (isAdjusted(row) || row.quantity === desired.quantity) &&
     row.unit === desired.unit &&
     row.category === desired.category &&
-    JSON.stringify(row.origins ?? null) === JSON.stringify(desired.origins)
+    sameDishes
   );
 }
 
@@ -72,6 +79,7 @@ function rank(row: ExistingShoppingRow) {
 export function diffShoppingList(existing: ExistingShoppingRow[], desired: DesiredItem[]): ReconcileOps {
   const groups = new Map<string, ExistingShoppingRow[]>();
   for (const row of existing) {
+    if (isManualKey(row.itemKey)) continue;
     const key = storedItemKey(row);
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(row);
   }
@@ -97,6 +105,12 @@ export function diffShoppingList(existing: ExistingShoppingRow[], desired: Desir
   }
 
   return ops;
+}
+
+// Names of the items whose adjusted quantity this update drops (their dishes changed).
+export function discardedAdjustments(existing: ExistingShoppingRow[], ops: ReconcileOps) {
+  const touched = new Set([...ops.update, ...ops.remove].map((op) => op.id));
+  return existing.filter((row) => touched.has(row.id) && isAdjusted(row) && row.removedAt === null).map((row) => row.name);
 }
 
 export const isEmptyOps = (ops: ReconcileOps) => ops.add.length + ops.update.length + ops.remove.length === 0;

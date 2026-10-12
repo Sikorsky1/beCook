@@ -11,7 +11,9 @@ export type ScopedEntity =
   | "shopping"
   | "legacy-origin"
   // B5: a proposed menu not applied yet, per week (never pending: it is not account data).
-  | "menu-proposal";
+  | "menu-proposal"
+  // C6: the Crear menú form (pasted text and preferences), per week, until the menu is saved.
+  | "menu-draft";
 
 export const STORAGE_FORMAT_VERSION = 1;
 
@@ -109,7 +111,10 @@ function keysOfScope(scope: StorageScope) {
 }
 
 // Weeks stored for a scope, as YYYY-Www ids.
-export function listScopedWeeks(scope: StorageScope, entity: "week" | "shopping" = "week") {
+export function listScopedWeeks(
+  scope: StorageScope,
+  entity: "week" | "shopping" | "menu-proposal" | "menu-draft" = "week",
+) {
   const prefix = `becook:${scope}:${entity}:`;
   return keysOfScope(scope)
     .filter((key) => key.startsWith(prefix))

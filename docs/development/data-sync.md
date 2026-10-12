@@ -1,4 +1,4 @@
-# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1, C2, C3, C4)
+# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1, C2, C3, C4, D5, C6, paso 32)
 
 Pasos 06 y 07 del roadmap (H3, H7), sin cambios de base de datos, y paso 10 (B4, H8):
 escrituras de semana transaccionales con versión e idempotencia.
@@ -22,7 +22,8 @@ escrituras de semana transaccionales con versión e idempotencia.
 
 `becook:<scope>:<entidad>[:<semana>]`, con `scope` = `guest` o `u_<userId>`.
 Entidades: `profile`, `pantry`, `week:YYYY-Www`, `selected-week`,
-`shopping:YYYY-Www`, `legacy-origin` (solo invitado).
+`shopping:YYYY-Www`, `menu-proposal:YYYY-Www`, `menu-draft:YYYY-Www`, `legacy-origin` (solo
+invitado).
 
 Valor con versión de formato:
 `{ v: 1, data, savedAt, remoteVersion, pending }`. `remoteVersion` es la versión
@@ -30,8 +31,9 @@ remota sobre la que se basa la copia (semana: `weeks.version`; perfil y despensa
 `updated_at`; despensa desde B7: ver «Despensa (B7)»); `pending` indica un cambio
 local no aceptado aún por el servidor (nunca en invitado).
 
-El borrador de «Crear menú» sigue en `sessionStorage` sin ámbito, a propósito:
-sirve para pasar de invitado a sesión iniciada.
+El formulario de «Crear menú» se guarda por identidad y semana en `menu-draft:YYYY-Www` (C6) y
+la propuesta sin aplicar en `menu-proposal:YYYY-Www` (B5). Solo el viaje de invitado a sesión
+iniciada usa además una copia en `sessionStorage` sin ámbito, a propósito.
 
 ## Fuente de verdad y conflictos
 
@@ -277,6 +279,65 @@ encontrar las filas que tenía, relee la cuenta en lugar de recrearlas (escenari
 `scripts/pantry-db-tests.cjs`, con una copia congelada del cliente de ab2433b en
 `tests/fixtures/`).
 
+## Compra completa, artículos manuales y acciones de despensa (D5)
+
+Pasos 30 y 31 del roadmap. Código en `src/lib/data/shopping.ts` (ediciones), `src/lib/shopping/`
+(`reconcile.ts`, `units.ts`), `src/lib/data/pantry.ts` y `src/lib/pantryStorage.ts`; migración
+`20261014090000_shopping_manual_items` (aditiva: trigger `shopping_items_guard_manual` y función
+`edit_shopping_items`, `SECURITY INVOKER`, solo `authenticated`; sin columnas nuevas ni cambios en
+funciones existentes).
+
+- **Artículo manual** (algo que no está en el menú): solo en la lista de esa semana y solo si la
+  semana ya tiene lista. Convención sin columnas nuevas: `item_key = 'manual|<nombre normalizado>'`
+  (uno por nombre en la lista, sin mayúsculas, acentos ni plurales simples) y
+  `origins = [{kind: "manual", quantity}]`. Se ve siempre como línea propia («Añadido por ti»),
+  aunque coincida con un ingrediente de los platos.
+- **`edit_shopping_items(año, semana, lista, ops)`** sobre la lista vigente (si no lo es →
+  `stale`, nada escrito; semana bloqueada `FOR SHARE`, como los marcados). `add` (≤ 50) con id
+  elegido por el cliente: reenvío → `duplicate`; misma clave activa → `existing` (dos dispositivos
+  a la vez → una fila). `set_quantity` (≤ 50) sobre cualquier fila activa: un manual cambia
+  cantidad y unidad; un artículo de los platos conserva su unidad (y su clave) y guarda sus
+  orígenes de platos más `{kind: "user_adjust", quantity}`. `remove` (≤ 50) solo de manuales
+  (`not_manual` si no). Nunca cambia `week_signature`, `ingredient_basis` ni `reconciled_at`.
+  Resultado `{status: applied | duplicate | existing | stale | no_week, list, results}`.
+- **Protección en servidor** (`shopping_items_guard_manual`, BEFORE UPDATE OR DELETE): un artículo
+  manual solo lo borra o cambia `edit_shopping_items` (permiso local de transacción
+  `becook.shopping_edit`); cualquier otro DELETE se ignora en silencio y cualquier otro UPDATE
+  también, salvo que solo cambie el marcado (`checked`, `checked_quantity`, `needs_review`,
+  `updated_at`). Borrar la lista, la semana o la cuenta lo borra (cascada, profundidad de trigger
+  > 1, como en C2).
+- **Reconciliación** (C4): `diffShoppingList` excluye los manuales; un ajuste `user_adjust` se
+  respeta mientras los orígenes de platos de ese ingrediente sean los mismos; si cambian, la fila se
+  recalcula (se pierde el ajuste) y la vista lo avisa (`discardedAdjustments`: «Hemos recalculado
+  cantidades que habías cambiado»).
+- **Sin conexión**: cada edición se aplica al momento en la copia del dispositivo y queda en
+  `pendingEdits` (con su id y un token por edición); se envía en la misma cola que los marcados
+  (un marcado de un artículo añadido sin conexión espera a que llegue el artículo) y antes que
+  ellos al cargar o reconciliar. La última cantidad de una fila gana; un `add` nunca se descarta
+  (si su respuesta se perdió, el reenvío es `duplicate`). Lista sustituida o semana borrada →
+  ediciones descartadas con el aviso de cambios no guardados. Una lista generada sin conexión se
+  guarda sin sus manuales y estos se envían después como ediciones.
+- **`fromCards`** cuenta solo orígenes de ficha (`card_reviewed`, `card_inferred`); un manual, un
+  ajuste o un tipo desconocido no es una ficha. `parseShoppingOrigins` acepta `manual` y
+  `user_adjust` y sigue descartando tipos desconocidos.
+- **Despensa desde Compra**: «Se me acabó» en un artículo omitido por estar en la despensa →
+  `set_pantry_items_active(false)` del artículo de despensa con ese nombre (mismo criterio que la
+  clasificación: sin mayúsculas, acentos ni plurales simples); vuelve a «Te falta comprar».
+  «Añadir a despensa» en un comprado → lo añade (sección por la de la tienda: despensa → básicos,
+  congelados → congelados, resto → otros) o, si estaba agotado, lo marca «Tengo».
+- **Despensa**: «Tengo / Se acabó» fija el valor (no alterna); varios básicos en una sola
+  `add_pantry_items`; borrar oculta el artículo al momento y lo borra en la cuenta tras ~6 s salvo
+  «Deshacer» (salir de la página o cambiar de identidad confirma lo pendiente).
+- Invitado: manuales, cantidades y despensa solo en el dispositivo.
+
+Despliegue: migración antes que el código. Con la migración aplicada, el cliente de `main`
+(f810818, copias congeladas en `tests/fixtures/legacy-shopping-*-f810818.ts`) lee los manuales como
+artículos normales (su lector descarta el origen `manual`), puede marcarlos, y cuando su
+reconciliación pide quitarlos el trigger los deja (escenario de `scripts/shopping-manual-db-tests.cjs`).
+Límites conocidos de ese cliente: si cae al respaldo de lista nueva, los manuales se quedan en la
+lista anterior; y al reconciliar un artículo de platos sobrescribe su cantidad ajustada. Sin la
+migración, el cliente nuevo guarda las ediciones como pendientes en el dispositivo.
+
 ## Aplicar un menú y estados de guardado (B5)
 
 Pasos 11 y 15 del roadmap (H9). Sin cambios de base de datos.
@@ -310,6 +371,13 @@ Pasos 11 y 15 del roadmap (H9). Sin cambios de base de datos.
   cambios… que no se guardaron» (respuesta perdida).
 - **Compra pendiente**: una lista generada sin guardar en la cuenta o marcados no aceptados marcan
   la caché `shopping` como `pending`, así que el aviso de cierre de sesión los tiene en cuenta.
+- **«Repetir la semana N»** (paso 32, `src/lib/repeatWeek.ts`): en una semana vacía, si la
+  anterior tiene algún plato, copia platos y fichas (`lunchRecipe`/`dinnerRecipe`) con
+  `applyMenuToWeek`/`saveWeek` sin modificarlos, como un menú importado (`generationRequestId:
+  null`: contexto del perfil actual) y sin preparar la compra (se prepara al abrir Compra). Nunca
+  reemplaza un menú: si otro llega entre la lectura y la escritura, se avisa y se vuelve a leer. En
+  `pending` el reintento es el de `SyncStatus` (clave nueva; la versión esperada evita duplicar).
+  Invitado: solo en el dispositivo.
 
 ## Perfil y onboarding (D2)
 
@@ -445,6 +513,58 @@ C2 y el contexto alimentario de C1.
 - Pruebas: `tests/restriction-check.test.cjs` (léxico, `checkDish`, texto libre, defectos del
   filtro anterior), más casos en `menu-generation`, `dish-substitution` y `recipe-cards`.
 
+## Importación y borradores de Crear menú (C6)
+
+Sin cambios de esquema ni de datos remotos: todo vive en el navegador y en `/api/import-menu`.
+
+- **Parser local primero** (`parseMenuTextLocally`, `src/lib/importMenu.ts`). Un texto es
+  inequívoco si cada línea no vacía es una cabecera de día, una línea «Comida:»/«Cena:» bajo un
+  día (con una sola etiqueta: «Comida: X; Cena: Y» es ambiguo), una fila de 3 columnas (día,
+  comida, cena) o la cabecera DÍA|COMIDA|CENA; sin días ni comidas repetidos y títulos de ≤ 120
+  caracteres. Un solo separador por línea: tabulador si lo hay, si no `|`; por espacios (2 o más)
+  solo si hay al menos dos filas así y todas tienen 3 columnas alineadas (tabla de ancho fijo).
+  Una celda puede repetir su etiqueta («Comida: Lentejas»); la etiqueta de la otra comida es
+  ambigua. Libre: vacío, «LIBRE»/«Libre.», «-», «–», «—», «·», «x» o «/». Entonces se ordena en
+  el dispositivo, sin petición, sin cuota y también para invitados. Una comida que falta o una
+  celda vacía queda libre y se avisa. Cualquier otra cosa es ambigua y va a la IA (solo con
+  sesión; el invitado ve el aviso de inicio de sesión con su texto conservado). Los límites de
+  texto que comprueba el navegador están en `importTextLimits` (iguales a los de `ai-limits.ts`).
+- **Ruta** (`/api/import-menu`, tras el guard de A3). Orden: 400 con `reason` (`not_text`, `empty`,
+  `too_long` > 8.000 caracteres, `too_many_lines` > 80 líneas no vacías) → el mismo parser local
+  (responde `parsedBy: "local"` sin abrir registro de uso: protege a clientes anteriores) → 422
+  `no_menu_found` si el texto no nombra ningún día (gratis; aquí cuentan también abreviaturas, «X»
+  a principio de línea y los nombres en inglés) → cuota (A4) → OpenAI con esfuerzo bajo y
+  `max_completion_tokens` 2.000 → 422 `empty_menu` si la IA no encuentra ningún plato (cuenta: hubo
+  tokens, y el mensaje lo dice) → 502 con `reason` (`invalid_output`, `truncated_output`, `empty_output`, `timeout`,
+  `ai_failed`). Un 422 local con todos los huecos libres también es `empty_menu`, sin IA. El
+  cliente traduce cada `reason` (`importErrorMessage`) y no ofrece «Reintentar» en 400/422.
+- **Borrador del formulario** (`becook:<scope>:menu-draft:YYYY-Www`): modo, texto pegado y
+  preferencias de esa semana, por identidad. Se guarda solo si el usuario tocó el formulario (o si
+  ya había borrador), para que los comensales del perfil sigan mandando en visitas posteriores. Se
+  borra al guardar el menú de esa semana, al cerrar sesión con el resto del ámbito y al pasar la
+  semana. El borrador de `sessionStorage` sin ámbito se mantiene solo para el viaje invitado →
+  login (tiene prioridad al volver).
+- **Propuesta** (`menu-proposal`, B5) guarda además `source` (`import`/`generate`), `parsedBy`,
+  `contextVersion` (`foodContext.version` de C1; null en importados) y `createdAt`. Las de antes de
+  C6 se leen deduciendo el origen de su `foodContext`.
+- **Semanas pasadas**: al cargar Crear menú se borran borradores y propuestas sin aplicar de
+  semanas anteriores a la actual (solo de la identidad en pantalla), salvo la semana seleccionada
+  (una semana pasada elegida con `?week=`).
+- **Estado de la página**: «Procesar menú» y «Crear menú semanal» se rechazan y se desactivan
+  mientras «Usar este menú» guarda o se puede deshacer. Un cambio de identidad sin recargar vuelve
+  a montar la página (`key` = ámbito).
+- **«Usar este menú»**: se rechaza en el manejador mientras haya otra generación activa de esa
+  identidad y semana (`activeGenerationRun`). En una propuesta generada con sesión se compara su
+  `contextVersion` con `week_food_context_status.current.version`; si difiere (o ya no hay perfil)
+  se avisa en la barra con «Usar igualmente» / «Ahora no», sin bloquear. Si la cuenta no responde,
+  no se afirma nada y se sigue.
+- **Avisos en menús importados** (`src/lib/importWarnings.ts`): por plato, la comprobación de C3
+  solo por el nombre (conflicto o posible conflicto, con su base) y las reglas culinarias de C5
+  (salsa sin concretar, «especial»…). Nunca cambian el plato ni bloquean el guardado. Sin perfil, o
+  con un perfil ilegible, solo se aplican las reglas culinarias y se dice.
+- Pruebas: `tests/import-local.test.cjs`, más casos en `ai-routes`, `ai-usage`, `openai-retry` y
+  `create-menu-proposal`.
+
 ## Datos anteriores a B1 (sin ámbito)
 
 Al arrancar, las claves `becook-profile`, `becook-pantry-base` y
@@ -497,3 +617,13 @@ Nunca se asignan a una cuenta automáticamente. Con sesión iniciada aparece
 - `scripts/recipe-cards-db-tests.cjs` (en `test:db`): catálogo para invitados, guardado de fichas
   estimadas, RLS y permisos, inmutabilidad, enlace y edición por la app, comprobaciones de
   propiedad y título, catálogo revisado, despliegue con el cliente anterior y borrado de cuenta.
+- `tests/shopping-manual.test.cjs` y `tests/pantry-actions.test.cjs` (D5): orígenes `manual` y
+  `user_adjust`, diff sin manuales, alta con id y reenvío, sin conexión, respuesta perdida, lotes de
+  ediciones, cambio de platos con manuales, `fromCards`, «Tengo / Se acabó», básicos en bloque y
+  borrado con «Deshacer».
+- `scripts/shopping-manual-db-tests.cjs` (en `test:db`, D5): alta, reenvío y existente,
+  cantidades, guarda del trigger, cascadas, permisos y validación, dos dispositivos,
+  reconciliación del cliente nuevo y despliegue con el cliente de f810818.
+- `tests/import-local.test.cjs` (C6): ver «Importación y borradores de Crear menú (C6)».
+- `tests/navigation.test.cjs` (paso 32): destinos y sección activa, redirección de `/import`,
+  semana vacía y «Repetir la semana N» (cuenta, invitado, semana ocupada, carrera, pendiente).

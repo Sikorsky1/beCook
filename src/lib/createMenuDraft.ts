@@ -1,4 +1,9 @@
-// Keeps the create-menu form while a guest goes to /login and comes back.
+import type { DataIdentity } from "@/lib/data/repositories";
+import { getIsoWeekStorageId, parseIsoWeekId, type IsoWeek } from "@/lib/isoWeek";
+import { listScopedWeeks, readEnvelope, removeScoped, writeScoped } from "@/lib/storage/scoped-storage";
+
+// Keeps the create-menu form while a guest goes to /login and comes back. Unscoped on purpose:
+// the form must cross from the guest to the account that signs in (see data-sync.md).
 const CREATE_MENU_DRAFT_KEY = "becook-create-menu-draft";
 
 export type CreateMenuDraft = {
@@ -18,25 +23,81 @@ export function saveCreateMenuDraft(draft: CreateMenuDraft) {
   }
 }
 
+function parseCreateMenuDraft(value: unknown): CreateMenuDraft | null {
+  if (!value || typeof value !== "object") return null;
+  const draft = value as Partial<CreateMenuDraft>;
+  if (draft.mode !== "import" && draft.mode !== "generate") return null;
+  return {
+    mode: draft.mode,
+    menuText: typeof draft.menuText === "string" ? draft.menuText : "",
+    freeTextPrompt: typeof draft.freeTextPrompt === "string" ? draft.freeTextPrompt : "",
+    peopleCount: typeof draft.peopleCount === "number" ? draft.peopleCount : 2,
+    menuStyles: Array.isArray(draft.menuStyles)
+      ? draft.menuStyles.filter((style): style is string => typeof style === "string")
+      : [],
+    elaborationLevel: typeof draft.elaborationLevel === "number" ? draft.elaborationLevel : 4,
+  };
+}
+
 export function consumeCreateMenuDraft(): CreateMenuDraft | null {
   try {
     const raw = window.sessionStorage.getItem(CREATE_MENU_DRAFT_KEY);
     window.sessionStorage.removeItem(CREATE_MENU_DRAFT_KEY);
     if (!raw) return null;
-    const value = JSON.parse(raw) as Partial<CreateMenuDraft>;
-    if (value.mode !== "import" && value.mode !== "generate") return null;
-    return {
-      mode: value.mode,
-      menuText: typeof value.menuText === "string" ? value.menuText : "",
-      freeTextPrompt: typeof value.freeTextPrompt === "string" ? value.freeTextPrompt : "",
-      peopleCount: typeof value.peopleCount === "number" ? value.peopleCount : 2,
-      menuStyles: Array.isArray(value.menuStyles)
-        ? value.menuStyles.filter((style): style is string => typeof style === "string")
-        : [],
-      elaborationLevel: typeof value.elaborationLevel === "number" ? value.elaborationLevel : 4,
-    };
+    return parseCreateMenuDraft(JSON.parse(raw));
   } catch {
     return null;
+  }
+}
+
+// --- The form on this device, per identity and week (C6, step 22) -----------------------------
+// What the user typed or pasted for a week is kept on the device under their identity scope
+// (becook:<scope>:menu-draft:YYYY-Www), so leaving the page or reloading never loses it, and no
+// other account, the guest or another week ever sees it. Removed when that week's menu is saved,
+// on sign-out with the rest of the scope, and once the week is past.
+export function readMenuFormDraft(identity: DataIdentity, isoWeek: IsoWeek): CreateMenuDraft | null {
+  try {
+    return parseCreateMenuDraft(readEnvelope(identity.scope, "menu-draft", getIsoWeekStorageId(isoWeek))?.data);
+  } catch {
+    return null;
+  }
+}
+
+export function writeMenuFormDraft(identity: DataIdentity, isoWeek: IsoWeek, draft: CreateMenuDraft) {
+  try {
+    writeScoped(identity.scope, "menu-draft", draft, { week: getIsoWeekStorageId(isoWeek) });
+  } catch {
+    // Storage full or unavailable: only the unsent form is at stake.
+  }
+}
+
+export function clearMenuFormDraft(identity: DataIdentity, isoWeek: IsoWeek) {
+  try {
+    removeScoped(identity.scope, "menu-draft", getIsoWeekStorageId(isoWeek));
+  } catch {
+    // Nothing to clear.
+  }
+}
+
+// Decision 10 of the plan: drafts and unapplied proposals of past weeks are dropped when Crear menú
+// loads (only for the identity on screen). The week on screen is never dropped, even if it is a
+// past one chosen with ?week=: the user is working on it.
+export function pruneStaleMenuDrafts(identity: DataIdentity, currentWeek: IsoWeek, selectedWeek?: IsoWeek) {
+  const keep = selectedWeek ? getIsoWeekStorageId(selectedWeek) : null;
+  try {
+    for (const entity of ["menu-draft", "menu-proposal"] as const) {
+      for (const weekId of listScopedWeeks(identity.scope, entity)) {
+        if (weekId === keep) continue;
+        const parsed = parseIsoWeekId(weekId);
+        const past =
+          !parsed.ok ||
+          parsed.week.isoYear < currentWeek.isoYear ||
+          (parsed.week.isoYear === currentWeek.isoYear && parsed.week.isoWeek < currentWeek.isoWeek);
+        if (past) removeScoped(identity.scope, entity, weekId);
+      }
+    }
+  } catch {
+    // Storage unavailable: nothing stored to prune.
   }
 }
 
@@ -50,7 +111,8 @@ const GENERATION_MARKER_KEY = "becook-create-menu-generating";
 export type GenerationResult =
   | { status: "proposal" }
   // profileRequired: 409 without a saved profile (ola 4, M-3): not a failure, nothing to retry.
-  | { status: "error"; message: string; limit: boolean; profileRequired?: boolean }
+  // fixText: 400/422 of an import (C6): the pasted text must change; retrying it as is will not help.
+  | { status: "error"; message: string; limit: boolean; profileRequired?: boolean; fixText?: boolean }
   | { status: "cancelled" }
   | { status: "login_required" };
 

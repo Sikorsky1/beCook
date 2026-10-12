@@ -4,12 +4,13 @@ import { Plus, Trash2 } from "lucide-react";
 import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 
+import { PantryBasicsPicker } from "@/components/features/PantryBasicsPicker";
+import { PantryStockToggle } from "@/components/features/PantryStockToggle";
 import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
 import { ShoppingTabs } from "@/components/layout/ShoppingTabs";
 import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { CategoryPill as BaseCategoryPill } from "@/components/ui/CategoryPill";
-import { CheckboxItem } from "@/components/ui/CheckboxItem";
 import { IconButton } from "@/components/ui/IconButton";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { TextInput } from "@/components/ui/TextInput";
@@ -18,19 +19,28 @@ import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
 import { SyncStatus } from "@/components/session/SyncStatus";
 import {
   addPantryItem,
+  addPantryItems,
+  createDeferredDeletes,
   deletePantryItem,
   loadPantry,
   readPantryView,
   setPantryItemActive,
   type PantryChangeResult,
 } from "@/lib/data/pantry";
+import type { DataIdentity } from "@/lib/data/repositories";
 import { pageShellClass } from "@/lib/ui";
 import {
   capitalizePantryItemName,
   normalizePantryItemName,
+  pantryBasicsToOffer,
+  pantryCategoryOrder,
+  pantryItemKey,
   type PantryCategory,
   type PantryStorageItem,
 } from "@/lib/pantryStorage";
+
+// D5: a delete waits this long so it can be undone.
+const DELETE_DELAY_MS = 6000;
 
 type PantryCategoryGroup = {
   category: PantryCategory;
@@ -43,16 +53,6 @@ type PantryCategoryProgress = {
   total: number;
   isCompleted: boolean;
 };
-
-const pantryCategoryOrder: PantryCategory[] = [
-  "básicos",
-  "especias",
-  "aceites y vinagres",
-  "salsas",
-  "conservas",
-  "congelados",
-  "otros",
-];
 
 function groupPantryItems(items: PantryStorageItem[]): PantryCategoryGroup[] {
   return pantryCategoryOrder.map((category) => ({
@@ -76,7 +76,7 @@ function PantryProgress({
 }: PantryProgressProps) {
   return (
     <StatusPill>
-      {activeItemsCount}/{totalItemsCount} activos
+      {activeItemsCount}/{totalItemsCount} en casa
     </StatusPill>
   );
 }
@@ -100,7 +100,7 @@ function PantryCategoryPill({
       isSelected={isSelected}
       label={category}
       meta={`${active}/${total}`}
-      aria-label={`${category}: ${active} de ${total} activos`}
+      aria-label={`${category}: ${active} de ${total} disponibles`}
       onClick={onSelect}
     />
   );
@@ -151,7 +151,7 @@ type PantryItemsForCategoryProps = {
   onDraftItemNameChange: (itemName: string) => void;
   onShowAddItem: () => void;
   onSubmitAddItem: (event: FormEvent<HTMLFormElement>) => void;
-  onToggleItem: (category: PantryCategory, itemName: string) => void;
+  onSetItemActive: (category: PantryCategory, itemName: string, active: boolean) => void;
 };
 
 function PantryItemsForCategory({
@@ -163,19 +163,18 @@ function PantryItemsForCategory({
   onDraftItemNameChange,
   onShowAddItem,
   onSubmitAddItem,
-  onToggleItem,
+  onSetItemActive,
 }: PantryItemsForCategoryProps) {
   return (
     <Card className="overflow-hidden">
       <div className="sticky top-0 z-10 border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-3 sm:px-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="t-h3 capitalize text-[color:var(--color-foreground)]">
+            <h2 tabIndex={-1} className="t-h3 capitalize text-[color:var(--color-foreground)]">
               {group.category}
             </h2>
-            <p className="t-micro mt-1">
-              {group.items.filter((item) => item.active).length}/
-              {group.items.length} activos
+            <p className="t-meta mt-1">
+              {group.items.filter((item) => item.active).length} de {group.items.length} en casa
             </p>
           </div>
 
@@ -221,30 +220,34 @@ function PantryItemsForCategory({
 
       {group.items.length > 0 ? (
         <ul className="max-h-[min(56dvh,34rem)] overflow-y-auto divide-y divide-[color:var(--color-border)]">
-          {group.items.map((item) => {
-            return (
-              <li key={`${item.category}:${item.name}`}>
-                <CheckboxItem
-                  checked={item.active}
-                  label={item.name}
-                  onChange={() => onToggleItem(group.category, item.name)}
-                  status={item.active ? "En despensa" : "Agotado"}
-                >
-                  <IconButton
-                    aria-label={`Borrar ${item.name}`}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onDeleteItem(group.category, item.name);
-                    }}
-                    className="shrink-0"
-                  >
-                    <Trash2 aria-hidden="true" className="h-4 w-4" />
-                  </IconButton>
-                </CheckboxItem>
-              </li>
-            );
-          })}
+          {group.items.map((item) => (
+            <li key={`${item.category}:${item.name}`} data-pantry-key={pantryItemKey(item)} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
+              <div className="min-w-0 flex-1 basis-40">
+                <p className="t-body-strong text-[color:var(--color-foreground)]">{item.name}</p>
+                <p className="t-meta mt-0.5">{item.active ? "En casa" : "Se ha acabado: sale en la compra"}</p>
+              </div>
+              <PantryStockToggle
+                name={item.name}
+                active={item.active}
+                onChange={(active) => onSetItemActive(group.category, item.name, active)}
+              />
+              <IconButton
+                aria-label={`Borrar ${item.name}`}
+                onClick={(event) => {
+                  // The line disappears: the focus goes to the next line (or the previous one, or
+                  // the section's title).
+                  const line = event.currentTarget.closest("li");
+                  const target = (line?.nextElementSibling ?? line?.previousElementSibling)?.querySelector<HTMLElement>("button")
+                    ?? line?.closest("article")?.querySelector<HTMLElement>("h2");
+                  onDeleteItem(group.category, item.name);
+                  requestAnimationFrame(() => target?.focus());
+                }}
+                className="shrink-0"
+              >
+                <Trash2 aria-hidden="true" className="h-4 w-4" />
+              </IconButton>
+            </li>
+          ))}
         </ul>
       ) : (
         <div className="t-meta px-4 py-5 sm:px-5">
@@ -273,7 +276,63 @@ export default function PantryPage() {
   );
   const [selectedCategory, setSelectedCategory] =
     useState<PantryCategory | null>(pantryCategoryOrder[0]);
-  const selectedCount = pantryItems.filter((item) => item.active).length;
+  // D5: deletes waiting ~6 s so they can be undone (hidden meanwhile), with the names shown.
+  const [pendingDeletes, setPendingDeletes] = useState<string[]>([]);
+  const [deletedNames, setDeletedNames] = useState<Record<string, string>>({});
+  const [basicsMessage, setBasicsMessage] = useState("");
+  // An item brought back by «Deshacer», to give it the focus once it is shown again.
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const deletesRef = useRef<ReturnType<typeof createDeferredDeletes> | null>(null);
+  const deleteTargets = useRef(new Map<string, { identity: DataIdentity; category: PantryCategory; name: string }>());
+  const currentScopeRef = useRef<string | null>(null);
+  const visibleItems = pantryItems.filter((item) => !pendingDeletes.includes(pantryItemKey(item)));
+  const selectedCount = visibleItems.filter((item) => item.active).length;
+
+  useEffect(() => {
+    currentScopeRef.current = identity.status === "ready" ? identity.scope : null;
+  }, [identity.status, identity.scope]);
+
+  // The deferred deletes live as long as the page; leaving it (or another identity) commits them.
+  useEffect(() => {
+    const deletes = createDeferredDeletes({
+      delayMs: DELETE_DELAY_MS,
+      onChange: setPendingDeletes,
+      commit: (key) => {
+        const target = deleteTargets.current.get(key);
+        deleteTargets.current.delete(key);
+        if (!target) return;
+        setSavingChanges((count) => count + 1);
+        void deletePantryItem(target.identity, target.category, target.name).then((result) => {
+          setSavingChanges((count) => count - 1);
+          if (currentScopeRef.current !== target.identity.scope) return;
+          setPantryItems(readPantryView(target.identity));
+          if (result.status === "conflict") setSyncState({ discardedLocalChanges: true });
+          else setSyncState(result.status === "pending" ? { pending: true } : {});
+        });
+      },
+    });
+    deletesRef.current = deletes;
+    // Closing the tab or leaving the app (pagehide, also on mobile) commits what is pending.
+    const commitPending = () => deletes.flush();
+    window.addEventListener("pagehide", commitPending);
+    return () => {
+      window.removeEventListener("pagehide", commitPending);
+      deletes.flush();
+    };
+  }, []);
+
+  useEffect(() => {
+    const deletes = deletesRef.current;
+    return () => deletes?.flush();
+  }, [identity.scope, identity.epoch]);
+
+  useEffect(() => {
+    if (!focusKey || pendingDeletes.includes(focusKey)) return;
+    const line = Array.from(document.querySelectorAll<HTMLElement>("[data-pantry-key]")).find((element) => element.dataset.pantryKey === focusKey);
+    line?.querySelector<HTMLElement>("button")?.focus();
+    const timer = window.setTimeout(() => setFocusKey(null), 0);
+    return () => window.clearTimeout(timer);
+  }, [focusKey, pendingDeletes, selectedCategory]);
 
   useEffect(() => {
     // Identity first; the pantry shown always belongs to the current identity.
@@ -320,7 +379,7 @@ export default function PantryPage() {
   const showChange = (change: Promise<PantryChangeResult>) => {
     setPantryItems(readPantryView(dataIdentity));
     setSavingChanges((count) => count + 1);
-    void change.then((result) => {
+    return change.then((result) => {
       setSavingChanges((count) => count - 1);
       setPantryItems(readPantryView(dataIdentity));
       if (result.status === "conflict") {
@@ -328,6 +387,7 @@ export default function PantryPage() {
       } else {
         setSyncState(result.status === "pending" ? { pending: true } : {});
       }
+      return result;
     });
   };
 
@@ -359,6 +419,15 @@ export default function PantryPage() {
 
     const normalizedItemName = normalizePantryItemName(displayName);
 
+    // Deleted a moment ago and not yet in the account: adding it again undoes the delete.
+    const key = pantryItemKey({ category, name: displayName });
+    if (pendingDeletes.includes(key)) {
+      undoDelete(key);
+      setAddingCategory(null);
+      setDraftItemName("");
+      return;
+    }
+
     if (
       pantryItems.some(
         (item) =>
@@ -376,7 +445,8 @@ export default function PantryPage() {
     setDraftItemName("");
   };
 
-  const toggleItem = (category: PantryCategory, itemName: string) => {
+  // «Tengo / Se acabó» sets the value (never toggles).
+  const setItemActive = (category: PantryCategory, itemName: string, active: boolean) => {
     const normalizedItemName = normalizePantryItemName(itemName);
     const item = pantryItems.find(
       (pantryItem) =>
@@ -384,16 +454,56 @@ export default function PantryPage() {
         normalizePantryItemName(pantryItem.name) === normalizedItemName,
     );
 
-    if (item) {
-      showChange(setPantryItemActive(dataIdentity, category, item.name, !item.active));
+    if (item && item.active !== active) {
+      showChange(setPantryItemActive(dataIdentity, category, item.name, active));
     }
   };
 
+  // The item disappears at once; it is deleted in the account after ~6 s unless «Deshacer».
   const deleteItem = (category: PantryCategory, itemName: string) => {
-    showChange(deletePantryItem(dataIdentity, category, itemName));
+    const key = pantryItemKey({ category, name: itemName });
+    deleteTargets.current.set(key, { identity: dataIdentity, category, name: itemName });
+    setDeletedNames((current) => ({ ...current, [key]: itemName }));
+    deletesRef.current?.schedule(key);
   };
 
-  const pantryGroups = groupPantryItems(pantryItems);
+  const undoDelete = (key: string, { focus = false } = {}) => {
+    const target = deleteTargets.current.get(key);
+    deletesRef.current?.undo(key);
+    deleteTargets.current.delete(key);
+    if (focus && target) {
+      // The item comes back in its section; the focus goes to it (the «Deshacer» button goes away).
+      setSelectedCategory(target.category);
+      setAddingCategory(null);
+      setFocusKey(key);
+    }
+  };
+
+  const addBasics = (basics: { name: string; category: PantryCategory }[]) => {
+    // A basic deleted a moment ago comes back by undoing that delete.
+    const toAdd = basics.filter((basic) => {
+      const key = pantryItemKey(basic);
+      if (!pendingDeletes.includes(key)) return true;
+      undoDelete(key);
+      return false;
+    });
+    const added = basics.length === 1 ? `«${basics[0].name}» añadido a tu despensa.` : `${basics.length} básicos añadidos a tu despensa.`;
+    if (!toAdd.length) {
+      setBasicsMessage(added);
+      return;
+    }
+    void showChange(addPantryItems(dataIdentity, toAdd)).then((result) =>
+      setBasicsMessage(
+        result.status === "conflict"
+          ? "Tu despensa había cambiado en otro dispositivo: revisa la lista antes de añadir más."
+          : result.status === "pending"
+            ? `${added} Se guardará en tu cuenta al recuperar la conexión.`
+            : added,
+      ),
+    );
+  };
+
+  const pantryGroups = groupPantryItems(visibleItems);
   const categoryProgress = pantryGroups.map((group) => {
     const activeItemsInCategory = group.items.filter((item) => item.active).length;
 
@@ -422,7 +532,7 @@ export default function PantryPage() {
             hasLoadedPantry ? (
               <PantryProgress
                 activeItemsCount={selectedCount}
-                totalItemsCount={pantryItems.length}
+                totalItemsCount={visibleItems.length}
               />
             ) : null
           }
@@ -452,6 +562,28 @@ export default function PantryPage() {
         ) : null}
         {identity.userId ? <SyncNotice state={syncState} /> : null}
 
+        {/* Persistent live region: deletes that can still be undone, and basics just added. */}
+        <div role="status" className="space-y-2 empty:hidden">
+          {pendingDeletes.map((key) => (
+            <div
+              key={key}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-4 py-2"
+            >
+              <p className="text-sm font-semibold text-[color:var(--color-foreground)]">«{deletedNames[key]}» borrado de la despensa.</p>
+              <button
+                type="button"
+                onClick={() => undoDelete(key, { focus: true })}
+                className="min-h-11 rounded-[var(--radius-control)] px-3 text-sm font-semibold text-[color:var(--color-accent-hover)] underline underline-offset-4"
+              >
+                Deshacer
+              </button>
+            </div>
+          ))}
+          {basicsMessage ? <p className="t-meta px-1">{basicsMessage}</p> : null}
+        </div>
+
+        {hasLoadedPantry ? <PantryBasicsPicker offered={pantryBasicsToOffer(visibleItems)} onAdd={addBasics} /> : null}
+
         <section className="transition-opacity duration-200 ease-out motion-reduce:transition-none">
           {!hasLoadedPantry ? (
             <Card className="p-6 sm:p-7">
@@ -472,7 +604,7 @@ export default function PantryPage() {
               onDraftItemNameChange={setDraftItemName}
               onShowAddItem={() => showAddItem(selectedGroup.category)}
               onSubmitAddItem={(event) => addItem(selectedGroup.category, event)}
-              onToggleItem={toggleItem}
+              onSetItemActive={setItemActive}
             />
           ) : (
             <Card className="t-meta p-6">

@@ -8,8 +8,10 @@
 import { getDayPosition } from "@/lib/isoWeek";
 import { recipeTitleKey, type RecipeCard } from "@/lib/recipes/card";
 import {
+  dishOriginsOf,
   supermarketCategoryLabels,
   type ShoppingOrigin,
+  type ShoppingRowOrigin,
   type ShoppingViewItem,
   type StoredShoppingItem,
   type SupermarketCategory,
@@ -188,7 +190,7 @@ export function aiItemsFromList(items: StoredShoppingItem[], dishes: PlannedDish
   const byDish = new Map<string, { slot: string; items: DishIngredient[] }>();
 
   for (const item of items) {
-    for (const origin of item.origins ?? []) {
+    for (const origin of dishOriginsOf(item.origins)) {
       if (origin.kind !== "ai_title") continue;
       const slot = slotKey(origin.day, origin.meal);
       const ingredient: DishIngredient = { name: item.name, quantity: origin.quantity, unit: origin.quantity === null ? null : item.unit, category: item.category };
@@ -213,7 +215,7 @@ export function aiItemsFromList(items: StoredShoppingItem[], dishes: PlannedDish
 // quota when the list was updated). Lists without origins (before C4) are never reported.
 export function pendingDishesOf(items: StoredShoppingItem[], dishes: PlannedDish[]) {
   const covered = new Set<string>();
-  for (const item of items) for (const origin of item.origins ?? []) covered.add(`${slotKey(origin.day, origin.meal)}|${origin.dish}`);
+  for (const item of items) for (const origin of dishOriginsOf(item.origins)) covered.add(`${slotKey(origin.day, origin.meal)}|${origin.dish}`);
   return dishes.filter((dish) => !covered.has(`${slotKey(dish.day, dish.meal)}|${dish.dish}`));
 }
 
@@ -234,11 +236,16 @@ export function pantryNameKeys(pantryNames: string[]) {
   return new Set(pantryNames.map(shoppingNameKey));
 }
 
-export function classifyShoppingLine(item: Pick<ShoppingViewItem, "name" | "needsReview" | "removed">, checked: boolean, pantry: Set<string>): ShoppingLineStatus {
+// An item added by hand (D5) is never «usually at home»: the user asked for it explicitly.
+export function classifyShoppingLine(
+  item: Pick<ShoppingViewItem, "name" | "needsReview" | "removed"> & { manual?: boolean },
+  checked: boolean,
+  pantry: Set<string>,
+): ShoppingLineStatus {
   if (checked && item.needsReview) return "review";
   if (checked && item.removed) return "bought_unneeded";
   if (checked) return "bought";
-  if (pantry.has(shoppingNameKey(item.name))) return "pantry";
+  if (!item.manual && pantry.has(shoppingNameKey(item.name))) return "pantry";
   return "to_buy";
 }
 
@@ -253,8 +260,8 @@ export function classifyShoppingView(items: ShoppingViewItem[], checkedIds: stri
 
 // «Lunes, comida: Lentejas» for the origin line of an item.
 const dayLabels = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-export function describeOrigins(origins: ShoppingOrigin[], dishes: PlannedDish[]) {
+export function describeOrigins(origins: ShoppingRowOrigin[], dishes: PlannedDish[]) {
   const titles = new Map(dishes.map((dish) => [`${slotKey(dish.day, dish.meal)}|${dish.dish}`, dish.title]));
-  const names = origins.map((origin) => titles.get(`${slotKey(origin.day, origin.meal)}|${origin.dish}`) ?? `${dayLabels[origin.day]} ${origin.meal === "lunch" ? "comida" : "cena"}`);
+  const names = dishOriginsOf(origins).map((origin) => titles.get(`${slotKey(origin.day, origin.meal)}|${origin.dish}`) ?? `${dayLabels[origin.day]} ${origin.meal === "lunch" ? "comida" : "cena"}`);
   return [...new Set(names)];
 }

@@ -1,11 +1,10 @@
-// Step 33: tab and group semantics, keyboard model of the tabs and minimum sizes of the screens
-// changed in this step. There is no DOM renderer in the test suite, so the markup is checked
-// statically on the source of each screen.
+// Step 33: tab and group semantics and minimum sizes of the screens changed in this step (and of
+// the screens added in wave 7: C6, D5 and NAV). There is no DOM renderer in the test suite, so the
+// markup is checked statically on the source of each screen.
 const {test} = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const {nextTabIndex, tabIds} = require("../src/lib/rovingTabs.ts");
 
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
@@ -18,33 +17,9 @@ function sourceFiles(dir) {
   });
 }
 
-test("arrow keys move between tabs and wrap around; Inicio/Fin go to the ends", () => {
-  assert.equal(nextTabIndex("ArrowRight", 0, 2), 1);
-  assert.equal(nextTabIndex("ArrowRight", 1, 2), 0);
-  assert.equal(nextTabIndex("ArrowLeft", 0, 2), 1);
-  assert.equal(nextTabIndex("ArrowLeft", 2, 3), 1);
-  assert.equal(nextTabIndex("Home", 2, 3), 0);
-  assert.equal(nextTabIndex("End", 0, 3), 2);
-});
-
-test("other keys keep their default action (Tab leaves the tab list, Enter/Space click)", () => {
-  for (const key of ["Tab", "Enter", " ", "ArrowDown", "ArrowUp", "a"]) {
-    assert.equal(nextTabIndex(key, 0, 2), null, key);
-  }
-  assert.equal(nextTabIndex("ArrowRight", 0, 0), null);
-});
-
-test("each tab and its panel share stable, distinct ids", () => {
-  assert.deepEqual(tabIds("create-menu", "import"), {
-    tab: "create-menu-tab-import",
-    panel: "create-menu-panel-import",
-  });
-  assert.notEqual(tabIds("create-menu", "import").panel, tabIds("create-menu", "generate").panel);
-});
-
 test("every role=tablist is a complete tab pattern: tabs, panels, aria-controls and roving tabindex", () => {
   const withTablist = sourceFiles("src").filter(file => read(file).includes('role="tablist"'));
-  assert.ok(withTablist.length > 0);
+  // C6 (step 32): Crear menú has no tabs any more; any tab list that appears must still be complete.
   for (const file of withTablist) {
     const source = read(file);
     for (const required of ['role="tab"', "aria-selected=", "aria-controls=", 'role="tabpanel"', "aria-labelledby=", "tabIndex=", "onKeyDown="]) {
@@ -54,14 +29,17 @@ test("every role=tablist is a complete tab pattern: tabs, panels, aria-controls 
   }
 });
 
-test("category selectors of Compra and Despensa are toggle-button groups, not tabs", () => {
-  for (const file of ["src/components/pages/ShoppingListPage.tsx", "src/components/pages/PantryPage.tsx"]) {
-    const source = read(file);
-    assert.ok(!source.includes('role="tablist"'), file);
-    assert.match(source, /role="group"\s+aria-label="Categorías de (compra|despensa)"/);
-    // The pill announces its progress in words, not just «2/5».
-    assert.match(source, /aria-label=\{`\$\{category\}: \$\{\w+\} de \$\{total\} \w+`\}/);
-  }
+test("Despensa's category selector is a toggle-button group and Compra's sections are links, not tabs", () => {
+  const pantry = read("src/components/pages/PantryPage.tsx");
+  assert.ok(!pantry.includes('role="tablist"'));
+  assert.match(pantry, /role="group"\s+aria-label="Categorías de despensa"/);
+  // The pill announces its progress in words, not just «2/5».
+  assert.match(pantry, /aria-label=\{`\$\{category\}: \$\{\w+\} de \$\{total\} \w+`\}/);
+  // D5: Compra is one continuous list; its quick links name each section and its progress.
+  const shopping = read("src/components/pages/ShoppingListPage.tsx");
+  assert.ok(!shopping.includes('role="tablist"'));
+  assert.match(shopping, /<nav aria-label="Secciones de la lista"/);
+  assert.match(shopping, /aria-label=\{`\$\{capitalize\(section\.category\)\}: \$\{section\.done\} de \$\{section\.total\} comprados`\}/);
 });
 
 test("chips built on a visually hidden input show the focus on their label", () => {
@@ -77,7 +55,7 @@ test("profile and onboarding fields use 16px text so iOS Safari does not zoom in
   assert.ok(compactInput.split(" ").includes("text-base"), compactInput);
 });
 
-test("screens changed in step 33 keep no text below 12px and no touch target below 44px", () => {
+test("screens changed in step 33 and wave 7 keep no text below 12px and no touch target below 44px", () => {
   const screens = [
     "src/app/week/page.tsx",
     "src/components/features/ProposalDayCard.tsx",
@@ -88,6 +66,15 @@ test("screens changed in step 33 keep no text below 12px and no touch target bel
     "src/components/features/ProfileFields.tsx",
     "src/app/profile/page.tsx",
     "src/app/onboarding/page.tsx",
+    // Wave 7 (C6, D5, NAV): new screens and components keep the same minimums.
+    "src/components/features/ImportMenuPanel.tsx",
+    "src/components/features/ShoppingSection.tsx",
+    "src/components/features/ManualItemForm.tsx",
+    "src/components/features/QuantityEditor.tsx",
+    "src/components/features/PantryStockToggle.tsx",
+    "src/components/features/PantryBasicsPicker.tsx",
+    "src/components/pages/PantryPage.tsx",
+    "src/components/layout/BottomNavigation.tsx",
   ];
   for (const file of screens) {
     const source = read(file);

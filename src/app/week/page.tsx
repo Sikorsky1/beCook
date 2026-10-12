@@ -23,17 +23,21 @@ import {
   isSameIsoWeek,
   type IsoWeek,
 } from "@/lib/isoWeek";
+import { resolveApplyWeekAttempt, type ApplyWeekAttempt } from "@/lib/applyWeek";
 import { nextCatalogIdea, requestAiIdea } from "@/lib/dishSubstitution";
 import { foodContextChangeNotice, type WeekFoodContextStatus } from "@/lib/menu-generation/food-context";
 import {
   loadProfile,
   loadWeek,
   loadWeekFoodContext,
+  newRequestKey,
   readCachedWeek,
   readSelectedWeek,
   saveWeekSlot,
   writeSelectedWeek,
 } from "@/lib/data/repositories";
+import { createMenuImportHref } from "@/lib/navigation";
+import { hasPlannedMeals, repeatPreviousWeek, type RepeatWeekResult } from "@/lib/repeatWeek";
 import { pageShellClass } from "@/lib/ui";
 import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
 import { withWeekDates } from "@/lib/weekStorage";
@@ -86,6 +90,16 @@ function WeekPageContent() {
   // C2: the dish card open (one meal), and «Cambiar plato» handed to that day's editor.
   const [dishCardSlot, setDishCardSlot] = useState<{ day: string; meal: MealKey } | null>(null);
   const [dishEditRequest, setDishEditRequest] = useState<{ day: string; meal: MealKey; key: number } | null>(null);
+  // Step 32: the previous week, read only when this one is empty, for «Repetir la semana N».
+  const [previousWeekEntry, setPreviousWeekEntry] = useState<{ key: string; days: WeekDay[] | null } | null>(null);
+  const [repeatNotice, setRepeatNotice] = useState<{ id: number; weekId: string; status: RepeatWeekResult["status"]; message: string } | null>(null);
+  const repeatNoticeRef = useRef<HTMLParagraphElement | null>(null);
+  // Identity and week of the last completed read: the empty state (and the read of the previous
+  // week) only follow a read of the week that is selected now, never a stale one.
+  const [loadedWeekKey, setLoadedWeekKey] = useState<string | null>(null);
+  const [isRepeating, setIsRepeating] = useState(false);
+  const isRepeatingRef = useRef(false);
+  const repeatAttemptRef = useRef<ApplyWeekAttempt<WeekDay[]> | null>(null);
 
   const isCurrentWeek =
     selectedIsoWeek && today ? isSameIsoWeek(selectedIsoWeek, today.week) : false;
@@ -201,6 +215,7 @@ function WeekPageContent() {
         discardedLocalChanges: result.discardedLocalChanges,
         pending: result.pending,
       });
+      setLoadedWeekKey(loadKey);
       setIsLoadingWeek(false);
     }
 
@@ -252,6 +267,74 @@ function WeekPageContent() {
   const foodContextNotice =
     weekDays && foodContextEntry?.key === foodContextKey ? foodContextChangeNotice(foodContextEntry.status) : null;
 
+  const previousIsoWeek = selectedIsoWeek ? addIsoWeeks(selectedIsoWeek, -1) : null;
+  const selectedLoadKey = selectedIsoWeek
+    ? `${identity.scope}:${identity.epoch}:${getIsoWeekStorageId(selectedIsoWeek)}`
+    : null;
+  const isEmptyWeek = selectedLoadKey !== null && loadedWeekKey === selectedLoadKey && !isLoadingWeek && !weekDays;
+  const previousWeekKey =
+    isEmptyWeek && previousIsoWeek && identity.status === "ready"
+      ? `${identity.scope}:${identity.epoch}:${getIsoWeekStorageId(previousIsoWeek)}`
+      : null;
+
+  useEffect(() => {
+    if (!previousWeekKey || !selectedIsoWeek) {
+      return;
+    }
+
+    let isCancelled = false;
+    // The usual read of that week (this identity's cache for a guest, the account otherwise).
+    void loadWeek({ scope: identity.scope, userId: identity.userId }, addIsoWeeks(selectedIsoWeek, -1)).then((result) => {
+      if (!isCancelled) setPreviousWeekEntry({ key: previousWeekKey, days: result.data?.length ? result.data : null });
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [previousWeekKey, selectedIsoWeek, identity.scope, identity.userId]);
+
+  const previousWeekDays =
+    previousWeekEntry?.key === previousWeekKey && hasPlannedMeals(previousWeekEntry.days) ? previousWeekEntry.days : null;
+  const selectedWeekId = selectedIsoWeek ? getIsoWeekStorageId(selectedIsoWeek) : null;
+  const visibleRepeatNotice = repeatNotice && repeatNotice.weekId === selectedWeekId ? repeatNotice : null;
+
+  useEffect(() => {
+    // The result of «Repetir» takes the focus (the button may disappear once the week is read
+    // again). It is not a live region, so it is not announced on top of SyncStatus.
+    if (repeatNotice) repeatNoticeRef.current?.focus();
+  }, [repeatNotice]);
+
+  // «Repetir la semana N»: copies dishes and cards into this empty week; never replaces a menu.
+  const handleRepeatPreviousWeek = async () => {
+    if (!selectedIsoWeek || !previousIsoWeek || !previousWeekDays || isRepeatingRef.current) {
+      return;
+    }
+
+    isRepeatingRef.current = true;
+    setIsRepeating(true);
+    const weekId = getIsoWeekStorageId(selectedIsoWeek);
+    // Same copy and week → same attempt and request key, so a resend is applied only once.
+    const attempt = resolveApplyWeekAttempt(repeatAttemptRef.current, previousWeekDays, weekId, newRequestKey);
+    repeatAttemptRef.current = attempt;
+    const result = await repeatPreviousWeek({
+      identity: { scope: identity.scope, userId: identity.userId },
+      isoWeek: selectedIsoWeek,
+      previousWeek: previousIsoWeek,
+      previousDays: previousWeekDays,
+      attempt,
+    });
+
+    if (result.attempt === "discard") {
+      repeatAttemptRef.current = null;
+    }
+    setRepeatNotice({ id: Date.now(), weekId, status: result.status, message: result.message });
+    if (result.reload) {
+      setReloadCount((count) => count + 1);
+    }
+    isRepeatingRef.current = false;
+    setIsRepeating(false);
+  };
+
   // «Otra idea»: reviewed catalogue first (free); AI only when the user asks after it runs out.
   const handleRequestIdea: RequestDishIdea = (dayName, mealKey, rejected, mode, signal) => {
     if (!weekDays) {
@@ -278,6 +361,7 @@ function WeekPageContent() {
   const goToWeek = (isoWeek: IsoWeek) => {
     setDaySelection(null);
     setWeekNotice(null);
+    setRepeatNotice(null);
     router.push(buildWeekHref("/week", isoWeek), { scroll: false });
   };
 
@@ -473,6 +557,20 @@ function WeekPageContent() {
           </p>
         ) : null}
 
+        {visibleRepeatNotice ? (
+          <p
+            ref={repeatNoticeRef}
+            tabIndex={-1}
+            className={`rounded-[var(--radius-control)] border px-4 py-3 text-sm leading-6 ${
+              visibleRepeatNotice.status === "copied"
+                ? "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)]"
+                : "border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] text-[#8a4e2a]"
+            }`}
+          >
+            {visibleRepeatNotice.message}
+          </p>
+        ) : null}
+
         {weekDays || syncState.offline || syncState.pending ? (
           <SyncStatus
             signedIn={isSignedIn}
@@ -576,25 +674,81 @@ function WeekPageContent() {
               ) : null}
             </div>
           ) : (
-            <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] p-6 text-center">
-              <p className="text-base font-semibold text-[color:var(--color-foreground)]">
-                {isLoadingWeek
-                  ? "Cargando esta semana..."
-                  : "No hay menú para esta semana"}
-              </p>
-              {!isLoadingWeek && selectedIsoWeek ? (
-                <Link
-                  href={buildWeekHref("/create-menu", selectedIsoWeek)}
-                  className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-accent-strong-hover)]"
-                >
-                  Crear menú
-                </Link>
-              ) : null}
-            </div>
+            <EmptyWeekState
+              isLoading={isLoadingWeek || !isEmptyWeek}
+              isoWeek={selectedIsoWeek}
+              previousIsoWeek={previousWeekDays ? previousIsoWeek : null}
+              isRepeating={isRepeating}
+              isGuest={!isSignedIn}
+              onRepeat={() => void handleRepeatPreviousWeek()}
+            />
           )}
         </section>
       </div>
     </main>
+  );
+}
+
+// Step 32: an empty week offers three ways to fill it (guests too): create a menu (main action),
+// repeat the previous week when it has dishes, or import a menu the user already has.
+function EmptyWeekState({
+  isLoading,
+  isoWeek,
+  previousIsoWeek,
+  isRepeating,
+  isGuest,
+  onRepeat,
+}: {
+  isLoading: boolean;
+  isoWeek: IsoWeek | null;
+  previousIsoWeek: IsoWeek | null;
+  isRepeating: boolean;
+  isGuest: boolean;
+  onRepeat: () => void;
+}) {
+  const secondaryClass =
+    "inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-5 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)] sm:w-auto";
+
+  return (
+    <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] p-6 text-center">
+      <p className="text-base font-semibold text-[color:var(--color-foreground)]">
+        {isLoading ? "Cargando esta semana..." : "No hay menú para esta semana"}
+      </p>
+      {!isLoading && isoWeek ? (
+        <div className="mt-4 flex flex-col items-center gap-3">
+          <Link
+            href={buildWeekHref("/create-menu", isoWeek)}
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-accent-strong-hover)] sm:w-auto"
+          >
+            Crear menú
+          </Link>
+          {previousIsoWeek ? (
+            <div className="flex w-full flex-col items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onRepeat}
+                // Busy, not disabled: it keeps the focus and is not dimmed; a second press is ignored.
+                aria-disabled={isRepeating}
+                aria-busy={isRepeating}
+                aria-describedby="repeat-week-help"
+                className={secondaryClass}
+              >
+                {isRepeating ? "Copiando…" : `Repetir la semana ${previousIsoWeek.isoWeek}`}
+              </button>
+              <p id="repeat-week-help" className="max-w-sm text-sm leading-6 text-[color:var(--color-muted-foreground)]">
+                Copia los platos y sus fichas de esa semana ({formatIsoWeekTitle(previousIsoWeek)}).{" "}
+                {isGuest
+                  ? "Se copia en este dispositivo. Para la lista de la compra, inicia sesión."
+                  : "Se guarda con tu perfil actual (raciones y restricciones de hoy). La lista de la compra se prepara cuando abras Compra."}
+              </p>
+            </div>
+          ) : null}
+          <Link href={createMenuImportHref(getIsoWeekStorageId(isoWeek))} className={secondaryClass}>
+            Ya tengo un menú
+          </Link>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

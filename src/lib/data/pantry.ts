@@ -12,8 +12,11 @@
 // - Guests: local only, as before.
 import { pantryRemote, type DataIdentity, type PantryRemote } from "@/lib/data/repositories";
 import type { LoadResult } from "@/lib/data/sync";
+import { shoppingNameKey } from "@/lib/shopping/units";
+import type { SupermarketCategory } from "@/lib/shoppingList";
 import {
   capitalizePantryItemName,
+  pantryCategoryForShopping,
   pantryItemKey,
   pantryItemsOrDefault,
   parseStoredPantryItems,
@@ -306,8 +309,9 @@ export function loadPantry(identity: DataIdentity): Promise<LoadResult<PantrySto
 
 export type PantryChangeResult = {
   // local: guest · synced: in the account · pending: kept on this device, sent on the next load ·
-  // conflict: another device had changed that item; the account copy is shown.
-  status: "local" | "synced" | "pending" | "conflict";
+  // conflict: another device had changed that item; the account copy is shown · missing: there is
+  // no such item (nothing changed).
+  status: "local" | "synced" | "pending" | "conflict" | "missing";
   items: PantryStorageItem[];
 };
 
@@ -415,4 +419,89 @@ export async function importPantryItems(identity: DataIdentity, imported: Pantry
     })));
   });
   return result.status;
+}
+
+// D5 (roadmap step 31): several items at once (the basics picker). One request for all of them;
+// those the pantry already has (same section and name) are left as they are.
+export function addPantryItems(identity: DataIdentity, toAdd: { name: string; category: PantryCategory }[]) {
+  return applyChange(identity, (items) => {
+    for (const entry of toAdd) {
+      const displayName = capitalizePantryItemName(entry.name);
+      const key = pantryItemKey({ category: entry.category, name: displayName });
+      if (!displayName || findShown(items, key) >= 0) continue;
+      const index = indexOfKey(items, key);
+      if (index >= 0) items[index] = { ...items[index], active: true, pending: { op: "active", change: token() } };
+      else items.push({ name: displayName, category: entry.category, active: true, pending: newAdd() });
+    }
+  });
+}
+
+// The pantry item a shopping item stands for: same name, ignoring section, case, accents and simple
+// plurals (as Compra decides «Ya lo tienes habitualmente»).
+function findByShoppingName(identity: DataIdentity, name: string) {
+  const key = shoppingNameKey(name);
+  return readPantryView(identity).find((item) => shoppingNameKey(item.name) === key) ?? null;
+}
+
+const unchanged = (identity: DataIdentity, status: PantryChangeResult["status"]): Promise<PantryChangeResult> =>
+  Promise.resolve({ status, items: readPantryView(identity) });
+
+// Compra «Se me acabó»: an item left out of the list because it is usually at home is used up now.
+export function markPantryItemUsedUp(identity: DataIdentity, name: string) {
+  const item = findByShoppingName(identity, name);
+  if (!item || !item.active) return unchanged(identity, "missing");
+  return setPantryItemActive(identity, item.category, item.name, false);
+}
+
+// Compra «Añadir a despensa»: a bought item is kept at home from now on (added, or back in stock).
+export function ensurePantryItemInStock(identity: DataIdentity, name: string, category: SupermarketCategory) {
+  const item = findByShoppingName(identity, name);
+  if (item?.active) return unchanged(identity, identity.userId ? "synced" : "local");
+  if (item) return setPantryItemActive(identity, item.category, item.name, true);
+  return addPantryItem(identity, pantryCategoryForShopping(category), name);
+}
+
+// Deletes that wait a few seconds so they can be undone («Deshacer»); flush commits what is pending
+// (leaving the page). commit receives the key once; onChange the keys still pending.
+export function createDeferredDeletes({
+  delayMs,
+  commit,
+  onChange = () => {},
+}: {
+  delayMs: number;
+  commit: (key: string) => void;
+  onChange?: (pending: string[]) => void;
+}) {
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const changed = () => onChange([...timers.keys()]);
+  const run = (key: string) => {
+    const timer = timers.get(key);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    timers.delete(key);
+    commit(key);
+  };
+  return {
+    schedule(key: string) {
+      if (timers.has(key)) return;
+      timers.set(key, setTimeout(() => {
+        run(key);
+        changed();
+      }, delayMs));
+      changed();
+    },
+    undo(key: string) {
+      const timer = timers.get(key);
+      if (timer === undefined) return false;
+      clearTimeout(timer);
+      timers.delete(key);
+      changed();
+      return true;
+    },
+    flush() {
+      for (const key of [...timers.keys()]) run(key);
+      changed();
+    },
+    pending: () => [...timers.keys()],
+  };
 }

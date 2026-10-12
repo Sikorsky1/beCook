@@ -2,7 +2,7 @@ import type { ReconcileOps, ReconcileSummary } from "@/lib/shopping/reconcile";
 import {
   parseShoppingOrigins,
   supermarketCategoryLabels,
-  type ShoppingOrigin,
+  type ShoppingRowOrigin,
 } from "@/lib/shoppingList";
 
 import { supabase } from "./client";
@@ -20,7 +20,7 @@ export type ShoppingItem = {
   // C4 (20261013090000_shopping_item_origins). Absent or null on rows made before C4, and when the
   // database does not have the columns yet.
   itemKey?: string | null;
-  origins?: ShoppingOrigin[] | null;
+  origins?: ShoppingRowOrigin[] | null;
   checkedQuantity?: number | null;
   needsReview?: boolean;
   removedAt?: string | null;
@@ -386,4 +386,89 @@ export async function reconcileShoppingListInSupabase({
   }
 
   throw new Error("Unexpected reconcile_shopping_list result.");
+}
+
+// D5 (20261014090000_shopping_manual_items): edits of the current list made by the user.
+// add: items added by hand, with an id chosen by the client (a resend is «duplicate»), key «manual|…».
+// set_quantity: any active row; a manual row keeps origins [{kind:"manual"}], a row of the dishes
+//   keeps its unit and records the given origins (its dish origins plus {kind:"user_adjust"}).
+// remove: items added by hand only.
+export type ShoppingEditOps = {
+  add: { id: string; name: string; quantity: number | null; unit: string; category: ShoppingItemCategory; item_key: string }[];
+  set_quantity: { id: string; quantity: number | null; unit: string; origins: ShoppingRowOrigin[] }[];
+  remove: { id: string }[];
+};
+
+export type ShoppingEditOutcome = "created" | "duplicate" | "existing" | "applied" | "missing" | "not_manual";
+
+export type EditShoppingItemsResult =
+  | { status: "applied" | "duplicate" | "existing"; list: ShoppingList; results: { id: string; result: ShoppingEditOutcome }[] }
+  // The list is not the week's current list any more: nothing was written.
+  | { status: "stale"; currentListId: string | null }
+  | { status: "no_week" }
+  // The database does not have edit_shopping_items yet (D5 migration not applied).
+  | { status: "unavailable" };
+
+// Thrown when the database refuses a call of edit_shopping_items (22023 invalid, 42501 not
+// allowed), as opposed to a connection failure: the data layer drops those edits.
+export class ShoppingEditRejectedError extends Error {
+  readonly rejected = true;
+  constructor(message: string) {
+    super(`Shopping list edits refused: ${message}`);
+    this.name = "ShoppingEditRejectedError";
+  }
+}
+
+const editOutcomes = new Set<ShoppingEditOutcome>(["created", "duplicate", "existing", "applied", "missing", "not_manual"]);
+
+// Applies the user's edits to the current list of the caller's week (edit_shopping_items): only
+// while it is still `listId`. Never changes the list's signature or ingredient basis.
+export async function editShoppingItemsInSupabase({
+  isoYear,
+  isoWeek,
+  listId,
+  ops,
+}: {
+  isoYear: number;
+  isoWeek: number;
+  listId: string;
+  ops: ShoppingEditOps;
+}): Promise<EditShoppingItemsResult> {
+  const { data, error } = await requireSupabase().rpc("edit_shopping_items", {
+    p_iso_year: isoYear,
+    p_iso_week: isoWeek,
+    p_list_id: listId,
+    p_ops: ops,
+  });
+
+  if (error) {
+    if (error.code === "PGRST202" || (error.code === "42883" && /edit_shopping_items\s*\(/.test(error.message))) {
+      return { status: "unavailable" };
+    }
+    // The database refused these edits (invalid, or not allowed): sending them again cannot work.
+    if (error.code === "22023" || error.code === "42501") throw new ShoppingEditRejectedError(error.message);
+    throw new Error(`Could not edit shopping list: ${error.message}`);
+  }
+
+  const result = data as { status?: string; list?: ShoppingListJson | null; results?: unknown; current_list_id?: string | null } | null;
+  switch (result?.status) {
+    case "applied":
+    case "duplicate":
+    case "existing": {
+      if (!result.list) break;
+      const results = Array.isArray(result.results)
+        ? result.results.flatMap((entry) => {
+            const { id, result: outcome } = (entry ?? {}) as { id?: unknown; result?: unknown };
+            return typeof id === "string" && editOutcomes.has(outcome as ShoppingEditOutcome) ? [{ id, result: outcome as ShoppingEditOutcome }] : [];
+          })
+        : [];
+      return { status: result.status, list: parseShoppingListJson(result.list), results };
+    }
+    case "stale":
+      return { status: "stale", currentListId: typeof result.current_list_id === "string" ? result.current_list_id : null };
+    case "no_week":
+      return { status: "no_week" };
+  }
+
+  throw new Error("Unexpected edit_shopping_items result.");
 }

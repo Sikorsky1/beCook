@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Eraser, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronLeft, ClipboardPaste, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { AiLoginNotice } from "@/components/features/AiLoginNotice";
 import { GenerationContextSummary } from "@/components/features/GenerationContextSummary";
 import { GenerationProgress } from "@/components/features/GenerationProgress";
+import { ImportMenuPanel } from "@/components/features/ImportMenuPanel";
 import { ProfileReadinessNotice } from "@/components/features/ProfileReadinessNotice";
 import { ProposalActionBar } from "@/components/features/ProposalActionBar";
 import { ProposalDayCard, type RequestProposalIdea } from "@/components/features/ProposalDayCard";
@@ -15,7 +16,6 @@ import { ReplaceMenuDialog } from "@/components/features/ReplaceMenuDialog";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { IconButton } from "@/components/ui/IconButton";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { TextArea } from "@/components/ui/TextArea";
 import { isAiLoginRequiredError, postAi } from "@/lib/ai-client";
@@ -30,21 +30,34 @@ import {
 } from "@/lib/applyWeek";
 import {
   activeGenerationRun,
+  clearMenuFormDraft,
   consumeCreateMenuDraft,
   consumeInterruptedGeneration,
+  pruneStaleMenuDrafts,
+  readMenuFormDraft,
   saveCreateMenuDraft,
   startGenerationRun,
+  writeMenuFormDraft,
   type GenerationRun,
 } from "@/lib/createMenuDraft";
 import { proposalIdeaProfile, replaceProposalDish, requestProposalIdea } from "@/lib/dishSubstitution";
 import { parseVerifiedFoodContext } from "@/lib/menu-generation/food-context";
 import { registerBeforeLoginSaver } from "@/lib/session/login-return";
 import {
+  hasPlannedDish,
+  importErrorMessage,
+  importTextLimits,
   importedMenuToWeekDays,
+  localMenuResponse,
+  mentionsAnyDayName,
+  parseMenuTextLocally,
+  validateImportText,
   type GeneratedMenuApiResponse,
+  type ImportErrorReason,
   type ImportedMenuResponse,
   type MenuGenerationApiErrorResponse,
 } from "@/lib/importMenu";
+import { importedDishWarnings, importWarningProfile } from "@/lib/importWarnings";
 import {
   formatIsoWeekTitle,
   getCurrentIsoWeek,
@@ -56,15 +69,19 @@ import {
 import {
   newRequestKey,
   loadProfile,
+  loadWeekFoodContext,
   readCachedProfile,
   readSelectedWeek,
   writeSelectedWeek,
 } from "@/lib/data/repositories";
 import {
   attemptFromProposal,
+  checkProposalUse,
   clearMenuProposal,
+  describeProposal,
   readMenuProposal,
   writeMenuProposal,
+  type MenuProposal,
 } from "@/lib/menuProposal";
 import { loadPantry, readCachedPantry } from "@/lib/data/pantry";
 import { pantryItemsOrDefault } from "@/lib/pantryStorage";
@@ -73,17 +90,17 @@ import { ensureShoppingList } from "@/lib/data/shopping";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
 import type { UserProfile } from "@/lib/supabase/profiles";
-import { nextTabIndex, tabIds } from "@/lib/rovingTabs";
 import { pageContentClass, pageShellClass } from "@/lib/ui";
 
 const freeTextPromptMaxLength = 300;
 
+// «generate» is the main path; «import» means the «¿Ya tienes un menú? Pégalo» disclosure is open
+// (C6, step 32: no tabs any more). ?mode=import opens it.
 type CreateMenuMode = "import" | "generate";
 
-const createMenuModes: { value: CreateMenuMode; label: string }[] = [
-  { value: "generate", label: "Crear menú con beCook" },
-  { value: "import", label: "Tengo un menú" },
-];
+const importPanelId = "create-menu-import";
+
+type ProposalMeta = Pick<MenuProposal, "source" | "parsedBy" | "contextVersion" | "createdAt">;
 
 type UseWeekStatus = "idle" | "applying" | "success" | "error";
 
@@ -145,16 +162,24 @@ function serializeMenuGenerationContext(
   return `${getMenuStylesForGeneration(menuStyles).join(",")}|elaboration_level=${elaborationLevel}`;
 }
 
+// C6 review: a change of identity without a reload (sign-in, sign-out in another tab) starts the
+// page again, so no form, proposal, error or «Usar este menú» state of the previous identity stays.
 export default function CreateMenuPage() {
+  const identity = useIdentity();
+  return <CreateMenuPageContent key={identity.scope} />;
+}
+
+function CreateMenuPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const weekParam = searchParams.get("week");
   const isoYearParam = searchParams.get("isoYear");
   const isoWeekParam = searchParams.get("isoWeek");
+  // C6 / step 32: «Ya tengo un menú» on Semana opens the import disclosure.
+  const modeParam = searchParams.get("mode");
   const [weekNotice, setWeekNotice] = useState<string | null>(null);
   const [hasMounted, setHasMounted] = useState(false);
   const [mode, setMode] = useState<CreateMenuMode>("generate");
-  const modeTabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [menuText, setMenuText] = useState("");
   const [importedMenu, setImportedMenu] = useState<ImportedMenuResponse | null>(
     null,
@@ -177,7 +202,19 @@ export default function CreateMenuPage() {
   const [errorIsLimit, setErrorIsLimit] = useState(false);
   // 409 without a saved profile: retrying will not help, saving the profile will (not a failure).
   const [errorNeedsProfile, setErrorNeedsProfile] = useState(false);
+  // C6: 400/422 of an import: the pasted text must change, «Reintentar» as is would not help.
+  const [errorFixText, setErrorFixText] = useState(false);
+  // Which action the error on screen belongs to (both paths are visible at once now).
+  const [errorSource, setErrorSource] = useState<CreateMenuMode>("generate");
   const [needsLogin, setNeedsLogin] = useState(false);
+  // C6, decision 2: guests import with the local parser; only a text it cannot read asks to log in.
+  const [importNeedsLogin, setImportNeedsLogin] = useState(false);
+  // C6: where the proposal on screen came from (stored with it).
+  const [proposalMeta, setProposalMeta] = useState<ProposalMeta | null>(null);
+  // C6, decision 3: «Usar este menú» on a proposal generated with an older profile asks first.
+  const [contextConfirm, setContextConfirm] = useState(false);
+  // The proposal whose profile change the user already accepted (a retry does not ask again).
+  const contextAcceptedRef = useRef<ImportedMenuResponse | null>(null);
   const identity = useIdentity();
   const [activePantryItemNames, setActivePantryItemNames] = useState<string[]>([]);
   const [useWeekStatus, setUseWeekStatus] = useState<UseWeekStatus>("idle");
@@ -215,6 +252,15 @@ export default function CreateMenuPage() {
   // M-1: scope whose people count came from a restored draft. The draft is read once, but this
   // effect runs again (e.g. once the week is set): the profile must not overwrite that choice.
   const draftPeopleScopeRef = useRef<string | null>(null);
+  // C6: identity and week whose form draft has been read; the form is only stored under that key
+  // once the page shows it (never the defaults of the first render over a stored draft).
+  const formDraftKeyRef = useRef<string | null>(null);
+  // Only a form the user touched (or a restored draft) is stored: the people count the profile
+  // fills in must keep following the profile on later visits.
+  const formTouchedRef = useRef(false);
+  const touchForm = () => {
+    formTouchedRef.current = true;
+  };
   const navigationTimeoutRef = useRef<number | null>(null);
   const [targetIsoWeek, setTargetIsoWeek] = useState<IsoWeek | null>(null);
   // Each proposed or imported day is dated by its name inside the target week.
@@ -254,6 +300,8 @@ export default function CreateMenuPage() {
     setWeekNotice(selection.notice);
     setTargetIsoWeek(weekForMenu);
     writeSelectedWeek(dataIdentity, weekForMenu);
+    // C6, decision 10: drafts and unapplied proposals of past weeks are dropped.
+    pruneStaleMenuDrafts(dataIdentity, getCurrentIsoWeek(), weekForMenu);
 
     let isCancelled = false;
     // A generation cut by a reload or a closed tab: its form comes back and the user is told.
@@ -261,14 +309,18 @@ export default function CreateMenuPage() {
     const interrupted = consumeInterruptedGeneration(dataIdentity.scope, weekForMenuId);
     // Still running from an earlier visit: the form shows what it was started with.
     const running = activeGenerationRun(dataIdentity.scope, weekForMenuId);
-    const draft = interrupted ?? running?.draft ?? consumeCreateMenuDraft();
+    // Then the guest → login trip (session draft), then this identity's form for this week (C6).
+    const draft =
+      interrupted ?? running?.draft ?? consumeCreateMenuDraft() ?? readMenuFormDraft(dataIdentity, weekForMenu);
+    formDraftKeyRef.current = `${dataIdentity.scope}|${weekForMenuId}`;
+    formTouchedRef.current = Boolean(draft);
 
     if (interrupted) {
       setInterruptedNotice(true);
     }
 
     if (draft) {
-      setMode(draft.mode);
+      setMode(modeParam === "import" ? "import" : draft.mode);
       setMenuText(draft.menuText);
       setFreeTextPrompt(draft.freeTextPrompt.slice(0, freeTextPromptMaxLength));
       setPeopleCount(normalizePeopleCount(draft.peopleCount));
@@ -276,9 +328,12 @@ export default function CreateMenuPage() {
       const restoredStyles = draft.menuStyles.filter(isMenuStyle);
       setMenuStyles(restoredStyles.length ? restoredStyles : defaultMenuStyles);
       setElaborationLevel(draft.elaborationLevel);
+    } else if (modeParam === "import") {
+      setMode("import");
     }
 
     setNeedsLogin(!dataIdentity.userId);
+    setImportNeedsLogin(false);
     setProfileReady(false);
 
     const applyProfile = (value: unknown) => {
@@ -320,6 +375,34 @@ export default function CreateMenuPage() {
     weekParam,
     isoWeekParam,
     isoYearParam,
+    modeParam,
+  ]);
+
+  useEffect(() => {
+    // C6: the form is kept on this device per identity and week while it is edited.
+    if (identity.status !== "ready" || !targetIsoWeek) return;
+    const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    if (!formTouchedRef.current) return;
+    if (formDraftKeyRef.current !== `${dataIdentity.scope}|${getIsoWeekStorageId(targetIsoWeek)}`) return;
+    writeMenuFormDraft(dataIdentity, targetIsoWeek, {
+      mode,
+      menuText,
+      freeTextPrompt,
+      peopleCount,
+      menuStyles,
+      elaborationLevel,
+    });
+  }, [
+    identity.status,
+    identity.scope,
+    identity.userId,
+    targetIsoWeek,
+    mode,
+    menuText,
+    freeTextPrompt,
+    peopleCount,
+    menuStyles,
+    elaborationLevel,
   ]);
 
   useEffect(
@@ -353,6 +436,13 @@ export default function CreateMenuPage() {
       applyAttemptRef.current = attemptFromProposal(proposal, proposal.menu, weekId);
       importedMenuRef.current = proposal.menu;
       setImportedMenu(proposal.menu);
+      setProposalMeta({
+        source: proposal.source,
+        parsedBy: proposal.parsedBy,
+        contextVersion: proposal.contextVersion,
+        createdAt: proposal.createdAt,
+      });
+      setContextConfirm(false);
       setGenerationRequestId(proposal.generationRequestId);
       setRestoredMenu(resumed ? null : proposal.menu);
       setProposalKey((key) => key + 1);
@@ -380,12 +470,16 @@ export default function CreateMenuPage() {
             setFailureCount(0);
             restoreProposal(true);
           } else if (result.status === "error") {
-            if (!result.profileRequired) setFailureCount((count) => count + 1);
+            if (!result.profileRequired && !result.fixText) setFailureCount((count) => count + 1);
             setErrorNeedsProfile(Boolean(result.profileRequired));
+            setErrorFixText(Boolean(result.fixText));
+            setErrorSource(run.mode);
             setErrorIsLimit(result.limit);
             setErrorMessage(result.message);
           } else if (result.status === "cancelled") {
             setCancelledNotice(true);
+          } else if (run.mode === "import") {
+            setImportNeedsLogin(true);
           } else {
             setNeedsLogin(true);
           }
@@ -412,6 +506,7 @@ export default function CreateMenuPage() {
       identity.status !== "ready" ||
       !targetIsoWeek ||
       !importedMenu ||
+      !proposalMeta ||
       useWeekStatus === "applying" ||
       useWeekStatus === "success"
     ) {
@@ -426,6 +521,7 @@ export default function CreateMenuPage() {
         attempt && attempt.menu === importedMenu
           ? { requestKey: attempt.requestKey, overwrite: attempt.overwrite, baseVersion: attempt.baseVersion }
           : null,
+      ...proposalMeta,
     });
   }, [
     identity.status,
@@ -433,6 +529,7 @@ export default function CreateMenuPage() {
     identity.userId,
     targetIsoWeek,
     importedMenu,
+    proposalMeta,
     generationRequestId,
     useWeekStatus,
   ]);
@@ -444,6 +541,8 @@ export default function CreateMenuPage() {
 
     applyAttemptRef.current = null;
     setImportedMenu(null);
+    setProposalMeta(null);
+    setContextConfirm(false);
     setGenerationRequestId(null);
     setRestoredMenu(null);
     setUseWeekStatus("idle");
@@ -504,15 +603,24 @@ export default function CreateMenuPage() {
     }
   };
 
-  const showNewProposal = (menu: ImportedMenuResponse, requestId: string | null, week: IsoWeek) => {
+  const showNewProposal = (
+    menu: ImportedMenuResponse,
+    requestId: string | null,
+    week: IsoWeek,
+    source: MenuProposal["source"],
+  ) => {
+    const meta = describeProposal(menu, source);
     // Stored at once: if the user left the page meanwhile, it is recovered when they come back.
     writeMenuProposal({ scope: identity.scope, userId: identity.userId }, week, {
       menu,
       generationRequestId: requestId,
       attempt: null,
+      ...meta,
     });
     applyAttemptRef.current = null;
     setImportedMenu(menu);
+    setProposalMeta(meta);
+    setContextConfirm(false);
     setRestoredMenu(null);
     setProposalKey((key) => key + 1);
     setFailureCount(0);
@@ -521,6 +629,11 @@ export default function CreateMenuPage() {
   const cancelGeneration = () => {
     runRef.current?.controller.abort();
   };
+
+  // «Usar este menú» is saving, or saved with «Deshacer» still possible.
+  const proposalBusy = () =>
+    isApplyingWeekRef.current || useWeekStatus === "applying" || useWeekStatus === "success";
+  const proposalLocked = useWeekStatus === "applying" || useWeekStatus === "success";
 
   const requireSession = async () => {
     if (await getAccessToken()) {
@@ -531,16 +644,74 @@ export default function CreateMenuPage() {
     return false;
   };
 
+  // C6: a text problem the user has to fix (400/422): said at once, never counted as a failure.
+  const showImportProblem = (reason: ImportErrorReason | string, message?: string) => {
+    setErrorSource("import");
+    setErrorIsLimit(false);
+    setErrorNeedsProfile(false);
+    setErrorFixText(true);
+    setErrorMessage(message ?? importErrorMessage(reason, "No se pudo procesar el menú."));
+  };
+
   const handleProcessMenu = async () => {
-    if (!(await requireSession())) {
+    // C6 review: never while the proposal is being saved or can still be undone (a new proposal
+    // would replace the one being applied and break its state).
+    if (isLoading || proposalBusy()) {
+      return;
+    }
+
+    setErrorMessage("");
+    setErrorIsLimit(false);
+    setErrorNeedsProfile(false);
+    setErrorFixText(false);
+    setErrorSource("import");
+    setImportNeedsLogin(false);
+    setCancelledNotice(false);
+    setInterruptedNotice(false);
+
+    const checked = validateImportText(menuText, importTextLimits);
+
+    if (!checked.ok) {
+      showImportProblem(checked.reason);
+      return;
+    }
+
+    // C6: a clear format is ordered here, at once: no request, no quota, guests included.
+    const local = parseMenuTextLocally(checked.text);
+
+    if (local.kind === "parsed") {
+      if (!hasPlannedDish(local.days)) {
+        showImportProblem("empty_menu");
+        return;
+      }
+
+      setUseWeekStatus("idle");
+      setUseWeekMessage("");
+      setUseWeekMenu(null);
+      setGenerationRequestId(null);
+      showNewProposal(
+        localMenuResponse(local.days, local.warnings),
+        null,
+        targetIsoWeek ?? getCurrentIsoWeek(),
+        "import",
+      );
+      return;
+    }
+
+    // Not a weekly menu: said without asking the server (it would answer the same 422).
+    if (!mentionsAnyDayName(checked.text)) {
+      showImportProblem("no_menu_found");
+      return;
+    }
+
+    // Only the AI can order it, and the AI needs a session.
+    if (!(await getAccessToken())) {
+      setImportNeedsLogin(true);
       return;
     }
 
     setIsLoading(true);
     setLoadingMode("import");
-    setErrorMessage("");
-    setErrorIsLimit(false);
-    setErrorNeedsProfile(false);
     setUseWeekStatus("idle");
     setUseWeekMessage("");
     const previousRequestId = generationRequestId;
@@ -548,25 +719,38 @@ export default function CreateMenuPage() {
     const { run, finish, weekForRun } = beginRun("import");
 
     try {
-      const response = await postAi("/api/import-menu", { text: menuText }, run.controller.signal);
+      const response = await postAi("/api/import-menu", { text: checked.text }, run.controller.signal);
 
       const data = (await response.json()) as
         | ImportedMenuResponse
-        | { error?: string };
+        | { error?: string; reason?: string };
 
       if (!response.ok) {
-        setImportedMenu(null);
         const isLimit = response.status === 429 || response.status === 503;
+        const fixText = response.status === 400 || response.status === 422;
+        const serverMessage = "error" in data ? data.error : undefined;
+        const reason = "reason" in data ? data.reason : undefined;
+        const fallbackMessage = serverMessage ?? "No se pudo procesar el menú.";
+        // The server's text first (an empty menu read by the AI says it counted); the reason only
+        // fills in for a response without one.
+        const message = serverMessage ?? importErrorMessage(reason, fallbackMessage);
+
+        if (fixText) {
+          // The proposal on screen (if any) stays: only the pasted text has to change.
+          showImportProblem(reason ?? "", message);
+          finish({ status: "error", message, limit: false, fixText: true });
+          return;
+        }
+
+        setImportedMenu(null);
         setErrorIsLimit(isLimit);
-        const fallbackMessage = "No se pudo procesar el menú.";
-        const message = "error" in data ? data.error ?? fallbackMessage : fallbackMessage;
         setErrorMessage(message);
         setFailureCount((count) => count + 1);
         finish({ status: "error", message, limit: isLimit });
         return;
       }
 
-      showNewProposal(data as ImportedMenuResponse, null, weekForRun);
+      showNewProposal(data as ImportedMenuResponse, null, weekForRun, "import");
       finish({ status: "proposal" });
     } catch (error: unknown) {
       // Cancelled: whatever was on screen before stays.
@@ -580,7 +764,7 @@ export default function CreateMenuPage() {
       setImportedMenu(null);
 
       if (isAiLoginRequiredError(error)) {
-        setNeedsLogin(true);
+        setImportNeedsLogin(true);
         finish({ status: "login_required" });
         return;
       }
@@ -597,6 +781,10 @@ export default function CreateMenuPage() {
   };
 
   const handleGenerateMenu = async () => {
+    if (isLoading || proposalBusy()) {
+      return;
+    }
+
     if (!(await requireSession())) {
       return;
     }
@@ -610,6 +798,8 @@ export default function CreateMenuPage() {
     setErrorMessage("");
     setErrorIsLimit(false);
     setErrorNeedsProfile(false);
+    setErrorFixText(false);
+    setErrorSource("generate");
     setUseWeekStatus("idle");
     setUseWeekMessage("");
     const previousRequestId = generationRequestId;
@@ -744,7 +934,7 @@ export default function CreateMenuPage() {
       }
 
       persistenceMs = Math.round(performance.now() - persistenceStartedAt);
-      showNewProposal(generatedMenu, currentGenerationRequestId, weekForGeneration);
+      showNewProposal(generatedMenu, currentGenerationRequestId, weekForGeneration, "generate");
       setGenerationRequestId(currentGenerationRequestId);
       finish({ status: "proposal" });
     } catch (error: unknown) {
@@ -844,7 +1034,7 @@ export default function CreateMenuPage() {
     [],
   );
 
-  const handleUseWeek = async () => {
+  const handleUseWeek = async (contextChangeConfirmed = false) => {
     if (
       !importedMenu ||
       !importedWeekDays ||
@@ -862,6 +1052,47 @@ export default function CreateMenuPage() {
     const weekForUse = targetIsoWeek ?? getCurrentIsoWeek();
     const weekHref = buildWeekHref("/week", weekForUse);
     const dataIdentity = { scope: identity.scope, userId: identity.userId };
+    const meta = proposalMeta ?? describeProposal(importedMenu, "import");
+    const accepted = contextChangeConfirmed || contextAcceptedRef.current === importedMenu;
+    const useCheck = {
+      scope: dataIdentity.scope,
+      week: getIsoWeekStorageId(weekForUse),
+      proposal: meta,
+      contextChangeConfirmed: accepted,
+    };
+    const refuse = (status: "generation_running" | "context_changed") => {
+      isApplyingWeekRef.current = false;
+      setUseWeekMenu(null);
+      if (status === "context_changed") {
+        setUseWeekStatus("idle");
+        setContextConfirm(true);
+        return;
+      }
+      setUseWeekStatus("error");
+      setUseWeekMessage("Hay otra propuesta creándose para esta semana. Espera a que termine o cancélala antes de usar esta.");
+    };
+
+    // C6: never while another generation for this identity and week is running (its proposal
+    // would arrive over this one).
+    let check = checkProposalUse({ ...useCheck, currentContextVersion: null });
+    if (check.status !== "ok") {
+      refuse(check.status);
+      return;
+    }
+
+    // C6, decision 3: a generated proposal is compared with the profile now (C1 version). Unknown
+    // (guest, account unreachable): nothing is claimed and it goes ahead.
+    if (dataIdentity.userId && meta.source === "generate" && meta.contextVersion && !accepted) {
+      const status = await loadWeekFoodContext(dataIdentity, weekForUse);
+      const currentContextVersion = status ? (status.current.found ? status.current.version : "no_profile") : null;
+      check = checkProposalUse({ ...useCheck, currentContextVersion });
+      if (check.status !== "ok") {
+        refuse(check.status);
+        return;
+      }
+    }
+
+    setContextConfirm(false);
     // Same menu and week → same attempt and request key, so a resend is applied only once.
     const attempt = resolveApplyWeekAttempt(
       applyAttemptRef.current,
@@ -878,6 +1109,7 @@ export default function CreateMenuPage() {
         attempt: keepAttempt
           ? { requestKey: attempt.requestKey, overwrite: attempt.overwrite, baseVersion: attempt.baseVersion }
           : null,
+        ...meta,
       });
     };
     let release: (prepare: boolean) => void = () => {};
@@ -915,6 +1147,9 @@ export default function CreateMenuPage() {
       // The menu is saved. The list is prepared apart (B6 keeps it if the dishes did not change)
       // and the Compra page shows its own state.
       clearMenuProposal(dataIdentity, weekForUse);
+      // C6: the form of this week is done with once its menu is saved.
+      clearMenuFormDraft(dataIdentity, weekForUse);
+      formTouchedRef.current = false;
       setRestoredMenu(null);
       writeSelectedWeek(dataIdentity, weekForUse);
       void shopping.then((prepared) => {
@@ -1042,15 +1277,28 @@ export default function CreateMenuPage() {
     );
   };
 
-  const selectMode = (nextMode: CreateMenuMode) => {
-    setMode(nextMode);
-    setErrorMessage("");
+  const toggleImport = () => {
+    touchForm();
+    setMode((current) => (current === "import" ? "generate" : "import"));
   };
+
+  const weekHrefForBack = targetIsoWeek ? buildWeekHref("/week", targetIsoWeek) : "/week";
+  // C6: imported menus get per-dish warnings (C3 restrictions, C5 culinary rules) from the profile
+  // this page has read for the current identity. Generated ones were already checked.
+  const warningProfile = profileReady ? importWarningProfile(profile) : null;
+  const showImportWarnings = proposalMeta?.source === "import";
 
   return (
     <main className={pageShellClass}>
       <div className={`${pageContentClass} gap-5 sm:gap-6`}>
         <section>
+          <Link
+            href={weekHrefForBack}
+            className="-ml-2 mb-2 inline-flex min-h-11 items-center gap-1 rounded-full px-2 text-sm font-semibold text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)]"
+          >
+            <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+            Volver a Semana
+          </Link>
           <p className="t-eyebrow">Crear menú</p>
           <h1 className="t-h1 mt-2 text-[color:var(--color-foreground)]">
             Prepara tu menú semanal
@@ -1072,268 +1320,211 @@ export default function CreateMenuPage() {
           <ProfileReadinessNotice profile={profile} fromOnboarding={searchParams.get("from") === "onboarding"} />
         </section>
 
-        <div
-          className="grid grid-cols-2 gap-1.5 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1.5"
-          role="tablist"
-          aria-label="Modo de creación de menú"
-        >
-          {createMenuModes.map((option, index) => {
-            const isSelected = mode === option.value;
-            const ids = tabIds("create-menu", option.value);
+        {/* C6 / step 32: generating is the main path; a menu the user already has is a disclosure. */}
+        <div className="space-y-3">
+          <button
+            type="button"
+            aria-expanded={mode === "import"}
+            aria-controls={importPanelId}
+            onClick={toggleImport}
+            className="flex min-h-11 w-full items-center gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-2.5 text-left text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
+          >
+            <ClipboardPaste aria-hidden="true" className="h-4 w-4 shrink-0 text-[color:var(--color-muted-foreground)]" />
+            <span className="flex-1">¿Ya tienes un menú? Pégalo</span>
+            <ChevronDown
+              aria-hidden="true"
+              className={`h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none ${mode === "import" ? "rotate-180" : ""}`}
+            />
+          </button>
 
-            return (
-              <button
-                key={option.value}
-                ref={(element) => {
-                  modeTabRefs.current[index] = element;
-                }}
-                type="button"
-                role="tab"
-                id={ids.tab}
-                aria-selected={isSelected}
-                // Only the selected panel is rendered, so only its tab points to it.
-                aria-controls={isSelected ? ids.panel : undefined}
-                tabIndex={isSelected ? 0 : -1}
-                onClick={() => selectMode(option.value)}
-                onKeyDown={(event) => {
-                  const next = nextTabIndex(event.key, index, createMenuModes.length);
-                  if (next === null) return;
-                  event.preventDefault();
-                  selectMode(createMenuModes[next].value);
-                  modeTabRefs.current[next]?.focus();
-                }}
-                className={`min-h-11 rounded-[var(--radius-input)] px-3 text-sm font-semibold transition-colors ${
-                  isSelected
-                    ? "bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
-                    : "text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-surface-muted)]"
-                }`}
-              >
-                {option.label}
-              </button>
-            );
-          })}
+          {/* Always in the DOM (hidden when closed), so aria-controls points to an existing element. */}
+          <div id={importPanelId} hidden={mode !== "import"}>
+            <ImportMenuPanel
+              idPrefix={importPanelId}
+              hasMounted={hasMounted}
+              value={menuText}
+              onChange={(value) => {
+                touchForm();
+                setMenuText(value);
+                setImportNeedsLogin(false);
+              }}
+              onProcess={() => void handleProcessMenu()}
+              processing={isLoading && loadingMode === "import"}
+              disabled={isLoading || proposalLocked}
+              needsLogin={importNeedsLogin}
+              loginReturnPath={createMenuReturnPath}
+              onBeforeLogin={saveDraftForLogin}
+            />
+          </div>
         </div>
 
-        {mode === "import" ? (
-          <Card
-            role="tabpanel"
-            id={tabIds("create-menu", "import").panel}
-            aria-labelledby={tabIds("create-menu", "import").tab}
-            className="p-3.5 sm:p-5"
-          >
-            <div className="relative">
-              <IconButton
-                onClick={() => setMenuText("")}
-                disabled={!menuText}
-                aria-label="Limpiar texto"
-                className="absolute right-3 top-3 z-10"
+        <Card aria-labelledby="create-menu-generate-title" className="space-y-4 p-3.5 sm:p-5">
+          <h2 id="create-menu-generate-title" className="t-h3 text-[color:var(--color-foreground)]">
+            Crea un menú con beCook
+          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
+            <span className="t-body-strong text-[color:var(--color-foreground)]">
+              Número de personas
+            </span>
+            <div className="inline-flex items-center gap-2 rounded-full bg-[color:var(--color-surface-muted)] p-1">
+              <button
+                type="button"
+                disabled={peopleCount === 1 || isLoading}
+                onClick={() => {
+                  touchForm();
+                  setPeopleCount((value) => value - 1);
+                }}
+                aria-label="Reducir personas"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-sm font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
               >
-                <Eraser aria-hidden="true" className="h-4 w-4" />
-              </IconButton>
-
-              {hasMounted ? (
-                <TextArea
-                  value={menuText}
-                  onChange={(event) => setMenuText(event.target.value)}
-                  placeholder={`Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\tPollo con arroz\tTortilla francesa`}
-                  className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg md:text-lg"
-                />
-              ) : (
-                <TextArea
-                  defaultValue=""
-                  placeholder={`Lunes\nComida: Salmón con calabacín\nCena: LIBRE\n\nMartes\tPollo con arroz\tTortilla francesa`}
-                  className="min-h-[18rem] resize-y border-0 pr-16 shadow-none sm:min-h-[22rem] sm:text-lg md:text-lg"
-                />
-              )}
-            </div>
-
-            {needsLogin ? (
-              <AiLoginNotice
-                className="mt-3"
-                returnPath={createMenuReturnPath}
-                description="Tu texto se conserva en este dispositivo. Al volver podrás procesarlo."
-                onBeforeNavigate={saveDraftForLogin}
-              />
-            ) : (
-              <PrimaryButton
-                onClick={handleProcessMenu}
-                disabled={isLoading}
-                size="lg"
-                className="mt-3 w-full disabled:cursor-wait"
-              >
-                {isLoading && loadingMode === "import" ? (
-                  "Estamos organizando tu menú..."
-                ) : (
-                  <>
-                    <Check aria-hidden="true" className="h-4 w-4" />
-                    Procesar menú
-                  </>
-                )}
-              </PrimaryButton>
-            )}
-          </Card>
-        ) : (
-          <Card
-            role="tabpanel"
-            id={tabIds("create-menu", "generate").panel}
-            aria-labelledby={tabIds("create-menu", "generate").tab}
-            className="space-y-4 p-3.5 sm:p-5"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
-              <span className="t-body-strong text-[color:var(--color-foreground)]">
-                Número de personas
+                -
+              </button>
+              <span className="t-body-strong min-w-10 text-center text-[color:var(--color-foreground)]">
+                {peopleCount}
               </span>
-              <div className="inline-flex items-center gap-2 rounded-full bg-[color:var(--color-surface-muted)] p-1">
-                <button
-                  type="button"
-                  disabled={peopleCount === 1 || isLoading}
-                  onClick={() => setPeopleCount((value) => value - 1)}
-                  aria-label="Reducir personas"
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-sm font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
-                >
-                  -
-                </button>
-                <span className="t-body-strong min-w-10 text-center text-[color:var(--color-foreground)]">
-                  {peopleCount}
-                </span>
-                <button
-                  type="button"
-                  disabled={peopleCount === 6 || isLoading}
-                  onClick={() => setPeopleCount((value) => value + 1)}
-                  aria-label="Aumentar personas"
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-sm font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
-                >
-                  +
-                </button>
-              </div>
+              <button
+                type="button"
+                disabled={peopleCount === 6 || isLoading}
+                onClick={() => {
+                  touchForm();
+                  setPeopleCount((value) => value + 1);
+                }}
+                aria-label="Aumentar personas"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-sm font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+              >
+                +
+              </button>
             </div>
+          </div>
 
-            <fieldset className="space-y-2">
-              <legend className="t-body-strong text-[color:var(--color-foreground)]">
-                Tipo de menú
-              </legend>
-              <div className="flex flex-wrap gap-1.5">
-                {menuStyleOptions.map((option) => {
-                  const isSelected = menuStyles.includes(option.id);
+          <fieldset className="space-y-2">
+            <legend className="t-body-strong text-[color:var(--color-foreground)]">
+              Tipo de menú
+            </legend>
+            <div className="flex flex-wrap gap-1.5">
+              {menuStyleOptions.map((option) => {
+                const isSelected = menuStyles.includes(option.id);
 
-                  return (
-                    <label
-                      key={option.id}
-                      className={`inline-flex min-h-11 cursor-pointer items-center justify-center rounded-full border px-3.5 py-2 text-center text-sm font-semibold leading-tight transition-colors has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-[color:var(--color-accent)] ${
-                        isSelected
-                          ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
-                          : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        name="menuStyles"
-                        checked={isSelected}
-                        disabled={isLoading}
-                        onChange={() =>
-                          setMenuStyles((currentMenuStyles) =>
-                            isSelected
-                              ? currentMenuStyles.filter(
-                                  (menuStyle) => menuStyle !== option.id,
-                                )
-                              : [...currentMenuStyles, option.id],
-                          )
-                        }
-                        className="sr-only"
-                      />
-                      {option.label}
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-
-            <fieldset className="space-y-2">
-              <legend className="t-body-strong text-[color:var(--color-foreground)]">
-                Nivel de elaboración deseado
-              </legend>
-              <div className="grid grid-cols-3 gap-1 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1 sm:gap-1.5 sm:p-1.5">
-                {elaborationOptions.map((option) => {
-                  const isSelected = elaborationLevel === option.value;
-
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
+                return (
+                  <label
+                    key={option.id}
+                    className={`inline-flex min-h-11 cursor-pointer items-center justify-center rounded-full border px-3.5 py-2 text-center text-sm font-semibold leading-tight transition-colors has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-[color:var(--color-accent)] ${
+                      isSelected
+                        ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
+                        : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      name="menuStyles"
+                      checked={isSelected}
                       disabled={isLoading}
-                      onClick={() => setElaborationLevel(option.value)}
-                      aria-pressed={isSelected}
-                      className={`flex min-h-11 min-w-0 items-center justify-center rounded-[var(--radius-input)] px-1 text-[0.8125rem] font-semibold transition-colors sm:px-2 sm:text-sm ${
-                        isSelected
-                          ? "bg-[color:var(--color-accent-strong)] text-white"
-                          : "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-accent-soft)] hover:text-[color:var(--color-foreground)]"
-                      } disabled:cursor-not-allowed disabled:opacity-60`}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </fieldset>
+                      onChange={() => {
+                        touchForm();
+                        setMenuStyles((currentMenuStyles) =>
+                          isSelected
+                            ? currentMenuStyles.filter(
+                                (menuStyle) => menuStyle !== option.id,
+                              )
+                            : [...currentMenuStyles, option.id],
+                        );
+                      }}
+                      className="sr-only"
+                    />
+                    {option.label}
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
 
-            <label className="block space-y-2">
-              <span className="t-body-strong text-[color:var(--color-foreground)]">
-                ¿Qué te apetece esta semana?
-              </span>
-              <TextArea
-                value={freeTextPrompt}
-                maxLength={freeTextPromptMaxLength}
-                onChange={(event) =>
-                  setFreeTextPrompt(
-                    event.target.value.slice(0, freeTextPromptMaxLength),
-                  )
-                }
-                placeholder="Ejemplo: cenas ligeras, comidas fáciles de tupper, algo mediterráneo y sin mucho pescado."
-                className="min-h-28 resize-y bg-[color:var(--color-surface)]"
-              />
-              <span className="t-meta block text-right">
-                {freeTextPrompt.length}/{freeTextPromptMaxLength}
-              </span>
-            </label>
+          <fieldset className="space-y-2">
+            <legend className="t-body-strong text-[color:var(--color-foreground)]">
+              Nivel de elaboración deseado
+            </legend>
+            <div className="grid grid-cols-3 gap-1 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1 sm:gap-1.5 sm:p-1.5">
+              {elaborationOptions.map((option) => {
+                const isSelected = elaborationLevel === option.value;
 
-            <GenerationContextSummary
-              profile={profile}
-              peopleCount={peopleCount}
-              styleLabels={getMenuStylesForGeneration(menuStyles).map(
-                (style) => menuStyleOptions.find((option) => option.id === style)?.label ?? style,
-              )}
-              elaborationLabel={
-                elaborationOptions.find((option) => option.value === elaborationLevel)?.label ?? "Equilibrado"
-              }
-              pantryCount={activePantryItemNames.length}
-              generating={isLoading && loadingMode === "generate"}
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => {
+                      touchForm();
+                      setElaborationLevel(option.value);
+                    }}
+                    aria-pressed={isSelected}
+                    className={`flex min-h-11 min-w-0 items-center justify-center rounded-[var(--radius-input)] px-1 text-[0.8125rem] font-semibold transition-colors sm:px-2 sm:text-sm ${
+                      isSelected
+                        ? "bg-[color:var(--color-accent-strong)] text-white"
+                        : "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-accent-soft)] hover:text-[color:var(--color-foreground)]"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <label className="block space-y-2">
+            <span className="t-body-strong text-[color:var(--color-foreground)]">
+              ¿Qué te apetece esta semana?
+            </span>
+            <TextArea
+              value={freeTextPrompt}
+              maxLength={freeTextPromptMaxLength}
+              onChange={(event) => {
+                touchForm();
+                setFreeTextPrompt(event.target.value.slice(0, freeTextPromptMaxLength));
+              }}
+              placeholder="Ejemplo: cenas ligeras, comidas fáciles de tupper, algo mediterráneo y sin mucho pescado."
+              className="min-h-28 resize-y bg-[color:var(--color-surface)]"
             />
+            <span className="t-meta block text-right">
+              {freeTextPrompt.length}/{freeTextPromptMaxLength}
+            </span>
+          </label>
 
-            {needsLogin ? (
-              <AiLoginNotice
-                returnPath={createMenuReturnPath}
-                description="Tus preferencias se conservan en este dispositivo. Al volver podrás crear el menú."
-                onBeforeNavigate={saveDraftForLogin}
-              />
-            ) : (
-              <PrimaryButton
-                onClick={handleGenerateMenu}
-                disabled={isLoading}
-                size="lg"
-                className="w-full disabled:cursor-wait"
-              >
-                {isLoading && loadingMode === "generate" ? (
-                  "Creando tu propuesta…"
-                ) : (
-                  <>
-                    <Sparkles aria-hidden="true" className="h-4 w-4" />
-                    Crear menú semanal
-                  </>
-                )}
-              </PrimaryButton>
+          <GenerationContextSummary
+            profile={profile}
+            peopleCount={peopleCount}
+            styleLabels={getMenuStylesForGeneration(menuStyles).map(
+              (style) => menuStyleOptions.find((option) => option.id === style)?.label ?? style,
             )}
-          </Card>
-        )}
+            elaborationLabel={
+              elaborationOptions.find((option) => option.value === elaborationLevel)?.label ?? "Equilibrado"
+            }
+            pantryCount={activePantryItemNames.length}
+            generating={isLoading && loadingMode === "generate"}
+          />
+
+          {needsLogin ? (
+            <AiLoginNotice
+              returnPath={createMenuReturnPath}
+              description="Tus preferencias se conservan en este dispositivo. Al volver podrás crear el menú."
+              onBeforeNavigate={saveDraftForLogin}
+            />
+          ) : (
+            <PrimaryButton
+              onClick={handleGenerateMenu}
+              disabled={isLoading || proposalLocked}
+              size="lg"
+              className="w-full disabled:cursor-wait"
+            >
+              {isLoading && loadingMode === "generate" ? (
+                "Creando tu propuesta…"
+              ) : (
+                <>
+                  <Sparkles aria-hidden="true" className="h-4 w-4" />
+                  Crear menú semanal
+                </>
+              )}
+            </PrimaryButton>
+          )}
+        </Card>
 
         {runView ? (
           <GenerationProgress
@@ -1363,45 +1554,50 @@ export default function CreateMenuPage() {
         ) : null}
 
         {errorMessage ? (
-          <StateMessage
-            className="mt-0"
-            title={
-              mode === "generate"
-                ? "No hemos podido crear este menú todavía."
-                : "No hemos podido ordenar este menú todavía."
-            }
-            variant="error"
-          >
-            <p>{errorMessage}</p>
-            {errorNeedsProfile ? (
-              <Link
-                href="/profile"
-                className="mt-2 inline-flex min-h-11 items-center font-semibold underline underline-offset-2"
-              >
-                Ir a Perfil
-              </Link>
-            ) : errorIsLimit ? null : failureCount >= maxConsecutiveFailures ? (
-              <p className="mt-1">
-                Ha fallado {failureCount} veces seguidas. Prueba de nuevo dentro de un rato.
-              </p>
-            ) : (
-              <>
+          // Announced when it appears (C6: text problems are said at once, without a request).
+          <div role="alert">
+            <StateMessage
+              className="mt-0"
+              title={
+                errorSource === "generate"
+                  ? "No hemos podido crear este menú todavía."
+                  : "No hemos podido ordenar este menú todavía."
+              }
+              variant="error"
+            >
+              <p>{errorMessage}</p>
+              {errorNeedsProfile ? (
+                <Link
+                  href="/profile"
+                  className="mt-2 inline-flex min-h-11 items-center font-semibold underline underline-offset-2"
+                >
+                  Ir a Perfil
+                </Link>
+              ) : errorIsLimit ? null : errorFixText ? (
+                <p className="mt-1">Cambia el texto pegado y vuelve a pulsar «Procesar menú».</p>
+              ) : failureCount >= maxConsecutiveFailures ? (
                 <p className="mt-1">
-                  {mode === "generate"
-                    ? "Puedes reintentarlo tal cual o ajustar un poco las preferencias."
-                    : "Revisa que el texto incluya días y platos, y vuelve a intentarlo."}
+                  Ha fallado {failureCount} veces seguidas. Prueba de nuevo dentro de un rato.
                 </p>
-                {needsLogin || isLoading ? null : (
-                  <TertiaryButton
-                    onClick={mode === "generate" ? handleGenerateMenu : handleProcessMenu}
-                    className="mt-2 w-full sm:w-auto"
-                  >
-                    Reintentar
-                  </TertiaryButton>
-                )}
-              </>
-            )}
-          </StateMessage>
+              ) : (
+                <>
+                  <p className="mt-1">
+                    {errorSource === "generate"
+                      ? "Puedes reintentarlo tal cual o ajustar un poco las preferencias."
+                      : "Revisa que el texto incluya días y platos, y vuelve a intentarlo."}
+                  </p>
+                  {(errorSource === "generate" ? needsLogin : importNeedsLogin) || isLoading ? null : (
+                    <TertiaryButton
+                      onClick={errorSource === "generate" ? handleGenerateMenu : handleProcessMenu}
+                      className="mt-2 w-full sm:w-auto"
+                    >
+                      Reintentar
+                    </TertiaryButton>
+                  )}
+                </>
+              )}
+            </StateMessage>
+          </div>
         ) : null}
 
         {importedMenu && importedWeekDays ? (
@@ -1429,6 +1625,32 @@ export default function CreateMenuPage() {
               <GenerationContextSummary verified={proposalFoodContext} peopleCount={peopleCount} />
             ) : null}
 
+            {showImportWarnings ? (
+              <div className="space-y-1.5 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
+                <p className="t-meta">
+                  {proposalMeta?.parsedBy === "local"
+                    ? "Ordenado en este dispositivo, sin IA."
+                    : proposalMeta?.parsedBy === "ai"
+                      ? "Ordenado con IA: comprueba que los días y los platos son los tuyos."
+                      : "Menú pegado por ti."}{" "}
+                  {!profileReady
+                    ? "Estamos leyendo tu perfil para revisar los platos…"
+                    : warningProfile
+                      ? "Te avisamos de lo que vemos en el nombre de cada plato según tu perfil; no cambiamos nada."
+                      : profile
+                        ? "No hemos podido leer las restricciones de tu perfil, así que no comprobamos los platos."
+                        : "Sin perfil no comprobamos alergias ni dietas."}
+                </p>
+                {importedMenu.warnings?.length ? (
+                  <ul className="t-meta list-disc space-y-0.5 pl-5">
+                    {importedMenu.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+
             <p className="t-meta">
               ¿Algún plato no encaja? Pulsa «Otra idea» para cambiar solo ese; el resto de la semana no cambia.
             </p>
@@ -1443,12 +1665,17 @@ export default function CreateMenuPage() {
                   onRequestIdea={handleRequestProposalIdea}
                   onReplaceDish={handleReplaceDish}
                   loginReturnPath={createMenuReturnPath}
+                  dishWarnings={
+                    showImportWarnings && profileReady
+                      ? (dish) => importedDishWarnings(dish, warningProfile)
+                      : undefined
+                  }
                 />
               ))}
             </div>
 
             {/* Room for the fixed bar, so the last day is never hidden behind it. */}
-            <div aria-hidden="true" className="h-28" />
+            <div aria-hidden="true" className={contextConfirm ? "h-52" : "h-28"} />
 
             {isLoading ? null : (
               <ProposalActionBar
@@ -1464,6 +1691,18 @@ export default function CreateMenuPage() {
                     ? () => openWeek(targetIsoWeek ?? getCurrentIsoWeek())
                     : null
                 }
+                contextWarning={
+                  contextConfirm
+                    ? {
+                        onConfirm: () => {
+                          contextAcceptedRef.current = importedMenu;
+                          setContextConfirm(false);
+                          void handleUseWeek(true);
+                        },
+                        onCancel: () => setContextConfirm(false),
+                      }
+                    : null
+                }
               />
             )}
           </section>
@@ -1471,7 +1710,7 @@ export default function CreateMenuPage() {
           <StateMessage title="Tu semana aparecerá aquí." variant="empty">
             <p>
               {mode === "generate"
-                ? "Crea un menú semanal y podrás revisar la semana entera antes de guardarla."
+                ? "Crea un menú semanal o pega el que ya tienes, y podrás revisar la semana entera antes de guardarla."
                 : "Pega el menú, procésalo y podrás revisar la semana entera antes de guardarla."}
             </p>
           </StateMessage>

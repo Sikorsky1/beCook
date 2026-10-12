@@ -98,6 +98,14 @@
       "sha256": "231604a9b14c8990faaef689c84a54770d19bc6012d2228e8b4cb624a3075a0e",
       "appliedAt": "2026-10-11",
       "notes": "Conector, una parte, sin BEGIN/COMMIT. Cuerpos de las 7 funciones idénticos a los de la BD local (md5 de prosrc; save_shopping_list y reconcile_shopping_list idénticos sin comentarios)."
+    },
+    {
+      "version": "20261012002220",
+      "name": "shopping_manual_items",
+      "source": "supabase/migrations/20261014090000_shopping_manual_items.sql",
+      "sha256": "ee6a1b624225ebe6b9161b5399c76a70c664b4ae7a813176cef2dede3c684a9e",
+      "appliedAt": "2026-10-12",
+      "notes": "Conector, una parte, sin BEGIN/COMMIT (SET LOCAL mantenidos). prosrc de las 2 funciones idéntico a local (md5); sin EXECUTE para anon."
     }
   ]
 }

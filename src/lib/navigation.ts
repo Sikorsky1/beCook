@@ -54,3 +54,72 @@ export function authHref(route: AuthRoute, next: string | null | undefined) {
 export function authRedirectUrl(origin: string, route: AuthRoute, next: string | null | undefined) {
   return `${origin.replace(/\/+$/, "")}${authHref(route, next)}`;
 }
+
+// --- Bottom navigation (step 32) -------------------------------------------------------------
+// Three destinations. «Crear menú» is an action on a week, not a destination: its route stays and
+// marks Semana. Routes are matched by segment, so /week marks /week/x but not /weekly.
+
+export type AppSectionId = "week" | "shopping" | "profile";
+
+export type AppSection = {
+  id: AppSectionId;
+  href: string;
+  label: string;
+  // Path prefixes (whole segments) that belong to this section.
+  prefixes: readonly string[];
+};
+
+export const appSections: readonly AppSection[] = [
+  { id: "week", href: "/week", label: "Semana", prefixes: ["/week", "/create-menu", "/import"] },
+  { id: "shopping", href: "/shopping/list", label: "Compra", prefixes: ["/shopping", "/shopping-list", "/pantry"] },
+  { id: "profile", href: "/profile", label: "Perfil", prefixes: ["/profile"] },
+];
+
+function normalizePath(pathname: string) {
+  let decoded = pathname;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    // Malformed escapes are compared as written.
+  }
+  const path = decoded.split(/[?#]/)[0].toLowerCase().replace(/\/+$/, "");
+  return path || "/";
+}
+
+const underPrefix = (path: string, prefix: string) => path === prefix || path.startsWith(`${prefix}/`);
+
+// The section a route belongs to; null for routes outside the three (e.g. /onboarding).
+export function activeSection(pathname: string | null | undefined): AppSectionId | null {
+  if (!pathname) return null;
+  const path = normalizePath(pathname);
+  if (path === "/") return "week";
+  if (isAuthPath(path)) return "profile";
+  return appSections.find((section) => section.prefixes.some((prefix) => underPrefix(path, prefix)))?.id ?? null;
+}
+
+// «page» only on the destination itself; «true» on the routes under it (Crear menú, Despensa,
+// login…), so a screen reader says «actual» without claiming the link points to this page.
+export function sectionAriaCurrent(section: AppSection, pathname: string | null | undefined): "page" | "true" | undefined {
+  if (activeSection(pathname) !== section.id) return undefined;
+  return normalizePath(pathname ?? "") === section.href ? "page" : "true";
+}
+
+type QueryValue = string | string[] | null | undefined;
+const firstValue = (value: QueryValue) => (Array.isArray(value) ? value[0] : value) ?? null;
+
+// Crear menú opened on the import form (contract with C6: ?mode=import), for a week if it is
+// well formed (Crear menú validates the week itself). Links from before B3 (?isoYear=&isoWeek=) are
+// understood too.
+export function createMenuImportHref(week?: QueryValue, legacy?: { isoYear?: QueryValue; isoWeek?: QueryValue }) {
+  let value = firstValue(week);
+  if (!value && legacy) {
+    const isoYear = firstValue(legacy.isoYear);
+    const isoWeek = firstValue(legacy.isoWeek);
+    if (isoYear && isoWeek && /^\d{4}$/.test(isoYear) && /^\d{1,2}$/.test(isoWeek)) {
+      value = `${isoYear}-W${isoWeek.padStart(2, "0")}`;
+    }
+  }
+  return value && /^\d{4}-W\d{2}$/.test(value)
+    ? `/create-menu?mode=import&week=${value}`
+    : "/create-menu?mode=import";
+}
