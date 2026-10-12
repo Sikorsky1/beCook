@@ -1,0 +1,51 @@
+{
+  "_comment": "Respuestas fijas del OpenAI simulado del E2E. Datos sintéticos; ninguna llamada sale de 127.0.0.1.",
+  "menuSelection": {
+    "lunches": [
+      "Pollo asado con batata",
+      "Lentejas estofadas",
+      "Espaguetis con brócoli",
+      "Pollo al limón",
+      "Judias verdes con patata y huevo duro",
+      "Paletilla de cordero al horno con patatas",
+      "Espaguetis con gambas y chirlas"
+    ],
+    "dinners": [
+      "Salmón a la plancha",
+      "Tortilla de patata",
+      "Escalibada",
+      "Ensalada de tomate y queso fresco",
+      "Merluza plancha con ajos fritos",
+      "Alcachofas con jamón",
+      "Tosta de Salmón ahumado"
+    ]
+  },
+  "dishSubstitution": { "dish": "Garbanzos con espinacas y comino" },
+  "importedMenu": {
+    "week": "Semana importada",
+    "days": [
+      { "dayName": "Lunes", "lunch": { "status": "planned", "dishName": "Lentejas estofadas" }, "dinner": { "status": "free", "dishName": "" } }
+    ]
+  },
+  "shoppingByMeal": {
+    "lunch": [
+      { "name": "tomate", "quantity": 4, "unit": "ud", "category": "frutería" },
+      { "name": "pechuga de pollo", "quantity": 300, "unit": "g", "category": "carnicería" }
+    ],
+    "dinner": [
+      { "name": "huevos", "quantity": 2, "unit": "ud", "category": "otros" },
+      { "name": "calabacín", "quantity": 1, "unit": "ud", "category": "frutería" }
+    ]
+  },
+  "dishCard": {
+    "baseServings": 2,
+    "totalMinutes": 40,
+    "ingredients": [
+      { "name": "tomate", "quantity": 2, "unit": "ud", "category": "frutería", "optional": false },
+      { "name": "aceite de oliva", "quantity": 15, "unit": "ml", "category": "despensa", "optional": false }
+    ],
+    "steps": ["Preparar los ingredientes.", "Cocinar a fuego medio y servir."],
+    "possibleAllergens": []
+  },
+  "usage": { "promptTokens": 120, "completionTokens": 80 }
+}
