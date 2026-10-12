@@ -29,6 +29,9 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
   // Which field the error is about (its input gets aria-invalid and the message).
   const [errorField, setErrorField] = useState<"name" | "quantity" | null>(null);
   const openButtonRef = useRef<HTMLButtonElement>(null);
+  // While saving, the submit button is disabled and the focus would fall to the page: it goes back
+  // to «Artículo», ready for the next item (or to fix this one).
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const focusOpenButton = useRef(false);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -72,6 +75,7 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
       reset();
     } finally {
       setSaving(false);
+      nameInputRef.current?.focus();
     }
   };
 
@@ -85,6 +89,7 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
             <label className="grid gap-1 sm:col-span-2">
               <span className="text-sm font-semibold text-[color:var(--color-foreground)]">Artículo</span>
               <input
+                ref={nameInputRef}
                 type="text"
                 value={name}
                 maxLength={120}
