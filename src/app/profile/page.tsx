@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, LogOut, Save } from "lucide-react";
+import { Check, ChevronDown, LogIn, LogOut, Save } from "lucide-react";
 import Link from "next/link";
 import type { FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -20,6 +20,7 @@ import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
 import { SyncStatus } from "@/components/session/SyncStatus";
 import { Button, PrimaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { enabledOAuthProviders, oauthProviderLabels } from "@/lib/auth/account";
 import { loadProfile, readCachedProfile, saveProfile } from "@/lib/data/repositories";
 import { loginHrefFor } from "@/lib/navigation";
 import {
@@ -49,6 +50,12 @@ import {
   type WeeklyTrainingDays,
 } from "@/lib/supabase/profiles";
 import { pageBleedClass, pageShellStickyClass, pageStickyColumnClass } from "@/lib/ui";
+
+// Inlined at build time, as in OAuthButtons: «con Google o con tu email» where Google is enabled.
+const signInWays = [
+  ...enabledOAuthProviders(process.env.NEXT_PUBLIC_AUTH_PROVIDERS).map((provider) => `con ${oauthProviderLabels[provider]}`),
+  "con tu email",
+].join(" o ");
 
 const sexOptions: { label: string; value: Sex }[] = [
   { label: "Hombre", value: "male" },
@@ -185,6 +192,7 @@ export default function ProfilePage() {
   const identity = useIdentity();
   const { signOut } = useIdentityActions();
   const userEmail = identity.email;
+  const isSignedOut = identity.status === "ready" && identity.userId === null;
   const [syncState, setSyncState] = useState<SyncState>({});
   const [isSigningOut, setIsSigningOut] = useState(false);
   // B5: «Reintentar» reads the profile again, which resends a change pending on this device.
@@ -383,22 +391,36 @@ export default function ProfilePage() {
         <StickyPageHeader title="Perfil" heading="Lo que necesita tu menú" />
 
         <Card className="space-y-3 p-3.5 sm:p-4">
-          <div className="flex items-center gap-3">
-            <span
-              aria-hidden="true"
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-soft)] text-lg font-semibold text-[color:var(--color-accent)]"
-            >
-              {(userEmail?.[0] ?? "B").toUpperCase()}
-            </span>
-            <div className="min-w-0">
-              <p className="t-body-strong truncate text-[color:var(--color-foreground)]">
-                {userEmail ?? "Modo local"}
+          {isSignedOut ? (
+            <div className="space-y-3">
+              <h2 className="t-h2 text-[color:var(--color-foreground)]">Guarda tu perfil en una cuenta</h2>
+              <p className="t-meta">
+                Ahora solo se guarda en este dispositivo. Entra {signInWays} y tendrás tu perfil y tus menús en
+                cualquier dispositivo.
               </p>
-              <p className="t-meta mt-0.5">
-                {householdSummary ? `${goalSummary} · ${householdSummary}` : goalSummary}
-              </p>
+              <PrimaryButton asChild size="lg" className="w-full sm:w-auto">
+                <Link href={loginHrefFor("/profile")}>
+                  <LogIn aria-hidden="true" className="h-4 w-4" />
+                  Entrar o crear cuenta
+                </Link>
+              </PrimaryButton>
             </div>
-          </div>
+          ) : userEmail ? (
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden="true"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-soft)] text-lg font-semibold text-[color:var(--color-accent)]"
+              >
+                {userEmail[0].toUpperCase()}
+              </span>
+              <div className="min-w-0">
+                <p className="t-body-strong truncate text-[color:var(--color-foreground)]">{userEmail}</p>
+                <p className="t-meta mt-0.5">
+                  {householdSummary ? `${goalSummary} · ${householdSummary}` : goalSummary}
+                </p>
+              </div>
+            </div>
+          ) : null}
           {hasLoadedProfile && pendingSections.length > 0 ? (
             <p className="t-meta">
               <span className="font-semibold text-[color:var(--color-foreground)]">Falta por completar:</span>{" "}
@@ -603,12 +625,10 @@ export default function ProfilePage() {
                 Hay cambios sin guardar en tu cuenta. Si cierras sesión ahora, se perderán en este dispositivo.
               </p>
             ) : null}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="t-meta min-w-0 truncate">
-                {userEmail ?? "Modo local"}
-              </p>
-
-              {userEmail ? (
+            {/* Signed out, entering or creating an account is the first card of the page. */}
+            {userEmail ? (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="t-meta min-w-0 truncate">{userEmail}</p>
                 <Button
                   variant="danger"
                   type="button"
@@ -619,15 +639,8 @@ export default function ProfilePage() {
                   <LogOut aria-hidden="true" className="h-4 w-4" />
                   {confirmSignOut ? "Cerrar sesión igualmente" : "Cerrar sesión"}
                 </Button>
-              ) : (
-                <Link
-                  href={loginHrefFor("/profile")}
-                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
-                >
-                  Entrar o crear cuenta
-                </Link>
-              )}
-            </div>
+              </div>
+            ) : null}
             <Link href="/profile/data" className="inline-flex min-h-11 items-center text-sm font-semibold text-[color:var(--color-foreground)] underline underline-offset-4 hover:text-[color:var(--color-accent-hover)]">Tus datos: descargar o eliminar la cuenta</Link>
           </Card>
 
