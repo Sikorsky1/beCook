@@ -780,6 +780,34 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | Despliegue be-cook | `dpl_4nyf4yHnbXcijGZRGemEkbzPCGA7` READY en `www.becook.xyz` (anterior para rollback: `dpl_83GDSCktFcRrAWhJBEngpYAfskTj`); `/shopping/pantry` muestra Básicos, Especias, Salsas, Conservas, Congelados y Otros |
 | Reversión | Restaurar la categoría desde `backup_20261012.pantry_items_aceites` y volver al cliente anterior; `add_pantry_items` sigue aceptando el valor antiguo |
 
+## Subir el menú en PDF o foto («Ya tengo un menú») ✅ (2026-10-12)
+| Elemento | Resultado |
+|---|---|
+| Cambio | El panel «¿Ya tienes un menú? Pégalo o súbelo» tiene «Subir PDF o foto». Un PDF con texto se lee en el navegador (`unpdf@1.8.1`, carga bajo demanda), sin IA y también para invitados; las filas de una tabla conservan las columnas como tabuladores. Una foto o un PDF escaneado se reduce en el navegador (1600 px, JPEG) y lo transcribe la IA en `/api/menu-file-text` (sesión obligatoria, `store: false`, cuenta como importación en la cuota y el presupuesto). El texto va a la caja de pegar para revisarlo antes de «Procesar menú». El archivo no se guarda. Límites en `src/lib/menuFile.ts`: PDF/JPG/PNG/WebP/HEIC, 15 MB, 4 páginas, 4 MB de petición. Tras «Procesar menú» la página lleva la vista a la propuesta, al progreso o al error |
+| PR | [#21](https://github.com/Sikorsky1/beCook/pull/21) `audit-opt` → `main`, merge commit `567df93` (2026-10-12); incluye también «Continuar con Google» (oculto en producción: `NEXT_PUBLIC_AUTH_PROVIDERS` solo en Preview de `audit-opt`) y `/privacidad` y `/condiciones` (con la frase sobre fotos y PDF enviados a OpenAI). Checks en verde (application, database, e2e, Vercel) |
+| Migración | Ninguna |
+| Validación | Unitarias 534/534, lint y typecheck; E2E en local con los recorridos nuevos (PDF de invitado sin IA, foto de invitado pide sesión, foto con sesión leída por la IA simulada, error a la vista) y en CI. Producción: PDF de prueba leído en el navegador y ordenado sin IA, propuesta a la vista; `/api/menu-file-text` sin sesión 401. Pendiente: probar una foto real con la IA real |
+| Despliegue be-cook | `dpl_2EPjHBgZrXa73YB5qaTCkBKmX4fo` READY en `www.becook.xyz` (anterior para rollback: `dpl_4nyf4yHnbXcijGZRGemEkbzPCGA7`) |
+
+## «Continuar con Google» y textos legales en producción ✅ (2026-10-12)
+| Elemento | Resultado |
+|---|---|
+| Cambio | Botón «Continuar con Google» en `/login` y `/signup` (componente `OAuthButtons`, solo si `NEXT_PUBLIC_AUTH_PROVIDERS` incluye `google`; Apple preparado y oculto). Vuelta a `/auth/callback?next=…&via=oauth`: «Entrando…», destino `next` o `/week` (OnboardingGate lleva las cuentas nuevas al onboarding); cancelar o cualquier error de Google se explica en español con «Volver a iniciar sesión». «Tus datos» muestra con qué entra la cuenta. `/privacidad` y `/condiciones` públicas y estáticas desde `docs/legal/privacidad.md` y `condiciones.md` (revisadas por Sergio), enlazadas desde `/login`, `/signup` y entre sí. Plan: `docs/development/2026-10-12-login-google-apple.md` |
+| PR | [#21](https://github.com/Sikorsky1/beCook/pull/21), merge commit `567df93` (junto con la subida de PDF/foto) |
+| Migración | Ninguna |
+| Configuración | Google Cloud (cliente OAuth) y proveedor Google en becook-preview y becook (Sergio). `NEXT_PUBLIC_AUTH_PROVIDERS=google` en Vercel Preview (`audit-opt`) y Production; se incrusta en el build |
+| Validación | Unitarias 534/534, E2E 26/26 (redirección a `/authorize` interceptada, cancelación, error del servidor, enlace caducado, atrás, 320 px), revisión del componente compartido con sus arreglos aplicados. Preview: Sergio entró con Google con el email de una cuenta existente → `auth.identities` con email + google en el mismo usuario, sin duplicados; cancelar → mensaje. Pendiente: ver en datos reales una cuenta nueva solo con Google |
+| Despliegue be-cook | Redespliegue `dpl_6KZPeit1hCeAYEmPSMNrP6Bd6whK` (commit `567df93`, con la variable) READY en `www.becook.xyz` (anterior para rollback: `dpl_2EPjHBgZrXa73YB5qaTCkBKmX4fo`, sin botón). `/login` y `/signup` muestran el botón; al pulsarlo va a accounts.google.com con el cliente de beCook y vuelta a `https://www.becook.xyz/auth/callback?next=%2Fweek&via=oauth` vía becook |
+| Desactivar | Quitar `NEXT_PUBLIC_AUTH_PROVIDERS` en Production y redesplegar (o volver al despliegue anterior) |
+| Pendiente (Sergio) | Verificación de marca en Google Auth Platform (para mostrar «beCook» en vez de «…supabase.co»); Apple cuando haya cuenta de Apple Developer |
+
+## Perfil sin sesión: entrar o crear cuenta primero 🟡 (2026-10-12)
+| Elemento | Resultado |
+|---|---|
+| Cambio | En `/profile` sin sesión, la primera tarjeta ya no es «Modo local / Perfil sin guardar»: es «Guarda tu perfil en una cuenta», con el motivo (ahora solo en este dispositivo; con cuenta, en cualquier dispositivo, «con Google o con tu email» según `NEXT_PUBLIC_AUTH_PROVIDERS`) y el botón principal «Entrar o crear cuenta» → `/login?next=/profile`. «Falta por completar» sigue debajo. La tarjeta «Cuenta» del final ya no repite el botón ni «Modo local»; sin sesión solo queda «Tus datos». Con sesión no cambia nada. Solo `src/app/profile/page.tsx` (clases Tailwind y `PrimaryButton asChild`), sin tocar componentes compartidos |
+| Migración | Ninguna |
+| Validación | Unitarias, lint y typecheck; E2E 27/27 en local (incluye el «Entrar o crear cuenta» tras cerrar sesión en `aislamiento`); captura a 390 px |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|

@@ -29,7 +29,10 @@ Reglas importantes:
 - Si el menú solo tiene una comida por día, usa solo «Comida:».
 - Si una comida pone «Libre», escribe «LIBRE».
 - Conserva el nombre de cada plato tal como aparece, corrigiendo solo errores evidentes de lectura.
-- No inventes días ni platos que no estén en la imagen.
+- Escribe siempre el nombre completo del día. Si aparece abreviado («L, M, X, J, V, S, D», con X para el miércoles, o «Lun, Mar, Mié…») o numerado («Día 1» es Lunes, «Día 2» Martes… hasta «Día 7» Domingo), conviértelo.
+- Si los días van en columnas (cabecera con los días y filas de comida y cena), lee cada columna como un día.
+- Si el menú no dice los días, asígnalos en orden: el primer valor o fila es Lunes, el segundo Martes, y así sucesivamente, hasta 7.
+- No inventes platos que no estén en la imagen.
 - Si no hay ningún menú legible, devuelve found false y text vacío.
 `.trim();
 

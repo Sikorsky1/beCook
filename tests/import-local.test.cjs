@@ -398,3 +398,47 @@ test("review: the profile-change question takes the focus and «Ahora no» gives
  assert.match(bar, /ref=\{confirmRef\}/);
  assert.match(bar, /ref=\{useButtonRef\}/);
 });
+
+// Days not written as «Lunes, Martes…»: letters, abbreviations, «Día N», days across, no days.
+const summary = result => result.kind === "parsed"
+ ? result.days.map(day => `${day.dayName}:${day.lunch.dishName || "-"}/${day.dinner.dishName || "-"}`)
+ : result.reason;
+
+test("days as «L M X J V S D», abbreviations and «Día 1…7» are read on the device", () => {
+ assert.deepEqual(summary(importMenu.parseMenuTextLocally("L\tLentejas\tTortilla\nM\tArroz\tLIBRE\nX\tPasta\tSopa\nD\tPaella\tPizza")),
+  ["Lunes:Lentejas/Tortilla", "Martes:Arroz/-", "Miércoles:Pasta/Sopa", "Domingo:Paella/Pizza"]);
+ assert.deepEqual(summary(importMenu.parseMenuTextLocally("Lun\tLentejas\tSopa\nMié.\tArroz\tTortilla\nSáb\tPollo\tLIBRE")),
+  ["Lunes:Lentejas/Sopa", "Miércoles:Arroz/Tortilla", "Sábado:Pollo/-"]);
+ assert.deepEqual(summary(importMenu.parseMenuTextLocally("Día 1\nComida: Lentejas\nCena: Sopa\n\nDía 2\nComida: Pollo\nCena: Pescado\n\ndia 7:\nComida: Paella")),
+  ["Lunes:Lentejas/Sopa", "Martes:Pollo/Pescado", "Domingo:Paella/-"]);
+ assert.deepEqual(summary(importMenu.parseMenuTextLocally("Día 8\tLentejas\tSopa")), "unrecognized_line");
+});
+
+test("days across the top: each column is a day, rows of lunch and dinner", () => {
+ assert.deepEqual(summary(importMenu.parseMenuTextLocally("\tL\tM\tX\nComida\tLentejas\tArroz\tPasta\nCena\tSopa\tTortilla\tLIBRE")),
+  ["Lunes:Lentejas/Sopa", "Martes:Arroz/Tortilla", "Miércoles:Pasta/-"]);
+ // Unlabelled rows: the first is lunch, the second dinner; a header with single spaces is fine.
+ assert.deepEqual(summary(importMenu.parseMenuTextLocally("Lunes Martes\nLentejas\tArroz\nSopa\tTortilla")),
+  ["Lunes:Lentejas/Sopa", "Martes:Arroz/Tortilla"]);
+ assert.deepEqual(summary(importMenu.parseMenuTextLocally("Día\tDía 1\tDía 2\nCena\tSopa\tTortilla")), ["Lunes:-/Sopa", "Martes:-/Tortilla"]);
+ // A third row or a wrong number of cells is left to the AI.
+ assert.equal(importMenu.parseMenuTextLocally("L\tM\nLentejas\tArroz\nSopa\tTortilla\nFruta\tYogur").kind, "ambiguous");
+ assert.equal(importMenu.parseMenuTextLocally("L\tM\tX\nLentejas\tArroz").kind, "ambiguous");
+});
+
+test("rows without days: the first is Monday, the second Tuesday… with a warning", () => {
+ const result = importMenu.parseMenuTextLocally("Comida\tCena\nLentejas\tSopa\nArroz\tTortilla\nPasta\tLIBRE");
+ assert.deepEqual(summary(result), ["Lunes:Lentejas/Sopa", "Martes:Arroz/Tortilla", "Miércoles:Pasta/-"]);
+ assert.match(result.warnings[0], /primera fila en el lunes/);
+ assert.equal(summary(importMenu.parseMenuTextLocally("A | B\n".repeat(8))), "unrecognized_line", "more than 7 rows");
+ assert.equal(importMenu.parseMenuTextLocally("Lentejas  Sopa\nArroz  Tortilla").kind, "ambiguous", "spaces alone are not columns");
+});
+
+test("tables and one-letter days are worth asking the AI; prose with neither is not", () => {
+ for (const text of ["Lentejas\tSopa\nArroz\tTortilla", "D: sopa de pescado", "Día 3 pollo", "comidas de la semana: lentejas, arroz"]) {
+  assert.equal(importMenu.mentionsAnyDayName(text), true, text);
+ }
+ for (const text of ["Hola, quiero algo sano para toda la familia", "2 x 3 tomates y pan", "Lista de la compra: tomates | pan"]) {
+  assert.equal(importMenu.mentionsAnyDayName(text), false, text);
+ }
+});
