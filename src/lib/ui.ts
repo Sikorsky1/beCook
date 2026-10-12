@@ -14,5 +14,9 @@ export const pageShellStickyClass = pageShellBaseClass;
 export const pageBleedClass =
   "-ml-[max(1rem,env(safe-area-inset-left))] -mr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:-ml-[max(1.5rem,env(safe-area-inset-left))] sm:-mr-[max(1.5rem,env(safe-area-inset-right))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))]";
 
+// Step 34: the column of the screens with StickyPageHeader. Its gap (gap-4 sm:gap-5) is what the
+// header's scrolling block cancels with -mt-4 sm:-mt-5: change both together.
+export const pageStickyColumnClass = "mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5";
+
 export const pageContentClass =
   "mx-auto flex w-full max-w-6xl flex-col gap-10 sm:gap-12";

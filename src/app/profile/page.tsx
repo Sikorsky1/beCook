@@ -48,7 +48,7 @@ import {
   type UserProfile,
   type WeeklyTrainingDays,
 } from "@/lib/supabase/profiles";
-import { pageBleedClass, pageShellStickyClass } from "@/lib/ui";
+import { pageBleedClass, pageShellStickyClass, pageStickyColumnClass } from "@/lib/ui";
 
 const sexOptions: { label: string; value: Sex }[] = [
   { label: "Hombre", value: "male" },
@@ -379,7 +379,7 @@ export default function ProfilePage() {
 
   return (
     <main className={pageShellStickyClass}>
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
+      <div className={pageStickyColumnClass}>
         <StickyPageHeader title="Perfil" heading="Lo que necesita tu menú" />
 
         <Card className="space-y-3 p-3.5 sm:p-4">

@@ -49,7 +49,7 @@ import {
 } from "@/lib/data/shopping";
 import { formatIsoWeekTitle, getCurrentIsoWeek, type IsoWeek } from "@/lib/isoWeek";
 import { getAccessToken } from "@/lib/supabase/auth";
-import { pageShellStickyClass } from "@/lib/ui";
+import { pageShellStickyClass, pageStickyColumnClass } from "@/lib/ui";
 import {
   activePantryNames,
   pantryItemsOrDefault,
@@ -89,6 +89,9 @@ function ShoppingProgress({
 }
 
 // What the user hears after an edit of the list, by what the account did with it.
+// Step 34: what the account did not accept is a failure, always shown (see actionNotices).
+const editFailed = (status: EditResult["status"] | "existing") => !["synced", "local", "pending", "existing"].includes(status);
+
 function editMessage(status: EditResult["status"], done: string) {
   switch (status) {
     case "synced":
@@ -306,7 +309,7 @@ export default function ShoppingListPage() {
       setListSyncState({});
       setHasCheckedList(false);
       setServings(null);
-      notices.clear();
+      notices.reset();
       setIsoWeek(weekToLoad);
       setPantryItems(activePantryNames(pantryItemsOrDefault(readCachedPantry(dataIdentity))));
 
@@ -589,15 +592,16 @@ export default function ShoppingListPage() {
     }
   };
 
-  const addManualItem = async (draft: ManualItemDraft) => {
-    if (!isoWeek || !weekDays) return "Primero necesitas una lista para esta semana.";
+  const addManualItem = async (draft: ManualItemDraft): Promise<{ text: string; failed: boolean }> => {
+    if (!isoWeek || !weekDays) return { text: "Primero necesitas una lista para esta semana.", failed: true };
     const result = await runEdit(() => addManualShoppingItem(dataIdentityOf(), isoWeek, draft, weekDays));
     const name = `«${capitalize(draft.name)}»`;
     // Frozen food is shown under «Otros».
     const section = capitalize(draft.category === "congelados" ? "otros" : draft.category);
-    if (result.status === "existing") return `${name} ya está en la lista.`;
-    if (result.status === "refused") return "Revisa el nombre y la cantidad.";
-    return editMessage(result.status, `${name} añadido a ${section}.`);
+    const failed = editFailed(result.status);
+    if (result.status === "existing") return { text: `${name} ya está en la lista.`, failed };
+    if (result.status === "refused") return { text: "Revisa el nombre y la cantidad.", failed };
+    return { text: editMessage(result.status, `${name} añadido a ${section}.`), failed };
   };
 
   const dataIdentityOf = () => ({ scope: identity.scope, userId: identity.userId });
@@ -617,6 +621,7 @@ export default function ShoppingListPage() {
           result.status === "refused"
             ? `No se puede cambiar la cantidad de «${capitalize(item.name)}».`
             : editMessage(result.status, `Cantidad de «${capitalize(item.name)}»: ${formatShoppingAmount(quantity, unit ?? item.unit)}.`),
+          { failed: editFailed(result.status) },
         ),
       );
     },
@@ -628,6 +633,7 @@ export default function ShoppingListPage() {
           result.status === "refused"
             ? `No se puede quitar «${capitalize(item.name)}».`
             : editMessage(result.status, `«${capitalize(item.name)}» quitado de la lista.`),
+          { failed: editFailed(result.status) },
         ),
       );
     },
@@ -639,6 +645,7 @@ export default function ShoppingListPage() {
           result.status === "conflict"
             ? "Tu despensa ha cambiado en otro dispositivo. Revisa la despensa."
             : `«${capitalize(item.name)}» está ahora en tu despensa${result.status === "pending" ? " (se guardará al recuperar la conexión)" : ""}.`,
+          { failed: result.status === "conflict" },
         );
       });
     },
@@ -656,6 +663,7 @@ export default function ShoppingListPage() {
           : result.status === "conflict"
             ? "Tu despensa ha cambiado en otro dispositivo. Revisa la despensa."
             : `«${capitalize(item.name)}» pasa a la lista: lo hemos marcado como agotado en tu despensa${result.status === "pending" ? " (se guardará al recuperar la conexión)" : ""}.`,
+        { failed: result.status === "missing" || result.status === "conflict" },
       );
     });
   };
@@ -670,7 +678,7 @@ export default function ShoppingListPage() {
 
   return (
     <main className={`${pageShellStickyClass} min-h-dvh`}>
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
+      <div className={pageStickyColumnClass}>
         {/* Step 34: the bar (progress) and the section links stay; title, tabs and week line scroll. */}
         <StickyPageHeader
           title="Lista de la compra"
@@ -840,7 +848,7 @@ export default function ShoppingListPage() {
                 />
               ))}
               {atHome.length > 0 ? (
-                <details id={shoppingSectionId("en-casa")} className="scroll-mt-[calc(7.5rem+env(safe-area-inset-top))] rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+                <details id={shoppingSectionId("en-casa")} className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
                   <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-4 py-3">
                     <span className="t-body-strong text-[color:var(--color-foreground)]">
                       Ya lo tienes habitualmente ({atHome.length})
@@ -892,7 +900,8 @@ export default function ShoppingListPage() {
               <ManualItemForm
                 onAdd={async (draft) => {
                   const show = notices.begin("form");
-                  show(await addManualItem(draft));
+                  const added = await addManualItem(draft);
+                  show(added.text, { failed: added.failed });
                 }}
                 message={noticeText(notice, "form")}
                 onClose={() => notices.close("form")}

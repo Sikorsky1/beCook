@@ -364,7 +364,9 @@ test("Compra: one continuous list with section anchors, the usual-at-home group 
  const section = read("src/components/features/ShoppingSection.tsx");
  assert.ok(!page.includes("selectedCategory"), "no single-category view");
  assert.match(page, /aria-label="Secciones de la lista"/);
- assert.match(section, /scroll-mt-/);
+ // Section anchors land under the fixed header thanks to the page's scroll-padding (step 34).
+ assert.match(section, /<section id=\{id\}/);
+ assert.match(read("src/app/layout.tsx"), /has-\[\[data-sticky-header\]\]:scroll-pt-/);
  assert.match(page, /<details/);
  assert.match(page, /Ya lo tienes habitualmente/);
  assert.match(page, /raciones/);

@@ -29,7 +29,7 @@ import {
 } from "@/lib/data/pantry";
 import type { DataIdentity } from "@/lib/data/repositories";
 import { createActionNotices, type ActionNotice } from "@/lib/actionNotices";
-import { pageShellStickyClass } from "@/lib/ui";
+import { pageShellStickyClass, pageStickyColumnClass } from "@/lib/ui";
 import {
   capitalizePantryItemName,
   normalizePantryItemName,
@@ -350,6 +350,8 @@ export default function PantryPage() {
       const isSameLoad = lastLoadRef.current === loadKey;
       lastLoadRef.current = loadKey;
       setSyncState((current) => (isSameLoad ? { pending: current.pending, offline: current.offline } : {}));
+      // Step 34: another identity: no notice of the previous one.
+      if (!isSameLoad) notices.reset();
       setPantryItems(readPantryView(dataIdentity));
       setHasLoadedPantry(true);
       setIsCheckingAccount(true);
@@ -374,7 +376,8 @@ export default function PantryPage() {
       isCancelled = true;
       window.clearTimeout(loadTimer);
     };
-  }, [identity.status, identity.scope, identity.userId, identity.epoch, reloadCount]);
+    // `notices` never changes (created once with the state setter).
+  }, [identity.status, identity.scope, identity.userId, identity.epoch, reloadCount, notices]);
 
   // B7: each change writes only that item. The device copy changes at once and is shown; the
   // list shown after the account answers is the device copy at that moment (later changes kept).
@@ -506,6 +509,7 @@ export default function PantryPage() {
           : result.status === "pending"
             ? `${added} Se guardará en tu cuenta al recuperar la conexión.`
             : added,
+        { failed: result.status === "conflict" },
       ),
     );
   };
@@ -529,7 +533,7 @@ export default function PantryPage() {
 
   return (
     <main className={pageShellStickyClass}>
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
+      <div className={pageStickyColumnClass}>
         {/* Step 34: only the bar (progress) stays; title, tabs and categories scroll. */}
         <StickyPageHeader
           title="Despensa"

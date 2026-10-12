@@ -64,7 +64,7 @@ test("dead files are gone and every export of ui.ts has a consumer", () => {
 
   const ui = read("src/lib/ui.ts");
   const exported = [...ui.matchAll(/export const (\w+)/g)].map((match) => match[1]);
-  assert.deepEqual(exported.sort(), ["pageBleedClass", "pageContentClass", "pageShellClass", "pageShellStickyClass"]);
+  assert.deepEqual(exported.sort(), ["pageBleedClass", "pageContentClass", "pageShellClass", "pageShellStickyClass", "pageStickyColumnClass"]);
   const others = sourceFiles("src").filter((file) => file !== path.join("src", "lib", "ui.ts")).map(read).join("\n");
   for (const name of exported) assert.match(others, new RegExp(`\\b${name}\\b`), `${name} has no consumer`);
 });
@@ -110,11 +110,13 @@ test("StickyPageHeader: only the bar and the pinned row stick (≤ 120 px); the 
   assert.ok(!/addEventListener\(\s*"scroll"|onScroll|useEffect/.test(header), "CSS only");
 });
 
-test("Semana, Perfil, Compra and Despensa use the header; tabs and titles scroll; scroll margins fit", () => {
+test("Semana, Perfil, Compra and Despensa use the header; tabs and titles scroll", () => {
   for (const file of stickyScreens) {
     const source = read(file);
     assert.match(source, /<StickyPageHeader\b/, file);
     assert.match(source, /className=\{(?:`\$\{)?pageShellStickyClass/, file);
+    // The header cancels the column's gap: the column must be the one whose gap it cancels.
+    assert.match(source, /<div className=\{pageStickyColumnClass\}>\s+(?:\{\/\*[^]*?\*\/\}\s+)?<StickyPageHeader\b/, file);
     const start = source.indexOf("pinned={");
     const pinned = start === -1 ? "" : source.slice(start, source.indexOf("\n          }", start));
     assert.ok(!pinned.includes("<ShoppingTabs") && !pinned.includes("<h1"), `${file}: tabs and h1 are not pinned`);
@@ -130,14 +132,39 @@ test("Semana, Perfil, Compra and Despensa use the header; tabs and titles scroll
   assert.match(week.slice(week.indexOf("pinned={")), /^pinned=\{\s+selectedIsoWeek && weekDayNumbers[^]*?aria-label="Ir a un día de la semana"/);
   assert.ok(!week.includes("headerRef") && !week.includes("offsetHeight"), "Semana does not measure the header");
   assert.match(week, /scrollIntoView\(\{ block: "start", behavior: reduceMotion \? "auto" : "smooth" \}\)/);
-  // Sections and days land under the fixed part (113 px) with some air: 7.5rem = 120 px.
-  for (const file of ["src/components/features/ShoppingSection.tsx", "src/components/pages/ShoppingListPage.tsx", "src/app/week/page.tsx"]) {
-    const source = read(file);
-    assert.ok(source.includes("scroll-mt-[calc(7.5rem+env(safe-area-inset-top))]"), file);
-    assert.doesNotMatch(source, /scroll-mt-64|scroll-mt-\[172px\]/, file);
-  }
+  // No scroll-margin of their own: the page's scroll-padding does it (they would add up).
+  for (const file of sourceFiles("src")) assert.doesNotMatch(read(file), /\bscroll-mt-/, file);
   // The pantry card header was sticky inside an overflow-hidden card (no effect): plain now.
   assert.ok(!read("src/components/pages/PantryPage.tsx").includes("sticky"));
+});
+
+test("the column gap the header cancels lives in one constant", () => {
+  const ui = read("src/lib/ui.ts");
+  const column = ui.match(/export const pageStickyColumnClass = "([^"]+)"/)[1].split(" ");
+  assert.ok(column.includes("gap-4") && column.includes("sm:gap-5"), column.join(" "));
+  assert.match(read("src/components/layout/StickyPageHeader.tsx"), /<div className="-mt-4 sm:-mt-5">/);
+  for (const file of sourceFiles("src")) {
+    if (read(file).includes("<StickyPageHeader")) assert.ok(read(file).includes("pageStickyColumnClass"), file);
+  }
+});
+
+test("focus and scrolled-to targets never land under the fixed bars (scroll-padding on <html>, WCAG 2.4.11)", () => {
+  const layout = read("src/app/layout.tsx");
+  const html = layout.slice(layout.indexOf("<html"), layout.indexOf("<body"));
+  const classes = html.match(/className=\{`([^`]+)`\}/)[1].split(/\s+/);
+  // Top: only where a sticky header exists, 7.5rem = 120 px ≥ 113 px fixed.
+  assert.ok(classes.includes("has-[[data-sticky-header]]:scroll-pt-[calc(7.5rem+env(safe-area-inset-top))]"));
+  assert.match(read("src/components/layout/StickyPageHeader.tsx"), /<div\s+data-sticky-header\s+className=\{`sticky top-0 /);
+  // Bottom: the bottom navigation is always there. Its height from its classes: pb-[0.85rem] +
+  // p-1.5 ×2 + border ×2 + min-h-[4.25rem] ≈ 95.6 px; 6.5rem = 104 px leaves some air.
+  const nav = read("src/components/layout/BottomNavigation.tsx");
+  for (const piece of ["pb-[calc(0.85rem+env(safe-area-inset-bottom))]", "p-1.5", "min-h-[4.25rem]", "border "]) assert.ok(nav.includes(piece), piece);
+  const navHeight = 0.85 * 16 + 2 * 6 + 2 + 4.25 * 16;
+  assert.ok(classes.includes("scroll-pb-[calc(6.5rem+env(safe-area-inset-bottom))]") && 6.5 * 16 >= navHeight);
+  // With the proposal bar of Crear menú (fixed 6.5rem above the bottom, ~100–130 px tall): 15rem.
+  assert.ok(classes.includes("has-[[data-proposal-bar]]:scroll-pb-[calc(15rem+env(safe-area-inset-bottom))]"));
+  const bar = read("src/components/features/ProposalActionBar.tsx");
+  assert.match(bar, /<div data-proposal-bar className="pointer-events-none fixed inset-x-0 bottom-\[calc\(6\.5rem\+env\(safe-area-inset-bottom\)\)\]/, "position unchanged");
 });
 
 test("ShoppingTabs: only the current routes (the old ones redirect before rendering)", () => {
@@ -170,7 +197,28 @@ test("notices: a new action clears the previous notice at once; a slow answer ne
   assert.equal(noticeText(box.notice, "list"), "«Papel» quitado de la lista.", "the late answer is dropped");
   notices.clear();
   assert.equal(box.notice, null, "an action without a notice (marking an item) clears it too");
-  fast("again");
+});
+
+test("notices: marking an item never swallows an answer on its way; failures always show; reset drops all", () => {
+  const {box, notices} = noticeState();
+  const quantity = notices.begin();
+  notices.clear(); // the user marks an item meanwhile
+  quantity("Cantidad de «Patata»: 2 kg.");
+  assert.equal(noticeText(box.notice, "list"), "Cantidad de «Patata»: 2 kg.", "clear() does not drop it");
+  // A failure overtaken by a later action is still shown when it arrives.
+  const usedUp = notices.begin();
+  const toPantry = notices.begin();
+  toPantry("«Leche» está ahora en tu despensa.");
+  usedUp("«Sal» no está en tu despensa.", {failed: true});
+  assert.equal(noticeText(box.notice, "list"), "«Sal» no está en tu despensa.");
+  const slowSuccess = notices.begin();
+  notices.begin();
+  slowSuccess("«Papel» quitado de la lista.");
+  assert.equal(box.notice, null, "a superseded success is still dropped");
+  // Another identity or week: nothing of the previous one, not even a failure.
+  const old = notices.begin();
+  notices.reset();
+  old("Tu despensa ha cambiado en otro dispositivo. Revisa la despensa.", {failed: true});
   assert.equal(box.notice, null);
 });
 
@@ -203,9 +251,15 @@ test("notices: Compra and Despensa go through the notice channel for every actio
   // Compra: quantity, removal, «Añadir a despensa», «Se me acabó» and the add form start an action;
   // marking an item and a new identity or week clear the notice.
   assert.equal((shopping.match(/notices\.begin\(\)/g) ?? []).length, 4);
-  assert.match(shopping, /const show = notices\.begin\("form"\);\s+show\(await addManualItem\(draft\)\);/);
+  assert.match(shopping, /const show = notices\.begin\("form"\);\s+const added = await addManualItem\(draft\);\s+show\(added\.text, \{ failed: added\.failed \}\);/);
+  // Failures (refused, stale, discarded, conflict, not in the pantry) are flagged as such.
+  assert.equal((shopping.match(/failed: editFailed\(result\.status\)/g) ?? []).length, 2);
+  assert.match(shopping, /\{ failed: result\.status === "conflict" \}/);
+  assert.match(shopping, /\{ failed: result\.status === "missing" \|\| result\.status === "conflict" \}/);
+  assert.match(pantry, /\{ failed: result\.status === "conflict" \}/);
   assert.match(shopping, /onToggle: \(item\) => \{\s+notices\.clear\(\);/);
-  assert.match(shopping, /setServings\(null\);\s+notices\.clear\(\);/);
+  assert.match(shopping, /setServings\(null\);\s+notices\.reset\(\);/);
+  assert.match(pantry, /if \(!isSameLoad\) notices\.reset\(\);/);
   assert.match(shopping, /message=\{noticeText\(notice, "form"\)\}\s+onClose=\{\(\) => notices\.close\("form"\)\}/);
   assert.match(shopping, /\{hasList \? noticeText\(notice, "list"\) : ""\}/);
   // Despensa: adding basics shows a notice; adding, «Tengo / Se acabó», deleting and «Deshacer» clear it.

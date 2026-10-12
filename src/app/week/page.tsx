@@ -39,7 +39,7 @@ import {
 } from "@/lib/data/repositories";
 import { createMenuImportHref } from "@/lib/navigation";
 import { hasPlannedMeals, repeatPreviousWeek, type RepeatWeekResult } from "@/lib/repeatWeek";
-import { pageShellStickyClass } from "@/lib/ui";
+import { pageShellStickyClass, pageStickyColumnClass } from "@/lib/ui";
 import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
 import { withWeekDates } from "@/lib/weekStorage";
 import {
@@ -382,7 +382,7 @@ function WeekPageContent() {
       return;
     }
 
-    // Step 34: the day lands under the fixed header thanks to its scroll-margin (no measuring).
+    // Step 34: the day lands under the fixed header thanks to the page's scroll-padding (layout.tsx).
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     dayCard.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
   };
@@ -425,10 +425,11 @@ function WeekPageContent() {
 
   return (
     <main className={pageShellStickyClass}>
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
+      <div className={pageStickyColumnClass}>
         {/* Step 34: the bar (with the week arrows) and the day strip stay; the title scrolls. */}
         <StickyPageHeader
-          title="Plan semanal"
+          // The week stays named in the bar while the h1 is scrolled away (‹ › are next to it).
+          title={selectedIsoWeek ? formatIsoWeekTitle(selectedIsoWeek, { compact: true }) : "Plan semanal"}
           headingLabel={selectedIsoWeek ? formatIsoWeekTitle(selectedIsoWeek) : undefined}
           heading={
             selectedIsoWeek ? (
@@ -615,7 +616,7 @@ function WeekPageContent() {
           {weekDays && layout ? (
             <div className="flex flex-col gap-4">
               {layout.todayPosition !== null ? (
-                <div id={`week-day-${layout.todayPosition}`} className="scroll-mt-[calc(7.5rem+env(safe-area-inset-top))]">
+                <div id={`week-day-${layout.todayPosition}`}>
                   {layout.todayDay ? (
                     <WeekDayCard
                       key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}-${layout.todayDay.day}`}
@@ -648,7 +649,6 @@ function WeekPageContent() {
                     <div
                       key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}-${day.day}`}
                       id={`week-day-${getDayPosition(day.day)}`}
-                      className="scroll-mt-[calc(7.5rem+env(safe-area-inset-top))]"
                     >
                       <WeekDayCard
                         day={day}
