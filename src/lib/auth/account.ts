@@ -49,6 +49,7 @@ const messageByCode: Record<string, string> = {
   reauthentication_needed: "Por seguridad, vuelve a pedir el enlace para cambiar la contraseña.",
   // Return from Google or Apple (/auth/callback).
   access_denied: "Has cancelado el inicio de sesión. Puedes volver a intentarlo o entrar con tu email.",
+  user_cancelled_authorize: "Has cancelado el inicio de sesión. Puedes volver a intentarlo o entrar con tu email.",
   provider_disabled: "Ahora mismo no se puede entrar así. Entra con tu email.",
   bad_oauth_state: "No se pudo completar el inicio de sesión. Vuelve a intentarlo desde el principio.",
   bad_oauth_callback: "No se pudo completar el inicio de sesión. Vuelve a intentarlo desde el principio.",
@@ -62,6 +63,7 @@ const messageByCode: Record<string, string> = {
 // to resend an email link.
 const providerErrorCodes = new Set([
   "access_denied",
+  "user_cancelled_authorize",
   "provider_disabled",
   "bad_oauth_state",
   "bad_oauth_callback",
@@ -223,11 +225,22 @@ export function readAuthLinkError(href: string): AccountFailure | null {
   if (code && messageByCode[code]) return { ok: false, message: messageByCode[code], code };
   // A cancelled provider screen comes back as error=access_denied, sometimes without error_code.
   if (!code && error === "access_denied") return { ok: false, message: messageByCode.access_denied, code: error };
+  // Back from Google or Apple with an error we do not name (server_error, unexpected_failure…).
+  if (url.searchParams.get("via") === "oauth") return { ok: false, message: fallbackByAction.oauth, code: code ?? error };
   return { ok: false, message: "El enlace no es válido o ya se ha usado. Pide uno nuevo.", code: code ?? error };
 }
 
-export function isProviderSignInError(failure: AccountFailure | null) {
-  return Boolean(failure?.code && providerErrorCodes.has(failure.code));
+// An error after Google or Apple: the return address says so (via=oauth), and a few codes only
+// ever come from a provider.
+export function isProviderSignInError(failure: AccountFailure | null, href?: string) {
+  if (!failure) return false;
+  if (failure.code && providerErrorCodes.has(failure.code)) return true;
+  if (!href) return false;
+  try {
+    return new URL(href).searchParams.get("via") === "oauth";
+  } catch {
+    return false;
+  }
 }
 
 // --- Sign-in with Google or Apple ---------------------------------------------------------------

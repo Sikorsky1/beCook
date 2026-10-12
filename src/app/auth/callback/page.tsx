@@ -26,7 +26,7 @@ const noSubscription = () => () => {};
 function useProviderSignInError() {
   return useSyncExternalStore(
     noSubscription,
-    () => isProviderSignInError(readAuthLinkError(window.location.href)),
+    () => isProviderSignInError(readAuthLinkError(window.location.href), window.location.href),
     () => false,
   );
 }

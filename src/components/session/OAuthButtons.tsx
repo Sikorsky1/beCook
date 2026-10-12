@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { FormError } from "@/components/session/AuthPageShell";
 import {
@@ -9,7 +9,7 @@ import {
   signInWithProvider,
   type OAuthProvider,
 } from "@/lib/auth/account";
-import { authRedirectUrl } from "@/lib/navigation";
+import { oauthRedirectUrl } from "@/lib/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 // Inlined at build time: each Vercel environment decides which providers it shows.
@@ -18,7 +18,7 @@ const providers = enabledOAuthProviders(process.env.NEXT_PUBLIC_AUTH_PROVIDERS);
 // Same height and shape as the app buttons; colours follow each provider's brand rules
 // (Google: white with a grey border and the four-colour «G»; Apple: black with the white logo).
 const baseClass =
-  "inline-flex min-h-11 w-full touch-manipulation items-center justify-center gap-3 rounded-[var(--radius-control)] border px-5 text-sm font-semibold transition-[background-color,box-shadow,opacity] duration-200 ease-out focus-visible:outline-none focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.18)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none";
+  "inline-flex min-h-11 w-full touch-manipulation items-center justify-center gap-3 rounded-[var(--radius-control)] border px-5 text-sm font-medium transition-[background-color,box-shadow,opacity] duration-200 ease-out focus-visible:outline-none focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.18)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none";
 
 const providerClass: Record<OAuthProvider, string> = {
   google: "border-[#747775] bg-white text-[#1f1f1f] hover:bg-[#f2f2f2]",
@@ -52,13 +52,23 @@ export function OAuthButtons({ next }: { next: string | null }) {
   const [pending, setPending] = useState<OAuthProvider | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
+  // Back from the provider with «atrás»: the page may come from the back/forward cache with the
+  // button still busy.
+  useEffect(() => {
+    const reset = (event: PageTransitionEvent) => {
+      if (event.persisted) setPending(null);
+    };
+    window.addEventListener("pageshow", reset);
+    return () => window.removeEventListener("pageshow", reset);
+  }, []);
+
   if (!providers.length) return null;
 
   async function handleClick(provider: OAuthProvider) {
     setPending(provider);
     setErrorMessage("");
     const result = await signInWithProvider(supabase, provider, {
-      redirectTo: authRedirectUrl(window.location.origin, "/auth/callback", next),
+      redirectTo: oauthRedirectUrl(window.location.origin, next),
     });
     // On success the page is already leaving for the provider; the button stays busy.
     if (!result.ok) {

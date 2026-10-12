@@ -1,6 +1,6 @@
 # Política de privacidad de beCook
 
-Última actualización: 12 octubre 2026
+Última actualización: 12 de octubre de 2026
 
 ## 1. Quién es el responsable
 
@@ -12,14 +12,14 @@
 
 | Categoría | Datos | Cuándo |
 | --- | --- | --- |
-| Cuenta | Email, contraseña (la guarda cifrada Supabase Auth; no la vemos), fechas de alta y último acceso, sesiones | Si creas una cuenta |
+| Cuenta | Email, contraseña si la usas (la guarda cifrada Supabase Auth; no la vemos), proveedor con el que entras (Google), fechas de alta y último acceso, sesiones | Si creas una cuenta |
 | Perfil | Comensales, días y tipos de entrenamiento, objetivos, dietas, **alergias e intolerancias**, alimentos que no te gustan. Opcionales: sexo, fecha de nacimiento, altura y peso | Si los rellenas |
 | Planificación | Menús por semana, platos, fichas de plato, lista de la compra, despensa, texto de menús que pegues para importarlos | Al usar la app |
 | Uso de IA | Tipo de petición, resultado, modelo, tokens, coste estimado, fecha y una huella cifrada de la IP (HMAC con clave secreta; no guardamos la IP) | Cada petición de IA |
 | Técnicos | Registros del servidor (ruta, código de respuesta, tiempos) sin contenido de tus menús ni de tu perfil | Al usar la web |
 | En tu dispositivo | Si no inicias sesión, tus datos se guardan solo en el almacenamiento local de tu navegador y no llegan a nuestros servidores | Sin cuenta |
 
-Si entras con Google, Google nos facilita tu email y tu nombre, y nada más.
+Si entras con Google, Google nos facilita tu email, tu nombre, la dirección de tu foto de perfil y un identificador de tu cuenta de Google, y nada más. No usamos la foto.
 
 ## 3. Para qué los usamos y con qué base
 
@@ -73,7 +73,7 @@ Puedes ejercerlos en la app o escribiendo a **sergio.ortiz.torrijos@gmail.com**:
 - **Retirar el consentimiento** sobre alergias y dietas: borrándolas del perfil (los menús dejarán de
   tenerlas en cuenta).
 - **Oposición y limitación**: por email.
-- **Reclamar** ante la Agencia Española de Protección de Datos (www.aepd.es).
+- **Reclamar** ante la Agencia Española de Protección de Datos ([www.aepd.es](https://www.aepd.es)).
 
 ## 8. Menores
 

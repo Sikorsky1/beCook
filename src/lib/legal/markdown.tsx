@@ -1,85 +1,35 @@
 // Renders the reviewed legal texts (docs/legal/*.md) as page content, so the published page and
-// the reviewed file never drift apart. Only the subset those files use: headings, paragraphs,
-// lists (with indented continuation lines), tables, **bold**, `code`, [links](/internal) and emails.
+// the reviewed file never drift apart. Parsing lives in ./parse.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { parseInline, parseLegalMarkdown } from "@/lib/legal/parse";
 import { pageShellClass } from "@/lib/ui";
-
-export type LegalBlock =
-  | { kind: "h1" | "h2" | "p"; text: string }
-  | { kind: "ul"; items: string[] }
-  | { kind: "table"; head: string[]; rows: string[][] };
-
-const cells = (line: string) =>
-  line
-    .trim()
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
-    .map((cell) => cell.trim());
-
-export function parseLegalMarkdown(source: string): LegalBlock[] {
-  const blocks: LegalBlock[] = [];
-  const lines = source.replace(/\r\n/g, "\n").split("\n");
-  let index = 0;
-  while (index < lines.length) {
-    const line = lines[index];
-    if (!line.trim()) {
-      index += 1;
-    } else if (line.startsWith("# ") || line.startsWith("## ")) {
-      blocks.push({ kind: line.startsWith("# ") ? "h1" : "h2", text: line.replace(/^#+\s+/, "").trim() });
-      index += 1;
-    } else if (line.trimStart().startsWith("|")) {
-      const rows: string[][] = [];
-      while (index < lines.length && lines[index].trimStart().startsWith("|")) {
-        // The |---|---| separator only marks the header.
-        if (!/^\s*\|[\s|:-]+\|\s*$/.test(lines[index])) rows.push(cells(lines[index]));
-        index += 1;
-      }
-      blocks.push({ kind: "table", head: rows[0] ?? [], rows: rows.slice(1) });
-    } else if (line.startsWith("- ")) {
-      const items: string[] = [];
-      while (index < lines.length && (lines[index].startsWith("- ") || /^\s+\S/.test(lines[index]))) {
-        if (lines[index].startsWith("- ")) items.push(lines[index].slice(2).trim());
-        else items[items.length - 1] += ` ${lines[index].trim()}`;
-        index += 1;
-      }
-      blocks.push({ kind: "ul", items });
-    } else {
-      const text: string[] = [];
-      while (index < lines.length && lines[index].trim() && !/^(#|- |\s*\|)/.test(lines[index])) {
-        text.push(lines[index].trim());
-        index += 1;
-      }
-      blocks.push({ kind: "p", text: text.join(" ") });
-    }
-  }
-  return blocks;
-}
 
 const linkClass =
   "font-semibold text-[color:var(--color-foreground)] underline underline-offset-4 hover:text-[color:var(--color-accent-hover)]";
 
 function renderInline(text: string): ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\(\/[^)\s]*\)|[\w.+-]+@[\w-]+(?:\.[\w-]+)+)/g).map((part, index) => {
-    const link = /^\[([^\]]+)\]\((\/[^)\s]*)\)$/.exec(part);
-    if (link) {
-      return <Link key={index} href={link[2]} className={linkClass}>{link[1]}</Link>;
+  return parseInline(text).map((part, index) => {
+    switch (part.kind) {
+      case "link":
+        return part.href.startsWith("/") ? (
+          <Link key={index} href={part.href} className={linkClass}>{part.text}</Link>
+        ) : (
+          <a key={index} href={part.href} rel="noopener noreferrer" className={linkClass}>{part.text}</a>
+        );
+      case "strong":
+        return <strong key={index} className="font-semibold">{renderInline(part.text)}</strong>;
+      case "code":
+        return <code key={index} className="font-mono text-[0.875em]">{part.text}</code>;
+      case "email":
+        return <a key={index} href={`mailto:${part.text}`} className={`break-all ${linkClass}`}>{part.text}</a>;
+      default:
+        return part.text;
     }
-    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
-      return <strong key={index} className="font-semibold">{renderInline(part.slice(2, -2))}</strong>;
-    }
-    if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
-      return <code key={index} className="font-mono text-[0.875em]">{part.slice(1, -1)}</code>;
-    }
-    if (/^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$/.test(part)) {
-      return <a key={index} href={`mailto:${part}`} className={`break-all ${linkClass}`}>{part}</a>;
-    }
-    return part;
   });
 }
 
@@ -92,6 +42,8 @@ export function LegalDocument({ source }: { source: string }) {
             return <h1 key={index} className="t-h1">{renderInline(block.text)}</h1>;
           case "h2":
             return <h2 key={index} className="t-h2 mt-4">{renderInline(block.text)}</h2>;
+          case "h3":
+            return <h3 key={index} className="t-body-strong mt-2">{renderInline(block.text)}</h3>;
           case "p":
             return <p key={index} className="t-body">{renderInline(block.text)}</p>;
           case "ul":
@@ -102,7 +54,14 @@ export function LegalDocument({ source }: { source: string }) {
             );
           case "table":
             return (
-              <div key={index} className="overflow-x-auto rounded-[var(--radius-control)] border border-[color:var(--color-border)]">
+              // Focusable: a narrow screen may need to scroll a wide table with the keyboard.
+              <div
+                key={index}
+                role="region"
+                aria-label={`Tabla: ${block.head.join(", ")}`}
+                tabIndex={0}
+                className="overflow-x-auto rounded-[var(--radius-control)] border border-[color:var(--color-border)] focus-visible:outline-none focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.18)]"
+              >
                 <table className="w-full border-collapse text-left text-sm leading-5">
                   <thead className="bg-[color:var(--color-surface-muted)]">
                     <tr>

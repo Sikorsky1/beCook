@@ -228,9 +228,11 @@ test("providers come only from NEXT_PUBLIC_AUTH_PROVIDERS; without it there are 
 test("signInWithProvider asks Auth for the provider with the callback and its destination", async () => {
  const calls = [];
  const client = {auth: {signInWithOAuth: async options => { calls.push(options); return {data: {provider: "google", url: "https://x"}, error: null}; }}};
- const redirectTo = nav.authRedirectUrl("https://www.becook.xyz", "/auth/callback", "/create-menu?week=2026-W42");
+ const redirectTo = nav.oauthRedirectUrl("https://www.becook.xyz/", "/create-menu?week=2026-W42");
+ assert.equal(redirectTo, "https://www.becook.xyz/auth/callback?next=%2Fcreate-menu%3Fweek%3D2026-W42&via=oauth");
+ assert.equal(nav.oauthRedirectUrl("https://www.becook.xyz", "https://evil.example/x"), "https://www.becook.xyz/auth/callback?via=oauth", "an off-site next is dropped");
  assert.deepEqual(await account.signInWithProvider(client, "google", {redirectTo}), {ok: true});
- assert.deepEqual(calls, [{provider: "google", options: {redirectTo: "https://www.becook.xyz/auth/callback?next=%2Fcreate-menu%3Fweek%3D2026-W42"}}]);
+ assert.deepEqual(calls, [{provider: "google", options: {redirectTo}}]);
 
  const failing = {auth: {signInWithOAuth: async () => ({data: {}, error: authError("provider_disabled")})}};
  const disabled = await account.signInWithProvider(failing, "google", {redirectTo});
@@ -256,6 +258,14 @@ test("the return from Google with an error is explained in Spanish and offers to
  const expired = account.readAuthLinkError("https://www.becook.xyz/auth/callback#error=access_denied&error_code=otp_expired&error_description=x");
  assert.equal(account.isProviderSignInError(expired), false);
  assert.equal(account.isProviderSignInError(null), false);
+ // Any error after Google (via=oauth) offers to try again, with a message about signing in.
+ const serverHref = "https://www.becook.xyz/auth/callback?via=oauth&error=server_error&error_code=unexpected_failure&error_description=Unable+to+exchange+external+code";
+ const server = account.readAuthLinkError(serverHref);
+ assert.equal(server.message, "No se pudo conectar. Inténtalo de nuevo o entra con tu email.");
+ assert.equal(account.isProviderSignInError(server, serverHref), true);
+ assert.equal(account.isProviderSignInError(server, "https://www.becook.xyz/auth/callback?error=server_error"), false);
+ const apple = account.readAuthLinkError("https://www.becook.xyz/auth/callback?error=user_cancelled_authorize&error_code=user_cancelled_authorize");
+ assert.equal(apple.message, cancelled.message);
  for (const failure of [cancelled, state]) assert.doesNotMatch(failure.message, /denied|state|Supabase/i);
 });
 
@@ -274,7 +284,7 @@ test("Google buttons, callback and legal pages are wired into the account screen
  }
  const buttons = read("src/components/session/OAuthButtons.tsx");
  assert.match(buttons, /enabledOAuthProviders\(process\.env\.NEXT_PUBLIC_AUTH_PROVIDERS\)/);
- assert.match(buttons, /"\/auth\/callback", next/);
+ assert.match(buttons, /oauthRedirectUrl\(window\.location\.origin, next\)/);
  assert.match(buttons, /if \(!providers\.length\) return null;/);
  // After Google the destination is next or the week; OnboardingGate takes new accounts to the onboarding.
  assert.match(read("src/app/auth/callback/page.tsx"), /next \?\? defaultAfterLoginPath/);
@@ -283,5 +293,33 @@ test("Google buttons, callback and legal pages are wired into the account screen
   assert.match(read(`src/app/${page}/page.tsx`), new RegExp(`file="${file}"`), page);
   assert.doesNotMatch(read(`docs/legal/${file}`), /\[(REVISAR|DECIDIR)|Borrador|Pendiente antes de publicar|\[fecha|\[email/i, file);
  }
- assert.match(read("docs/legal/privacidad.md"), /Si entras con Google, Google nos facilita tu email y tu nombre, y nada más\./);
+ assert.match(read("docs/legal/privacidad.md"), /Si entras con Google, Google nos facilita tu email, tu nombre, la dirección de tu foto de perfil y un identificador de tu cuenta de Google, y nada más\./);
+});
+
+test("legal texts: headings, tables, lists, links and emails; no line can stop the parser", () => {
+ const {parseLegalMarkdown, parseInline} = require("../src/lib/legal/parse.ts");
+ const blocks = parseLegalMarkdown("# T\n\nUno\ndos\n\n### Sub\n#x raro\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n- a\n  sigue\n- b\n");
+ assert.deepEqual(blocks, [
+  {kind: "h1", text: "T"},
+  {kind: "p", text: "Uno dos"},
+  {kind: "h3", text: "Sub"},
+  {kind: "p", text: "#x raro"},
+  {kind: "table", head: ["A", "B"], rows: [["1", "2"]]},
+  {kind: "ul", items: ["a sigue", "b"]},
+ ]);
+ assert.deepEqual(parseInline("**x@y.es** y [p](/privacidad), [e](//evil.example), [a](https://www.aepd.es)"), [
+  {kind: "strong", text: "x@y.es"},
+  {kind: "text", text: " y "},
+  {kind: "link", text: "p", href: "/privacidad"},
+  {kind: "text", text: ", [e](//evil.example), "},
+  {kind: "link", text: "a", href: "https://www.aepd.es"},
+ ]);
+ assert.deepEqual(parseInline("javascript [j](javascript:alert(1))").map(part => part.kind), ["text"]);
+ for (const file of ["privacidad.md", "condiciones.md"]) {
+  const parsed = parseLegalMarkdown(read(`docs/legal/${file}`));
+  assert.equal(parsed.filter(block => block.kind === "h1").length, 1, file);
+  for (const table of parsed.filter(block => block.kind === "table")) {
+   for (const row of table.rows) assert.equal(row.length, table.head.length, file);
+  }
+ }
 });

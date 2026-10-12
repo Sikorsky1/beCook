@@ -62,12 +62,12 @@ export default function AccountDataPage() {
   const deleteNoticeRef = useRef<HTMLDivElement>(null);
   const [signInMethods, setSignInMethods] = useState<{ userId: string; labels: string[] } | null>(null);
 
-  // How this account signs in (email, Google, Apple), from the session kept on this device.
+  // How this account signs in (email, Google, Apple), asked to Auth (up to date after linking).
   useEffect(() => {
     if (!identity.userId || !supabase) return;
     let active = true;
-    void supabase.auth.getSession().then(({ data }) => {
-      const user = data.session?.user;
+    void supabase.auth.getUser().then(({ data }) => {
+      const user = data.user;
       if (active && user) setSignInMethods({ userId: user.id, labels: signInMethodLabels(user.identities) });
     });
     return () => {
