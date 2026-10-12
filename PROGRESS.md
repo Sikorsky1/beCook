@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-12 · Rama: `audit-opt` (= `main` tras PR #17: C3 y C4 en producción); ola 7 (C6, D5, NAV) integrada en `audit/ola7`, sin push · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-12 · Rama: `audit-opt` (= `main` tras PR #18: C6, D5 y paso 32 en producción) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -664,6 +664,15 @@ NAV no llega a `main` sin C6 (se integran juntos). Paso 34: el color fijo `text-
 | Observaciones | El aviso de una acción anterior puede seguir visible tras otra distinta (p. ej. «2 básicos añadidos a tu despensa» tras borrar, o «Papel de cocina añadido» con el formulario cerrado); la línea de raciones de Compra aparece al recargar, no justo tras generar la lista; a 320 px la cabecera fija de Despensa ocupa ~60 % de la altura (paso 34). Datos de prueba eliminados con `db:reset` + `db:seed` |
 | Pendiente | Migración `20261014090000_shopping_manual_items` en becook-preview (conector, quitando solo `BEGIN`/`COMMIT`; registrar en `applied-preview.json`) y validación en la Preview (importación con IA real, Compra con manuales); producción con OK, backup completo y copia `backup_AAAAMMDD` **antes** del merge a `main`. CI tras el push |
 
+## C6, D5 y paso 32 en producción ✅ (2026-10-12)
+| Elemento | Resultado |
+|---|---|
+| PR | [#18](https://github.com/Sikorsky1/beCook/pull/18) `audit-opt` → `main`, merge commit `2455498` (2026-10-12); checks en verde (application, database, Vercel) |
+| Migración | `shopping_manual_items` aplicada antes del merge con el conector de Supabase (sin `BEGIN`/`COMMIT`, con los `SET LOCAL`): becook-preview `20261012002220`; becook `20261012002444`, tras backup completo en `~/Backups/becook/2026-10-12-ola7`. Precondición `manual|` = 0; 70 listas y 2217 artículos antes y después; `prosrc` idéntico a local |
+| Validación | Revisión de código de C6, D5 y NAV (y del plan de navegación por el revisor delegado) con sus cambios aplicados; recorrido en navegador en local (invitado y cuenta, 320/390 px); Preview sin sesión (rutas de IA 401) |
+| Despliegue be-cook | `dpl_4EjzprRM38aF7nk39LMygpmAFRyB` READY en `www.becook.xyz` y `becook.xyz` (anterior para rollback: `dpl_GdXzGVQ4Th2uLJPmweME8kxTeBNQ`). Páginas 200 (incluido `/create-menu?mode=import`) · `/import` y `/` 307 · `POST` de las 5 rutas de IA sin sesión 401 |
+| Pendiente | Importación con IA real y compra con sesión (Sergio); avisos que persisten tras otra acción, raciones visibles solo al recargar y cabecera alta de Despensa a 320 px (paso 34); VoiceOver (paso 36). `audit-opt` = `main` por fast-forward antes de este commit |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
@@ -688,7 +697,7 @@ NAV no llega a `main` sin C6 (se integran juntos). Paso 34: el color fijo `text-
 | 19 Compra desde recetas y despensa | C4 | ✅ | En producción 2026-10-12 (PR #17); ver C3/C4 |
 | 20 Reconciliar cambios de plato | C4 | ✅ | En producción 2026-10-12 (PR #17); ver C3/C4 |
 | 21 Reglas culinarias y sustitución | C5 | ✅ | En producción desde 2026-10-09 (PR #12): reglas de títulos, «Otra idea» con catálogo y luego IA (flujo `menu`); ver C5 |
-| 22 Importación y borradores | C6 | 🟡 | Integrado en local (`audit/ola7`, 2026-10-12): parser local sin IA, errores con motivo, borradores por identidad y semana; ver C6 e integración |
+| 22 Importación y borradores | C6 | ✅ | En producción 2026-10-12 (PR #18) |
 | 23 Alta, login y recuperación | D1 | ✅ | En producción desde 2026-10-09 (PR #12): alta, login con `next`, recuperación. Auth completado el 2026-10-11 en preview y producción: SMTP Resend, plantillas en español, mínimo 8, confirmación de email activada. Solo queda la protección de contraseñas filtradas; ver D1 |
 | 24 Perfil simplificado | D2 | ✅ | Primera mitad en producción (PR #13); resto en `audit-opt` desde 2026-10-10: datos corporales opcionales y `confirmed_sections`. Migración `20261010090000` en preview y producción (2026-10-10); en producción desde 2026-10-10 (PR #14); ver D2 (segunda mitad) |
 | 25 Onboarding y primer menú | D2 | ✅ | En `audit-opt` desde 2026-10-10: onboarding de 3 pasos con `onboarding_progress`; migración `20261010090000` en preview y producción (2026-10-10); en producción desde 2026-10-10 (PR #14); ver D2 (segunda mitad) |
@@ -696,9 +705,9 @@ NAV no llega a `main` sin C6 (se integran juntos). Paso 34: el color fijo `text-
 | 27 Generación honesta | D3 | ✅ | En producción 2026-10-11 (PR #15); ver D3 e integración |
 | 28 «Otra idea» por plato | D3 | ✅ | En producción 2026-10-11 (PR #15); ver D3 e integración |
 | 29 Semana con «Hoy» | D4 | ✅ | En producción desde 2026-10-09 (PR #13): bloque «Hoy» y días compactos; ficha de plato al llegar C2; ver D4 |
-| 30 Compra completa y despensa | D5 | 🟡 | Integrado en local (`audit/ola7`, 2026-10-12): lista continua, artículos manuales y cantidades; migración `20261014090000` solo en local; ver D5 |
-| 31 Despensa con acciones claras | D5 | 🟡 | Integrado en local (`audit/ola7`, 2026-10-12): «Tengo / Se acabó», básicos en bloque, borrar con «Deshacer»; ver D5 |
-| 32 Navegación y estados vacíos | D6 | 🟡 | Integrado en local (`audit/ola7`, 2026-10-12): barra de 3 destinos, semana vacía con «Repetir la semana N» y «Ya tengo un menú»; llega a `main` junto con C6; ver paso 32 (NAV) |
+| 30 Compra completa y despensa | D5 | ✅ | En producción 2026-10-12 (PR #18) |
+| 31 Despensa con acciones claras | D5 | ✅ | En producción 2026-10-12 (PR #18) |
+| 32 Navegación y estados vacíos | D6 | ✅ | En producción 2026-10-12 (PR #18) |
 | 33 Legibilidad y accesibilidad | D6 | ✅ | En producción 2026-10-11 (PR #16); falta iPhone físico/VoiceOver (paso 36); ver paso 33 |
 | 34 Consolidar componentes | D6 | ⏳ | |
 | 35 Tests de recorridos críticos | E1 | ⏳ | Se adelantan tests en cada iteración |
