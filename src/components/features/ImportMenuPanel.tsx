@@ -60,8 +60,9 @@ export function ImportMenuPanel({
           Pega tu menú de la semana
         </label>
         <p id={helpId} className="t-meta mt-1">
-          Si cada día va en su línea con «Comida:» y «Cena:», o como filas de una tabla (día, comida, cena), lo
-          ordenamos al momento en este dispositivo, sin IA. Si no, lo ordena la IA (necesita sesión iniciada).
+          Si cada día va en su línea con «Comida:» y «Cena:», o como filas o columnas de una tabla, lo ordenamos al
+          momento en este dispositivo, sin IA. Vale «Lunes», «L» o «Día 1»; sin días, la primera fila es el lunes. Si
+          no, lo ordena la IA (necesita sesión iniciada).
         </p>
       </div>
 

@@ -59,3 +59,13 @@ test("un texto que no se puede ordenar muestra el problema en pantalla, no fuera
   await page.getByRole("button", { name: "Procesar menú" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "demasiadas líneas" })).toBeInViewport();
 });
+
+test("invitado pega una tabla con los días en columnas (L M X) y se ordena sin IA", async ({ page }) => {
+  await page.goto("/create-menu?mode=import");
+  await page.getByRole("textbox", { name: "Pega tu menú de la semana" }).fill(
+    ["\tL\tM\tX", "Comida\tLentejas\tArroz con verduras\tPasta", "Cena\tSopa\tTortilla francesa\tLIBRE"].join("\n"),
+  );
+  await page.getByRole("button", { name: "Procesar menú" }).click();
+  await expect(page.getByRole("heading", { level: 2, name: "Revisa tu semana" })).toBeInViewport();
+  await expect(page.getByRole("region", { name: "Usar la propuesta" })).toContainText("5 platos · 3 días");
+});

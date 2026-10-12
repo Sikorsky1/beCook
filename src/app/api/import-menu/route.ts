@@ -33,7 +33,10 @@ Reglas importantes:
 - Puede haber mayúsculas, tabs, espacios irregulares, filas vacías y símbolos como (*).
 - Ignora filas vacías.
 - Normaliza los nombres de días exactamente a: Lunes, Martes, Miércoles, Jueves, Viernes, Sábado, Domingo.
-- Devuelve exactamente los días presentes en el input. No inventes días ausentes.
+- Los días pueden venir abreviados: «L, M, X, J, V, S, D» (una letra por día, X es miércoles), «Lun, Mar, Mié, Jue, Vie, Sáb, Dom», o numerados: «Día 1» es Lunes, «Día 2» Martes… hasta «Día 7» Domingo.
+- Si el menú no dice los días (por ejemplo, una tabla o una lista de platos sin días), asígnalos en orden: el primer valor o fila es Lunes, el segundo Martes, y así sucesivamente, hasta 7.
+- Si los días van en columnas (cabecera con los días y filas de comida y cena), lee cada columna como un día.
+- Devuelve solo los días que aparecen en el input o que salen de ese orden. No inventes días ni platos.
 - Si el plato es "Libre" o "LIBRE", convierte ese slot a status "free" y dishName "".
 - Si un slot contiene un plato, usa status "planned".
 - Conserva el nombre del plato con la mayor fidelidad posible.

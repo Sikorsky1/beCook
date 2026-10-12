@@ -296,21 +296,40 @@ function parseTabularLine(line: string): ImportedMenuDay | null {
   };
 }
 
+// A day label as menus write it: the full name, an abbreviation («Lun», «Mié.»), one letter of
+// «L M X J V S D» or «Día 1» to «Día 7» (Día 1 is Monday). Only a whole label counts: a line or a
+// cell that is just the day, never a word inside a dish.
+const dayLabels: Record<string, ImportedMenuDay["dayName"]> = {
+  LUNES: "Lunes",
+  MARTES: "Martes",
+  MIERCOLES: "Miércoles",
+  JUEVES: "Jueves",
+  VIERNES: "Viernes",
+  SABADO: "Sábado",
+  DOMINGO: "Domingo",
+  LUN: "Lunes",
+  MAR: "Martes",
+  MIE: "Miércoles",
+  MIER: "Miércoles",
+  MIERC: "Miércoles",
+  JUE: "Jueves",
+  VIE: "Viernes",
+  SAB: "Sábado",
+  DOM: "Domingo",
+  L: "Lunes",
+  M: "Martes",
+  X: "Miércoles",
+  J: "Jueves",
+  V: "Viernes",
+  S: "Sábado",
+  D: "Domingo",
+};
+
 function normalizeDayName(value: string): ImportedMenuDay["dayName"] | null {
-  const normalizedValue = normalizeWord(value);
+  const numbered = value.trim().match(/^d[ií]a\s*([1-7])\s*[:.]?$/i);
+  if (numbered) return orderedDayNames[Number(numbered[1]) - 1];
 
-  const dayMap: Record<string, ImportedMenuDay["dayName"]> = {
-    LUNES: "Lunes",
-    MARTES: "Martes",
-    MIERCOLES: "Miércoles",
-    MIERCOLES_: "Miércoles",
-    JUEVES: "Jueves",
-    VIERNES: "Viernes",
-    SABADO: "Sábado",
-    DOMINGO: "Domingo",
-  };
-
-  return dayMap[normalizedValue] ?? null;
+  return dayLabels[normalizeWord(value)] ?? null;
 }
 
 function normalizeWord(value: string) {
@@ -439,6 +458,105 @@ export function parseMenuTextLocally(text: string): LocalParseResult {
 
   if (!lines.length) return { kind: "ambiguous", reason: "empty" };
 
+  const byDay = parseDayLines(lines);
+  if (byDay.kind === "parsed") return byDay;
+
+  // Tables whose days are not in a first column: days across the top, or no days at all.
+  return parseDaysAcross(lines) ?? parseRowsInOrder(lines) ?? byDay;
+}
+
+const sequentialDaysWarning =
+  "El menú no dice los días: hemos puesto la primera fila en el lunes, la segunda en el martes y así sucesivamente.";
+
+// Only tab or «|» tables: with spaces alone, a dish name cannot be told apart from a column.
+function splitTableRow(line: string) {
+  const row = splitRow(line);
+  return row && !row.spaced ? row.columns : null;
+}
+
+function mealOfLabel(cell: string): "lunch" | "dinner" | null {
+  const word = normalizeWord(cell);
+  if (word === "COMIDA" || word === "ALMUERZO") return "lunch";
+  if (word === "CENA") return "dinner";
+  return null;
+}
+
+function validTitles(...titles: string[]) {
+  return titles.every((title) => !anyMealLabel.test(title) && title.trim().length <= maxLocalTitleLength);
+}
+
+// Days as columns: a header row of days («L M X J V», «Lunes | Martes…», «Día 1 | Día 2…»), maybe
+// after an empty or «Día» corner cell, then one row of lunches and one of dinners. A row may start
+// with «Comida»/«Cena»; without labels the first row is lunch and the second dinner.
+function parseDaysAcross(lines: string[]): LocalParseResult | null {
+  const [headerLine, ...rows] = lines;
+  let header = splitTableRow(headerLine) ?? headerLine.split(/\s+/);
+  if (header.length >= 2 && (header[0] === "" || normalizeWord(header[0]) === "DIA")) header = header.slice(1);
+  const dayNames = header.map(normalizeDayName);
+  if (header.length < 2 || dayNames.some((day) => !day) || new Set(dayNames).size !== dayNames.length) return null;
+  if (!rows.length || rows.length > 2) return null;
+
+  const meals: Partial<Record<"lunch" | "dinner", string[]>> = {};
+  for (const [index, line] of rows.entries()) {
+    const cells = splitTableRow(line);
+    if (!cells) return null;
+    let meal: "lunch" | "dinner" | null = index === 0 ? "lunch" : "dinner";
+    let values = cells;
+    if (cells.length === dayNames.length + 1) {
+      meal = mealOfLabel(cells[0]);
+      values = cells.slice(1);
+    }
+    if (!meal || meals[meal] || values.length !== dayNames.length || !validTitles(...values)) return null;
+    meals[meal] = values;
+  }
+
+  const days = new Map<ImportedMenuDay["dayName"], ImportedMenuDay>();
+  dayNames.forEach((dayName, index) =>
+    days.set(dayName!, {
+      dayName: dayName!,
+      lunch: createMealSlot(meals.lunch?.[index] ?? ""),
+      dinner: createMealSlot(meals.dinner?.[index] ?? ""),
+    }),
+  );
+  const warnings = [
+    ...(meals.lunch ? [] : ["El menú no indica las comidas; quedan libres."]),
+    ...(meals.dinner ? [] : ["El menú no indica las cenas; quedan libres."]),
+  ];
+  return {
+    kind: "parsed",
+    days: orderedDayNames.filter((dayName) => days.has(dayName)).map((dayName) => days.get(dayName)!),
+    warnings,
+  };
+}
+
+// No days at all: rows of two cells (lunch, dinner), maybe under a «Comida | Cena» header. The
+// first row is Monday, the second Tuesday… up to seven rows.
+function parseRowsInOrder(lines: string[]): LocalParseResult | null {
+  const rows = lines.map(splitTableRow);
+  if (rows.some((row) => !row || row.length !== 2)) return null;
+  const cells = rows as string[][];
+  // A header of days whose columns did not fit is not a row of dishes.
+  if (cells.some((row) => row.every((cell) => normalizeDayName(cell)))) return null;
+  const body =
+    mealOfLabel(cells[0][0]) === "lunch" && mealOfLabel(cells[0][1]) === "dinner" ? cells.slice(1) : cells;
+  if (!body.length || body.length > orderedDayNames.length) return null;
+  if (body.some(([lunch, dinner]) => !validTitles(lunch, dinner))) return null;
+
+  return {
+    kind: "parsed",
+    days: body.map(([lunch, dinner], index) => ({
+      dayName: orderedDayNames[index],
+      lunch: createMealSlot(lunch),
+      dinner: createMealSlot(dinner),
+    })),
+    warnings: [sequentialDaysWarning],
+  };
+}
+
+// Days named in each line or row: «Lunes» headers with «Comida:»/«Cena:» lines, or rows of
+// day, lunch and dinner.
+function parseDayLines(lines: string[]): LocalParseResult {
+
   const days = new Map<ImportedMenuDay["dayName"], ImportedMenuDay>();
   // Meals given for each day written as a header block (rows give both at once).
   const given = new Map<ImportedMenuDay["dayName"], Set<"lunch" | "dinner">>();
@@ -521,15 +639,20 @@ export function parseMenuTextLocally(text: string): LocalParseResult {
   return { kind: "parsed", days: ordered.map((dayName) => days.get(dayName)!), warnings };
 }
 
-// A paste with no day of the week anywhere is not a weekly menu: answered without the AI (422).
-// Lenient on purpose: it only decides whether the AI is worth asking, so abbreviations («lun»,
-// «mié», «sáb»…), «X» for Wednesday at the start of a line and English names also count.
+// A paste with no day of the week and no sign of a menu is not a weekly menu: answered without the
+// AI (422). Lenient on purpose: it only decides whether the AI is worth asking, so abbreviations
+// («lun», «mié», «sáb»…), one-letter days as a cell or line («L», «X:»), «Día 1»…, English names,
+// meal words and tables (the AI reads their rows in order as Monday, Tuesday…) also count.
 export function mentionsAnyDayName(text: string) {
   const normalized = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const tableRows = normalized.split(/\n/).filter((line) => /\S\s*(\t|\|)\s*\S/.test(line)).length;
   return (
     /\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo|lun|mar|mie|jue|vie|sab|dom)\b/.test(normalized) ||
     /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\b/.test(normalized) ||
-    /(^|\n)\s*x\s*[:.\t|-]/.test(normalized)
+    /(^|\n|\t|\|)[ ]*[lmxjvsd][ ]*([:.\t|-]|\n|$)/.test(normalized) ||
+    /\bdia\s*[1-7]\b/.test(normalized) ||
+    /\b(comida|cena|almuerzo)s?\b/.test(normalized) ||
+    tableRows >= 2
   );
 }
 
@@ -570,7 +693,7 @@ export function importErrorMessage(
     case "too_many_lines":
       return `El menú pegado tiene demasiadas líneas (máximo ${limits.maxLines}). Pega solo una semana.`;
     case "no_menu_found":
-      return "No encontramos ningún día de la semana en el texto. Escribe cada día (Lunes, Martes…) con su comida y su cena.";
+      return "No encontramos ningún día ni ninguna comida en el texto. Escribe cada día (Lunes, Martes… o L, M, X…) con su comida y su cena.";
     case "empty_menu":
       return "No hemos encontrado ningún plato en el menú. Revisa que cada día tenga su comida o su cena.";
     case "empty_menu_ai":
