@@ -6,8 +6,9 @@
 //   E2E_SKIP_BUILD=1 npm run test:e2e   reutiliza el último build del E2E (comprobado otra vez)
 //   node scripts/e2e.cjs --serve     deja los servidores arrancados para depurar (Ctrl+C para salir)
 //
-// Nunca lee valores de .env*: solo sus nombres, para vaciarlos en los subprocesos y que un
-// .env.local que apunte a producción no aporte nada al build ni al servidor.
+// De los .env* solo usa los nombres para vaciarlos en los subprocesos, y así un .env.local que
+// apunte a producción no aporta nada al build ni al servidor. Sus valores largos (claves, URL)
+// se leen únicamente en memoria para comprobar que no aparecen en el build; nunca se imprimen.
 const fs = require("node:fs");
 const path = require("node:path");
 const net = require("node:net");
@@ -36,23 +37,23 @@ function ensureWorkspaceConfig() {
   fs.writeFileSync(target, config);
 }
 
-function envFileNames() {
-  const names = new Set();
+function envFileEntries() {
+  const entries = [];
   for (const file of fs.readdirSync(ROOT).filter(name => name.startsWith(".env"))) {
     const full = path.join(ROOT, file);
     if (!fs.statSync(full).isFile()) continue;
     for (const line of fs.readFileSync(full, "utf8").split(/\r?\n/)) {
-      const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
-      if (match) names.add(match[1]);
+      const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+      if (match) entries.push({ name: match[1], value: match[2].trim().replace(/^(["'])(.*)\1$/, "$2") });
     }
   }
-  return names;
+  return entries;
 }
 
 function baseEnv(api) {
   const env = {};
   // Defined but empty: @next/env never replaces a variable that already exists in process.env.
-  for (const name of envFileNames()) env[name] = "";
+  for (const { name } of envFileEntries()) env[name] = "";
   Object.assign(env, local.safeEnv());
   for (const name of ["CI", "PLAYWRIGHT_BROWSERS_PATH", "E2E_CHANNEL", "DISPLAY", "LANG"]) {
     if (process.env[name]) env[name] = process.env[name];
@@ -82,6 +83,14 @@ function verifyBuild() {
   const hosted = [...clientFiles, ...serverFiles].filter(file => /[a-z0-9]{20}\.supabase\.co/.test(fs.readFileSync(file, "utf8")));
   if (!embedsLocal) throw new Error(`The client bundle does not embed ${LOCAL_API}.`);
   if (hosted.length) throw new Error(`The build references a hosted Supabase project (${hosted.length} files). Aborting.`);
+  // No long value of a .env* file (keys, project URLs) may end up in the build. Names only in errors.
+  const values = envFileEntries().filter(entry => entry.value.length >= 20);
+  const leaked = new Set();
+  for (const file of [...clientFiles, ...serverFiles]) {
+    const text = fs.readFileSync(file, "utf8");
+    for (const entry of values) if (text.includes(entry.value)) leaked.add(entry.name);
+  }
+  if (leaked.size) throw new Error(`The build embeds values from .env* files (${[...leaked].join(", ")}). Aborting.`);
   console.log(`Build verificado: el bundle usa ${LOCAL_API} y ningún proyecto alojado (${clientFiles.length} ficheros de cliente).`);
 }
 
