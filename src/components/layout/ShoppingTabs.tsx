@@ -3,17 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// /shopping-list and /pantry redirect before rendering (step 32): only the current routes count.
 const shoppingTabs = [
-  {
-    href: "/shopping/list",
-    label: "Lista de la compra",
-    legacyHref: "/shopping-list",
-  },
-  {
-    href: "/shopping/pantry",
-    label: "Despensa",
-    legacyHref: "/pantry",
-  },
+  { href: "/shopping/list", label: "Lista de la compra" },
+  { href: "/shopping/pantry", label: "Despensa" },
 ];
 
 export function ShoppingTabs() {
@@ -25,7 +18,7 @@ export function ShoppingTabs() {
       className="grid grid-cols-2 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]/70 p-1 shadow-[var(--shadow-card)]"
     >
       {shoppingTabs.map((tab) => {
-        const isActive = pathname === tab.href || pathname === tab.legacyHref;
+        const isActive = pathname === tab.href;
 
         return (
           <Link
