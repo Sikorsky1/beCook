@@ -137,6 +137,14 @@
       "sha256": "231604a9b14c8990faaef689c84a54770d19bc6012d2228e8b4cb624a3075a0e",
       "appliedAt": "2026-10-12",
       "notes": "Tras backup completo en ~/Backups/becook/2026-10-12-ola6. Conector, una parte, sin BEGIN/COMMIT. Aditiva: 70 listas, 2217 artículos y 85 marcados antes y después. save_shopping_list y reconcile_shopping_list idénticas a local (md5 sin comentarios)."
+    },
+    {
+      "version": "20261012002444",
+      "name": "shopping_manual_items",
+      "source": "supabase/migrations/20261014090000_shopping_manual_items.sql",
+      "sha256": "ee6a1b624225ebe6b9161b5399c76a70c664b4ae7a813176cef2dede3c684a9e",
+      "appliedAt": "2026-10-12",
+      "notes": "Tras backup completo en ~/Backups/becook/2026-10-12-ola7. Conector, sin BEGIN/COMMIT. Precondición manual|=0. prosrc idéntico a local; 70 listas y 2217 artículos antes y después."
     }
   ]
 }

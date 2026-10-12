@@ -721,7 +721,7 @@ NAV no llega a `main` sin C6 (se integran juntos). Paso 34: el color fijo `text-
 | week_food_context (`20261011090000`) | ✅ | ✅ 20261011190843 | ✅ 20261011195740 (tras backup completo en ~/Backups/becook/2026-10-11-ola4) |
 | recipe_cards (`20261012090000`) | ✅ | ✅ 20261011204724 + 20261011204749 (`_apply_week`) | ✅ 20261011205123 + 20261011205211 (tras backup completo en ~/Backups/becook/2026-10-11-ola5) |
 | shopping_item_origins (`20261013090000`) | ✅ | ✅ 20261011223501 | ✅ 20261011223838 (tras backup completo en ~/Backups/becook/2026-10-12-ola6) |
-| shopping_manual_items (`20261014090000`) | ✅ | ⏳ | ⏳ (con OK, backup completo y antes del merge a `main`) |
+| shopping_manual_items (`20261014090000`) | ✅ | ✅ 20261012002220 | ✅ 20261012002444 (tras backup completo en ~/Backups/becook/2026-10-12-ola7) |
 
 ## Decisiones
 | # | Decisión | Fecha |
