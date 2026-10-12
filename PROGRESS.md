@@ -801,12 +801,14 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | Desactivar | Quitar `NEXT_PUBLIC_AUTH_PROVIDERS` en Production y redesplegar (o volver al despliegue anterior) |
 | Pendiente (Sergio) | Verificación de marca en Google Auth Platform (para mostrar «beCook» en vez de «…supabase.co»); Apple cuando haya cuenta de Apple Developer |
 
-## Perfil sin sesión: entrar o crear cuenta primero 🟡 (2026-10-12)
+## Perfil sin sesión: entrar o crear cuenta primero ✅ (2026-10-12, en producción)
 | Elemento | Resultado |
 |---|---|
 | Cambio | En `/profile` sin sesión, la primera tarjeta ya no es «Modo local / Perfil sin guardar»: es «Guarda tu perfil en una cuenta», con el motivo (ahora solo en este dispositivo; con cuenta, en cualquier dispositivo, «con Google o con tu email» según `NEXT_PUBLIC_AUTH_PROVIDERS`) y el botón principal «Entrar o crear cuenta» → `/login?next=/profile`. «Falta por completar» sigue debajo. La tarjeta «Cuenta» del final ya no repite el botón ni «Modo local»; sin sesión solo queda «Tus datos». Con sesión no cambia nada. Solo `src/app/profile/page.tsx` (clases Tailwind y `PrimaryButton asChild`), sin tocar componentes compartidos |
 | Migración | Ninguna |
 | Validación | Unitarias, lint y typecheck; E2E 27/27 en local (incluye el «Entrar o crear cuenta» tras cerrar sesión en `aislamiento`); captura a 390 px |
+| PR | [#22](https://github.com/Sikorsky1/beCook/pull/22) `audit-opt` → `main`, merge commit `519e08d` (junto con los días de la semana al importar, `7ffaaa4`). Checks en verde (application, database, e2e, Vercel) |
+| Despliegue be-cook | `dpl_8ukytWzYiicL5aeb7tvnoaLXFJPd` READY en `www.becook.xyz` (anterior para rollback: `dpl_6KZPeit1hCeAYEmPSMNrP6Bd6whK`). `/profile` sin sesión a 390 px: primera tarjeta «Guarda tu perfil en una cuenta», «Entra con Google o con tu email…» y «Entrar o crear cuenta» |
 
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
