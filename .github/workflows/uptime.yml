@@ -4,6 +4,7 @@ name: Uptime becook.xyz
 # ejecuciones programadas). Solo peticiones públicas sin sesión ni secretos: la página de login
 # responde 200 y una ruta de IA sin sesión responde 401 (la API está viva y sigue protegida).
 # Si falla, el job falla y GitHub avisa por email al propietario del repositorio.
+# Se comprueba www.becook.xyz: becook.xyz redirige (308) a www y las peticiones no siguen redirecciones.
 # El schedule se activa cuando el archivo llega a la rama por defecto (main).
 
 on:
@@ -26,7 +27,7 @@ jobs:
           import urllib.error
           import urllib.request
 
-          BASE = "https://becook.xyz"
+          BASE = "https://www.becook.xyz"
 
           class NoRedirect(urllib.request.HTTPRedirectHandler):
               def redirect_request(self, *args, **kwargs):

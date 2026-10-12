@@ -52,4 +52,4 @@ Reglas:
 | `GITLEAKS_BIN` | Máquina del desarrollador | Hook de pre-commit |
 | SMTP de Auth (Resend) | Supabase → Auth → SMTP, en becook-preview y becook | Emails de alta y recuperación (D1) |
 
-`uptime.yml` no usa secretos: solo peticiones públicas a becook.xyz.
+`uptime.yml` no usa secretos: solo peticiones públicas a www.becook.xyz (becook.xyz redirige a www con 308).

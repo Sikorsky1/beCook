@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-12 · Rama: `audit-opt` (= `main` tras PR #18: C6, D5 y paso 32 en producción); ola 8 (pasos 34, 35 y 37) integrada en local en `audit/ola8` · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-12 · Rama: `audit-opt` (= `main` tras PR #19: pasos 34, 35 y 37 en producción; quedan los pasos 36 y 38, de Sergio) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -761,6 +761,15 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | Foco bajo «Guardar perfil» (ampliación del plan del paso 34) | En Perfil sin perfil guardado (onboarding saltado), la barra fija «Guardar perfil» (105 px, 6rem sobre el borde) tapaba 201 px desde abajo y el `scroll-padding-bottom` de 104 px no la cubría: al tabular, un chip enfocado quedaba medio debajo («Mejorar rendimiento deportivo» 631–675 px con la barra desde 643 px, a 390×844). La barra lleva `data-profile-save-bar` y `<html>` añade `has-[[data-profile-save-bar]]:scroll-pb-[calc(14rem+env(safe-area-inset-bottom))]` (224 px), solo Tailwind, como con `ProposalActionBar`; anotado en el plan del paso 34 («Revisión y aplicación»). Test en `tests/ui-consolidation.test.cjs`. Navegador a 390×844 con una cuenta local sin perfil: `scroll-padding-bottom` 224 px y 22 elementos enfocados con Tab (personas, objetivos, restricciones, alergias, campos y entrenamiento), ninguno bajo la barra (el más bajo, 585–629 px) |
 | Pendiente | Migración `20261015090000_ai_usage_keep_on_account_delete` en becook-preview y producción (procedimiento en «Paso 37») **antes** del merge a `main`; variables `OPS_ALERT_*` (opcionales); validación en la Preview (cabecera a 320/390 px, exportar y borrar con una cuenta de prueba de preview) y CI tras el push |
 
+## Pasos 34, 35 y 37 en producción ✅ (2026-10-12)
+| Elemento | Resultado |
+|---|---|
+| PR | [#19](https://github.com/Sikorsky1/beCook/pull/19) `audit-opt` → `main`, merge commit `6bd1dda` (2026-10-12); checks en verde (application, database, e2e —primera ejecución en CI—, Vercel) |
+| Migración | `ai_usage_keep_on_account_delete` aplicada antes del merge con el conector (sin `BEGIN`/`COMMIT`, con los `SET LOCAL`): becook-preview `20261012021426`; becook `20261012060819`, tras backup completo en `~/Backups/becook/2026-10-12-ola8`; 17 filas antes y después; FK `ON DELETE SET NULL` validada |
+| Validación | Revisión de código de P34 (con su plan, por el revisor delegado), P35 y P37 con sus cambios aplicados; test:e2e 15/15 en local (2 pasadas) y en CI; recorrido en navegador en local |
+| Despliegue be-cook | `dpl_83GDSCktFcRrAWhJBEngpYAfskTj` READY en `www.becook.xyz` y `becook.xyz` (anterior para rollback: `dpl_4EjzprRM38aF7nk39LMygpmAFRyB`). Páginas 200 (incluida `/profile/data`) · `/` 307 · rutas de IA y de cuenta sin sesión 401 |
+| Pendiente (Sergio) | Canal de alertas (`OPS_ALERT_*` en Vercel), DPA, revisión legal de los borradores, simulacro de restauración con datos reales, límites de gasto, protección de contraseñas filtradas en Auth, pasos 36 (dispositivos reales) y 38 (beta). `audit-opt` = `main` por fast-forward antes de este commit |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
@@ -797,10 +806,10 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | 31 Despensa con acciones claras | D5 | ✅ | En producción 2026-10-12 (PR #18) |
 | 32 Navegación y estados vacíos | D6 | ✅ | En producción 2026-10-12 (PR #18) |
 | 33 Legibilidad y accesibilidad | D6 | ✅ | En producción 2026-10-11 (PR #16); falta iPhone físico/VoiceOver (paso 36); ver paso 33 |
-| 34 Consolidar componentes | D6 | 🟡 | Integrado en local 2026-10-12 (rama `audit/ola8`): cabecera compactable, token de aviso, avisos por página, raciones, código muerto; ver paso 34 e integración |
-| 35 Tests de recorridos críticos | E1 | 🟡 | Integrado en local 2026-10-12: Playwright 1.61.1, OpenAI simulado, 15 recorridos y job `e2e` en CI (sin ejecutar en GitHub); ver paso 35 e integración |
+| 34 Consolidar componentes | D6 | ✅ | En producción 2026-10-12 (PR #19) |
+| 35 Tests de recorridos críticos | E1 | ✅ | En producción 2026-10-12 (PR #19) |
 | 36 Usabilidad en dispositivos | E2 | ⏳ | Requiere a Sergio |
-| 37 Operación y privacidad | E3 | 🟡 | Integrado en local 2026-10-12: alertas, exportar y borrar cuenta, copias y simulacro, runbook, borradores legales; migración pendiente en preview y producción; ver paso 37 |
+| 37 Operación y privacidad | E3 | ✅ | En producción 2026-10-12 (PR #19) |
 | 38 Beta cerrada y apertura | E4 | ⏳ | Requiere a Sergio |
 
 ## Migraciones por entorno

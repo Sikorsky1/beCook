@@ -65,7 +65,7 @@ test("the express pantry offers distinct staples with valid categories and nothi
   const items = onboarding.expressPantryItems;
   assert.ok(items.length >= 10);
   assert.equal(new Set(items.map(pantryItemKey)).size, items.length);
-  const categories = new Set(["básicos", "especias", "aceites y vinagres", "salsas", "conservas", "congelados", "otros"]);
+  const categories = new Set(["básicos", "especias", "salsas", "conservas", "congelados", "otros"]);
   assert.ok(items.every((item) => categories.has(item.category) && !("active" in item)));
   // The default pantry items are there under the same key, so marking one updates it in place.
   for (const name of ["Aceite de oliva", "Sal", "Pimienta", "Vinagre", "Mostaza", "Ajo en polvo"]) {

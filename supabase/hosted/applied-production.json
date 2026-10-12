@@ -153,6 +153,14 @@
       "sha256": "3fdabaddf51bcd2a7705e0b2b687b7fd8e5d40383e06d04ef2aa2d2b25f76ff5",
       "appliedAt": "2026-10-12",
       "notes": "Tras backup completo en ~/Backups/becook/2026-10-12-ola8. Conector, sin BEGIN/COMMIT. user_id nullable, FK ON DELETE SET NULL validada, 17 filas antes y después."
+    },
+    {
+      "version": "20261012120026",
+      "name": "pantry_oils_into_basics",
+      "source": "supabase/migrations/20261016090000_pantry_oils_into_basics.sql",
+      "sha256": "df18c99ba303949d082c8c1bc7ccaaa8e3d9663e2e7abda9e58a8607ccafbe8a",
+      "appliedAt": "2026-10-12",
+      "notes": "Conector, una parte, sin BEGIN/COMMIT (SET LOCAL mantenidos). Antes: backup completo ~/Backups/becook/2026-10-12-ola9 y copia interna backup_20261012.pantry_items_aceites (5 filas, RLS activa, sin permisos para anon/authenticated). prosrc de add_pantry_items idéntico a local (md5 4f027ba0…); SECURITY INVOKER y EXECUTE solo authenticated. Filas: 'aceites y vinagres' 5 → 0, 'básicos' 10 → 15; total 35 sin cambios."
     }
   ]
 }

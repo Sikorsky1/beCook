@@ -1,0 +1,23 @@
+{
+  "migration": "20261016090000_pantry_oils_into_basics",
+  "replaces": {
+    "functions": [
+      {
+        "proname": "add_pantry_items"
+      }
+    ]
+  },
+  "supersedes": {
+    "schema": "add_pantry_items is redefined (CREATE OR REPLACE, same signature, SECURITY INVOKER and grants): an item sent with category 'aceites y vinagres' is stored and matched as 'básicos'. Rows with 'aceites y vinagres' are updated to 'básicos'. No column, constraint, policy or grant changes and no row is deleted.",
+    "client": [
+      "The pantry had a section «Aceites y vinagres». Now its items (aceite de oliva, aceite de girasol, vinagre) are in «Básicos»; a device copy or account row still holding the old section is read as «Básicos»."
+    ],
+    "rollout": "Order: migration -> code. The deployed client keeps working with the migration applied: it accepts 'básicos' rows, and its adds with the old section are stored in 'básicos' (it shows those items under Básicos)."
+  },
+  "functions": [
+    {
+      "proname": "add_pantry_items",
+      "definition": "CREATE OR REPLACE FUNCTION public.add_pantry_items(p_items jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_user uuid := auth.uid();\n  v_categories constant text[] := ARRAY['básicos','especias','aceites y vinagres','salsas','conservas','congelados','otros'];\n  v_profile uuid;\n  v_count integer;\n  v_item record;\n  v_name text;\n  v_row public.pantry_items%ROWTYPE;\n  v_result text;\n  v_results jsonb := '[]';\nBEGIN\n  IF v_user IS NULL THEN\n    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'add_pantry_items: authentication required';\n  END IF;\n  IF jsonb_typeof(p_items) IS DISTINCT FROM 'array' OR jsonb_array_length(p_items) NOT BETWEEN 1 AND 100 THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'add_pantry_items: 1 to 100 items required';\n  END IF;\n\n  SELECT count(*) INTO v_count\n  FROM jsonb_to_recordset(p_items) AS i(id uuid, name text, category text, active boolean)\n  WHERE i.id IS NOT NULL\n    AND char_length(regexp_replace(btrim(coalesce(i.name, '')), '\\s+', ' ', 'g')) BETWEEN 1 AND 80\n    AND i.category = ANY (v_categories)\n    AND i.active IS NOT NULL;\n  IF v_count <> jsonb_array_length(p_items)\n     OR (SELECT count(DISTINCT i.id) FROM jsonb_to_recordset(p_items) AS i(id uuid)) <> v_count THEN\n    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'add_pantry_items: invalid or repeated item';\n  END IF;\n\n  PERFORM pg_advisory_xact_lock(hashtextextended('pantry_items:' || v_user::text, 0));\n\n  -- The pantry links to the caller's own profile, never one sent by the client.\n  SELECT id INTO v_profile FROM public.profiles\n  WHERE user_id = v_user\n  ORDER BY updated_at DESC\n  LIMIT 1;\n\n  FOR v_item IN\n    SELECT (e.value->>'id')::uuid AS id, e.value->>'name' AS name,\n      CASE WHEN e.value->>'category' = 'aceites y vinagres' THEN 'básicos' ELSE e.value->>'category' END AS category,\n      (e.value->>'active')::boolean AS active\n    FROM jsonb_array_elements(p_items) WITH ORDINALITY AS e(value, ord)\n    ORDER BY e.ord\n  LOOP\n    v_name := regexp_replace(btrim(v_item.name), '\\s+', ' ', 'g');\n    SELECT * INTO v_row FROM public.pantry_items WHERE id = v_item.id AND user_id = v_user;\n    IF FOUND THEN\n      v_result := 'duplicate';\n    ELSE\n      SELECT * INTO v_row FROM public.pantry_items p\n      WHERE p.user_id = v_user AND p.category = v_item.category\n        AND regexp_replace(normalize(lower(regexp_replace(btrim(p.name), '\\s+', ' ', 'g')), NFD), '[̀-ͯ]', '', 'g')\n          = regexp_replace(normalize(lower(v_name), NFD), '[̀-ͯ]', '', 'g')\n      ORDER BY p.created_at, p.id\n      LIMIT 1;\n      IF FOUND THEN\n        v_result := 'existing';\n      ELSE\n        INSERT INTO public.pantry_items (id, user_id, profile_id, name, category, active)\n        VALUES (v_item.id, v_user, v_profile, v_name, v_item.category, v_item.active)\n        RETURNING * INTO v_row;\n        v_result := 'created';\n      END IF;\n    END IF;\n    v_results := v_results || jsonb_build_array(jsonb_build_object(\n      'id', v_item.id,\n      'result', v_result,\n      'row', jsonb_build_object('id', v_row.id, 'name', v_row.name, 'category', v_row.category,\n        'active', v_row.active, 'version', v_row.version)));\n  END LOOP;\n\n  RETURN jsonb_build_object('status', 'applied', 'items', v_results);\nEND;\n$function$\n"
+    }
+  ]
+}

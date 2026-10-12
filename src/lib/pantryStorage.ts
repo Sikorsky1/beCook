@@ -6,12 +6,12 @@ import type { SupermarketCategory } from "@/lib/shoppingList";
 export type PantryCategory =
   | "básicos"
   | "especias"
-  | "aceites y vinagres"
   | "salsas"
   | "conservas"
   | "congelados"
   | "otros";
-type LegacyPantryCategory = PantryCategory;
+// «Aceites y vinagres» was a section until 2026-10-12; its items now live in «Básicos».
+type LegacyPantryCategory = PantryCategory | "aceites y vinagres";
 
 // Account row of an item and the version this copy is based on (B7).
 export type PantryRowRef = { id: string; version: number };
@@ -45,8 +45,8 @@ const pantryCategoryByItem = new Map<string, PantryCategory>([
   ["pimienta", "especias"],
   ["ajo en polvo", "especias"],
   ["mostaza", "salsas"],
-  ["aceite de oliva", "aceites y vinagres"],
-  ["vinagre", "aceites y vinagres"],
+  ["aceite de oliva", "básicos"],
+  ["vinagre", "básicos"],
 ]);
 
 export function normalizePantryItemName(itemName: string) {
@@ -77,6 +77,11 @@ function isPantryCategory(value: unknown): value is LegacyPantryCategory {
     typeof value === "string" &&
     pantryCategoryValues.has(value as LegacyPantryCategory)
   );
+}
+
+// Section of an item saved with a section that no longer exists.
+export function currentPantryCategory(category: LegacyPantryCategory): PantryCategory {
+  return category === "aceites y vinagres" ? "básicos" : category;
 }
 
 function normalizePantryItem(item: PantryStorageItem): PantryStorageItem {
@@ -135,7 +140,7 @@ function parseStoredItem(item: unknown): PantryStorageItem | null {
   const pending = parsePending(parsedItem.pending);
   return {
     name,
-    category: parsedItem.category,
+    category: currentPantryCategory(parsedItem.category),
     active: parsedItem.active !== false,
     ...(rows ? { rows } : {}),
     ...(pending ? { pending } : {}),
@@ -213,7 +218,6 @@ export function pantryHasItem(pantryItems: string[], itemName: string) {
 export const pantryCategoryOrder: PantryCategory[] = [
   "básicos",
   "especias",
-  "aceites y vinagres",
   "salsas",
   "conservas",
   "congelados",
@@ -236,9 +240,9 @@ export const pantryBasicsCatalog: { name: string; category: PantryCategory }[] =
   { name: "Orégano", category: "especias" },
   { name: "Laurel", category: "especias" },
   { name: "Ajo en polvo", category: "especias" },
-  { name: "Aceite de oliva", category: "aceites y vinagres" },
-  { name: "Aceite de girasol", category: "aceites y vinagres" },
-  { name: "Vinagre", category: "aceites y vinagres" },
+  { name: "Aceite de oliva", category: "básicos" },
+  { name: "Aceite de girasol", category: "básicos" },
+  { name: "Vinagre", category: "básicos" },
   { name: "Mostaza", category: "salsas" },
   { name: "Salsa de soja", category: "salsas" },
   { name: "Tomate frito", category: "salsas" },
