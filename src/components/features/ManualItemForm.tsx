@@ -10,8 +10,11 @@ import { capitalize } from "./ShoppingSection";
 export type ManualItemDraft = { name: string; quantity: number | null; unit: string; category: SupermarketCategory };
 
 type ManualItemFormProps = {
-  // Resolves with a message for the user (what happened with the item).
-  onAdd: (draft: ManualItemDraft) => Promise<string>;
+  // Saves the item; the page shows what happened in `message` (step 34: one notice per page, so the
+  // page owns it and clears it when another action starts or this form closes).
+  onAdd: (draft: ManualItemDraft) => Promise<void>;
+  message: string;
+  onClose: () => void;
 };
 
 const fieldClass =
@@ -19,7 +22,7 @@ const fieldClass =
 
 // D5 (roadmap step 31): add something that is not in the menu (papel de cocina, leche…). It goes to
 // this week's list; without connection it stays on this device and is sent later.
-export function ManualItemForm({ onAdd }: ManualItemFormProps) {
+export function ManualItemForm({ onAdd, message, onClose }: ManualItemFormProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -33,7 +36,6 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
   // to «Artículo», ready for the next item (or to fix this one).
   const nameInputRef = useRef<HTMLInputElement>(null);
   const focusOpenButton = useRef(false);
-  const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const id = useId();
 
@@ -71,7 +73,7 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
     setErrorField(null);
     setSaving(true);
     try {
-      setMessage(await onAdd({ name: cleanName, quantity: amount, unit: unit.trim() || "ud", category }));
+      await onAdd({ name: cleanName, quantity: amount, unit: unit.trim() || "ud", category });
       reset();
     } finally {
       setSaving(false);
@@ -148,6 +150,7 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
                 focusOpenButton.current = true;
                 setOpen(false);
                 reset();
+                onClose();
               }}
               className="min-h-11 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)]"
             >
@@ -160,10 +163,7 @@ export function ManualItemForm({ onAdd }: ManualItemFormProps) {
           ref={openButtonRef}
           type="button"
           aria-expanded={false}
-          onClick={() => {
-            setMessage("");
-            setOpen(true);
-          }}
+          onClick={() => setOpen(true)}
           className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)]"
         >
           <Plus aria-hidden="true" className="h-4 w-4" />

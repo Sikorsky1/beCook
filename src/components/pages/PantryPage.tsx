@@ -28,6 +28,7 @@ import {
   type PantryChangeResult,
 } from "@/lib/data/pantry";
 import type { DataIdentity } from "@/lib/data/repositories";
+import { createActionNotices, type ActionNotice } from "@/lib/actionNotices";
 import { pageShellStickyClass } from "@/lib/ui";
 import {
   capitalizePantryItemName,
@@ -279,7 +280,9 @@ export default function PantryPage() {
   // D5: deletes waiting ~6 s so they can be undone (hidden meanwhile), with the names shown.
   const [pendingDeletes, setPendingDeletes] = useState<string[]>([]);
   const [deletedNames, setDeletedNames] = useState<Record<string, string>>({});
-  const [basicsMessage, setBasicsMessage] = useState("");
+  // Step 34: the notice of the last action (basics added); any other action clears it.
+  const [notice, setNotice] = useState<ActionNotice>(null);
+  const [notices] = useState(() => createActionNotices(setNotice));
   // An item brought back by «Deshacer», to give it the focus once it is shown again.
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const deletesRef = useRef<ReturnType<typeof createDeferredDeletes> | null>(null);
@@ -410,6 +413,7 @@ export default function PantryPage() {
 
   const addItem = (category: PantryCategory, event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    notices.clear();
 
     const displayName = capitalizePantryItemName(draftItemName);
 
@@ -447,6 +451,7 @@ export default function PantryPage() {
 
   // «Tengo / Se acabó» sets the value (never toggles).
   const setItemActive = (category: PantryCategory, itemName: string, active: boolean) => {
+    notices.clear();
     const normalizedItemName = normalizePantryItemName(itemName);
     const item = pantryItems.find(
       (pantryItem) =>
@@ -461,6 +466,7 @@ export default function PantryPage() {
 
   // The item disappears at once; it is deleted in the account after ~6 s unless «Deshacer».
   const deleteItem = (category: PantryCategory, itemName: string) => {
+    notices.clear();
     const key = pantryItemKey({ category, name: itemName });
     deleteTargets.current.set(key, { identity: dataIdentity, category, name: itemName });
     setDeletedNames((current) => ({ ...current, [key]: itemName }));
@@ -480,6 +486,7 @@ export default function PantryPage() {
   };
 
   const addBasics = (basics: { name: string; category: PantryCategory }[]) => {
+    const show = notices.begin();
     // A basic deleted a moment ago comes back by undoing that delete.
     const toAdd = basics.filter((basic) => {
       const key = pantryItemKey(basic);
@@ -489,11 +496,11 @@ export default function PantryPage() {
     });
     const added = basics.length === 1 ? `«${basics[0].name}» añadido a tu despensa.` : `${basics.length} básicos añadidos a tu despensa.`;
     if (!toAdd.length) {
-      setBasicsMessage(added);
+      show(added);
       return;
     }
     void showChange(addPantryItems(dataIdentity, toAdd)).then((result) =>
-      setBasicsMessage(
+      show(
         result.status === "conflict"
           ? "Tu despensa había cambiado en otro dispositivo: revisa la lista antes de añadir más."
           : result.status === "pending"
@@ -571,14 +578,17 @@ export default function PantryPage() {
               <p className="text-sm font-semibold text-[color:var(--color-foreground)]">«{deletedNames[key]}» borrado de la despensa.</p>
               <button
                 type="button"
-                onClick={() => undoDelete(key, { focus: true })}
+                onClick={() => {
+                  notices.clear();
+                  undoDelete(key, { focus: true });
+                }}
                 className="min-h-11 rounded-[var(--radius-control)] px-3 text-sm font-semibold text-[color:var(--color-accent-hover)] underline underline-offset-4"
               >
                 Deshacer
               </button>
             </div>
           ))}
-          {basicsMessage ? <p className="t-meta px-1">{basicsMessage}</p> : null}
+          {notice ? <p className="t-meta px-1">{notice.text}</p> : null}
         </div>
 
         {hasLoadedPantry ? <PantryBasicsPicker offered={pantryBasicsToOffer(visibleItems)} onAdd={addBasics} /> : null}

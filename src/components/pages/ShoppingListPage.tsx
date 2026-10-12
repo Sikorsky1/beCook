@@ -69,6 +69,7 @@ import {
   type SupermarketCategory,
 } from "@/lib/shoppingList";
 import { ShoppingListApiError } from "@/lib/shoppingListStorage";
+import { createActionNotices, noticeText, type ActionNotice } from "@/lib/actionNotices";
 import { withWeekDates } from "@/lib/weekStorage";
 
 type ShoppingProgressProps = {
@@ -249,7 +250,9 @@ export default function ShoppingListPage() {
   // D5: the week's servings (when the account told) and the result of the last action of the user
   // on an item (added by hand, quantity, pantry), announced politely.
   const [servings, setServings] = useState<number | null>(null);
-  const [actionMessage, setActionMessage] = useState("");
+  // Step 34: one notice at a time (a new action clears it; closing the add form clears its own).
+  const [notice, setNotice] = useState<ActionNotice>(null);
+  const [notices] = useState(() => createActionNotices(setNotice));
 
   const identity = useIdentity();
   const [isoWeek, setIsoWeek] = useState<IsoWeek | null>(null);
@@ -303,7 +306,7 @@ export default function ShoppingListPage() {
       setListSyncState({});
       setHasCheckedList(false);
       setServings(null);
-      setActionMessage("");
+      notices.clear();
       setIsoWeek(weekToLoad);
       setPantryItems(activePantryNames(pantryItemsOrDefault(readCachedPantry(dataIdentity))));
 
@@ -329,7 +332,8 @@ export default function ShoppingListPage() {
       isCancelled = true;
       window.clearTimeout(loadTimer);
     };
-  }, [identity.status, identity.scope, identity.userId, identity.epoch, syncReload]);
+    // `notices` never changes (created once with the state setter).
+  }, [identity.status, identity.scope, identity.userId, identity.epoch, syncReload, notices]);
 
   useEffect(() => {
     if (!hasLoadedWeek || !weekDays || weekDays.length === 0 || !isoWeek) {
@@ -601,11 +605,15 @@ export default function ShoppingListPage() {
   const refreshPantry = () => setPantryItems(activePantryNames(readPantryView(dataIdentityOf())));
 
   const rowActions: ShoppingRowActions = {
-    onToggle: (item) => toggleCheckedItem(item.id),
+    onToggle: (item) => {
+      notices.clear();
+      toggleCheckedItem(item.id);
+    },
     onSaveQuantity: (item, quantity, unit) => {
       if (!isoWeek || !weekDays) return;
+      const show = notices.begin();
       void runEdit(() => setShoppingItemQuantity(dataIdentityOf(), isoWeek, item.id, quantity, weekDays, unit)).then((result) =>
-        setActionMessage(
+        show(
           result.status === "refused"
             ? `No se puede cambiar la cantidad de «${capitalize(item.name)}».`
             : editMessage(result.status, `Cantidad de «${capitalize(item.name)}»: ${formatShoppingAmount(quantity, unit ?? item.unit)}.`),
@@ -614,8 +622,9 @@ export default function ShoppingListPage() {
     },
     onRemove: (item) => {
       if (!isoWeek || !weekDays) return;
+      const show = notices.begin();
       void runEdit(() => removeManualShoppingItem(dataIdentityOf(), isoWeek, item.id, weekDays)).then((result) =>
-        setActionMessage(
+        show(
           result.status === "refused"
             ? `No se puede quitar «${capitalize(item.name)}».`
             : editMessage(result.status, `«${capitalize(item.name)}» quitado de la lista.`),
@@ -623,9 +632,10 @@ export default function ShoppingListPage() {
       );
     },
     onAddToPantry: (item) => {
+      const show = notices.begin();
       void ensurePantryItemInStock(dataIdentityOf(), item.name, item.category).then((result) => {
         refreshPantry();
-        setActionMessage(
+        show(
           result.status === "conflict"
             ? "Tu despensa ha cambiado en otro dispositivo. Revisa la despensa."
             : `«${capitalize(item.name)}» está ahora en tu despensa${result.status === "pending" ? " (se guardará al recuperar la conexión)" : ""}.`,
@@ -637,9 +647,10 @@ export default function ShoppingListPage() {
   // «Se me acabó» on an item left out because it is usually at home: the pantry marks it as used
   // up, so it goes back to what is still to buy.
   const markUsedUp = (item: ShoppingViewItem) => {
+    const show = notices.begin();
     void markPantryItemUsedUp(dataIdentityOf(), item.name).then((result) => {
       refreshPantry();
-      setActionMessage(
+      show(
         result.status === "missing"
           ? `«${capitalize(item.name)}» no está en tu despensa.`
           : result.status === "conflict"
@@ -728,7 +739,7 @@ export default function ShoppingListPage() {
         />
         {/* Persistent live region for the result of the user's last action on an item. */}
         <p role="status" className="t-meta px-1 empty:hidden">
-          {hasList ? actionMessage : ""}
+          {hasList ? noticeText(notice, "list") : ""}
         </p>
 
         <section className="transition-opacity duration-200 ease-out motion-reduce:transition-none">
@@ -878,7 +889,14 @@ export default function ShoppingListPage() {
                   </ul>
                 </details>
               ) : null}
-              <ManualItemForm onAdd={addManualItem} />
+              <ManualItemForm
+                onAdd={async (draft) => {
+                  const show = notices.begin("form");
+                  show(await addManualItem(draft));
+                }}
+                message={noticeText(notice, "form")}
+                onClose={() => notices.close("form")}
+              />
             </div>
           ) : (
             <StateMessage title="No hay lista de la compra." variant="empty">
