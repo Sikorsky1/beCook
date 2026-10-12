@@ -222,7 +222,7 @@ function PantryItemsForCategory({
         <ul className="max-h-[min(56dvh,34rem)] overflow-y-auto divide-y divide-[color:var(--color-border)]">
           {group.items.map((item) => (
             <li key={`${item.category}:${item.name}`} data-pantry-key={pantryItemKey(item)} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 basis-40">
                 <p className="t-body-strong text-[color:var(--color-foreground)]">{item.name}</p>
                 <p className="t-meta mt-0.5">{item.active ? "En casa" : "Se ha acabado: sale en la compra"}</p>
               </div>
