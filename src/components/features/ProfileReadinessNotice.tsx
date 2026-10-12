@@ -37,7 +37,7 @@ export function ProfileReadinessNotice({
   return (
     <p
       role="status"
-      className="mt-3 rounded-[var(--radius-control)] border border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] px-4 py-3 text-sm leading-6 text-[#8a4e2a]"
+      className="mt-3 rounded-[var(--radius-control)] border border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] px-4 py-3 text-sm leading-6 text-[color:var(--color-warning-foreground)]"
     >
       Tu perfil tiene respuestas sin confirmar (
       {assumed.map((section) => profileSectionInfo[section].title.replace(/^¿|\?$/g, "")).join(" · ")}

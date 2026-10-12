@@ -27,7 +27,7 @@ export function GenerationProgress({ mode, startedAt, maxSeconds, onCancel }: Ge
   return (
     <article
       aria-busy="true"
-      className="rounded-[var(--radius-control)] border border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] px-4 py-3 text-sm leading-6 text-[#8a4e2a]"
+      className="rounded-[var(--radius-control)] border border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] px-4 py-3 text-sm leading-6 text-[color:var(--color-warning-foreground)]"
     >
       <div className="flex items-start gap-3">
         <LoaderCircle

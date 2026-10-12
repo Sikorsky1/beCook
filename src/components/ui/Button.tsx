@@ -25,7 +25,7 @@ const buttonVariantClasses: Record<ButtonVariant, string> = {
   soft:
     "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)] hover:bg-[color:var(--color-surface-muted)] hover:shadow-[0_12px_28px_rgba(217,184,121,0.14)]",
   danger:
-    "border-[#e8d5b5] bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger)] hover:bg-[#fbe4d5]",
+    "border-[color:var(--color-border)] bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger)] hover:bg-[#fbe4d5]",
 };
 
 export function Button({

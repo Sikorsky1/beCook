@@ -10,8 +10,8 @@ const tones: Record<SyncStatusKind, string> = {
   saving: "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)]",
   checking: "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)]",
   saved: "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-secondary-hover)]",
-  pending: "border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] text-[#8a4e2a]",
-  error: "border-[#e8d5b5] bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger)]",
+  pending: "border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning-foreground)]",
+  error: "border-[color:var(--color-border)] bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger)]",
 };
 
 function StatusIcon({ kind }: { kind: SyncStatusKind }) {

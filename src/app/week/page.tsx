@@ -551,7 +551,7 @@ function WeekPageContent() {
         {weekNotice ? (
           <p
             role="status"
-            className="rounded-[var(--radius-control)] border border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] px-4 py-3 text-sm leading-6 text-[#8a4e2a]"
+            className="rounded-[var(--radius-control)] border border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] px-4 py-3 text-sm leading-6 text-[color:var(--color-warning-foreground)]"
           >
             {weekNotice}
           </p>
@@ -564,7 +564,7 @@ function WeekPageContent() {
             className={`rounded-[var(--radius-control)] border px-4 py-3 text-sm leading-6 ${
               visibleRepeatNotice.status === "copied"
                 ? "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)]"
-                : "border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] text-[#8a4e2a]"
+                : "border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning-foreground)]"
             }`}
           >
             {visibleRepeatNotice.message}
