@@ -770,6 +770,16 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | Despliegue be-cook | `dpl_83GDSCktFcRrAWhJBEngpYAfskTj` READY en `www.becook.xyz` y `becook.xyz` (anterior para rollback: `dpl_4EjzprRM38aF7nk39LMygpmAFRyB`). Páginas 200 (incluida `/profile/data`) · `/` 307 · rutas de IA y de cuenta sin sesión 401 |
 | Pendiente (Sergio) | Canal de alertas (`OPS_ALERT_*` en Vercel), DPA, revisión legal de los borradores, simulacro de restauración con datos reales, límites de gasto, protección de contraseñas filtradas en Auth, pasos 36 (dispositivos reales) y 38 (beta). `audit-opt` = `main` por fast-forward antes de este commit |
 
+## Despensa sin «Aceites y vinagres» en producción ✅ (2026-10-12)
+| Elemento | Resultado |
+|---|---|
+| Cambio | La Despensa pasa de 7 a 6 secciones: aceite de oliva, aceite de girasol y vinagre van a «Básicos» (catálogo de básicos, despensa exprés y clasificador por nombre). Copias del dispositivo y filas de la cuenta con la sección antigua se leen como Básicos |
+| PR | [#20](https://github.com/Sikorsky1/beCook/pull/20) `audit-opt` → `main`, merge commit `1330fa7` (2026-10-12); incluye también el arreglo del monitor de disponibilidad (`www.becook.xyz`). Checks en verde (application, database, e2e, Vercel) |
+| Migración | `pantry_oils_into_basics` (`20261016090000`): `add_pantry_items` guarda `aceites y vinagres` como `básicos` y las filas existentes pasan a `básicos` (UPDATE, sin borrados). Conector sin `BEGIN`/`COMMIT`: becook-preview `20261012114830` (0 filas afectadas); becook `20261012120026` tras backup completo en `~/Backups/becook/2026-10-12-ola9` y copia interna `backup_20261012.pantry_items_aceites` (5 filas). `prosrc` idéntico a local en ambos |
+| Validación | test:db 447/447, unitarias 512/512, lint y typecheck en local; CI con E2E en verde; Preview: 6 secciones y una copia guardada con la sección antigua sale en Básicos |
+| Despliegue be-cook | `dpl_4nyf4yHnbXcijGZRGemEkbzPCGA7` READY en `www.becook.xyz` (anterior para rollback: `dpl_83GDSCktFcRrAWhJBEngpYAfskTj`); `/shopping/pantry` muestra Básicos, Especias, Salsas, Conservas, Congelados y Otros |
+| Reversión | Restaurar la categoría desde `backup_20261012.pantry_items_aceites` y volver al cliente anterior; `add_pantry_items` sigue aceptando el valor antiguo |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
@@ -829,6 +839,7 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | shopping_item_origins (`20261013090000`) | ✅ | ✅ 20261011223501 | ✅ 20261011223838 (tras backup completo en ~/Backups/becook/2026-10-12-ola6) |
 | shopping_manual_items (`20261014090000`) | ✅ | ✅ 20261012002220 | ✅ 20261012002444 (tras backup completo en ~/Backups/becook/2026-10-12-ola7) |
 | ai_usage_keep_on_account_delete (`20261015090000`) | ✅ | ✅ 20261012021426 | ✅ 20261012060819 (tras backup completo en ~/Backups/becook/2026-10-12-ola8) |
+| pantry_oils_into_basics (`20261016090000`) | ✅ | ✅ 20261012114830 | ✅ 20261012120026 (tras backup completo en ~/Backups/becook/2026-10-12-ola9 y copia `backup_20261012`) |
 
 ## Decisiones
 | # | Decisión | Fecha |

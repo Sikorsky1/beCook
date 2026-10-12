@@ -106,3 +106,13 @@ export function FieldLabel({ children, htmlFor }: { children: ReactNode; htmlFor
 
 export const authTextLinkClass =
   "font-semibold text-[color:var(--color-foreground)] underline underline-offset-4 hover:text-[color:var(--color-accent-hover)]";
+
+// Under the account forms (/login, /signup): where the legal texts are.
+export function LegalNotice() {
+  return (
+    <p className="t-meta leading-5">
+      Consulta la <Link href="/privacidad" className={authTextLinkClass}>política de privacidad</Link> y las{" "}
+      <Link href="/condiciones" className={authTextLinkClass}>condiciones de uso</Link>.
+    </p>
+  );
+}

@@ -55,6 +55,14 @@ export function authRedirectUrl(origin: string, route: AuthRoute, next: string |
   return `${origin.replace(/\/+$/, "")}${authHref(route, next)}`;
 }
 
+// Return address from Google or Apple: /auth/callback marked with via=oauth, so any error that
+// comes back is treated as a provider sign-in (try again), never as an email link (resend it).
+export function oauthRedirectUrl(origin: string, next: string | null | undefined) {
+  const url = new URL(authRedirectUrl(origin, "/auth/callback", next));
+  url.searchParams.set("via", "oauth");
+  return url.toString();
+}
+
 // --- Bottom navigation (step 32) -------------------------------------------------------------
 // Three destinations. «Crear menú» is an action on a week, not a destination: its route stays and
 // marks Semana. Routes are matched by segment, so /week marks /week/x but not /weekly.

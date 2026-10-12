@@ -27,6 +27,10 @@
       { "dayName": "Lunes", "lunch": { "status": "planned", "dishName": "Lentejas estofadas" }, "dinner": { "status": "free", "dishName": "" } }
     ]
   },
+  "menuFileText": {
+    "found": true,
+    "text": "Lunes\nComida: Crema de calabaza\nCena: Tortilla francesa\n\nMartes\nComida: Lentejas estofadas\nCena: LIBRE"
+  },
   "shoppingByMeal": {
     "lunch": [
       { "name": "tomate", "quantity": 4, "unit": "ud", "category": "frutería" },
