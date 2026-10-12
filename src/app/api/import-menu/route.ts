@@ -13,7 +13,7 @@ import {
   validateImportText,
   type ImportedMenuResponse,
 } from "@/lib/importMenu";
-import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
+import { logOpenAIModelUsage, OPENAI_MODEL, blockedOpenAIEndpointResponse } from "@/lib/openai/config";
 import { estimateOpenAICostUsd } from "@/lib/openai/cost";
 import { importTimeoutMs, withOneRetry } from "@/lib/openai/retry";
 import { aiRequestLimits } from "@/lib/server/ai-limits";
@@ -89,6 +89,8 @@ export async function POST(request: Request) {
     );
   }
 
+  const blockedEndpoint = blockedOpenAIEndpointResponse("import-menu");
+  if (blockedEndpoint) return blockedEndpoint;
   const begin = await beginAiUsage(request, { userId: guard.user.id, flow: "import" });
 
   if (!begin.ok) {

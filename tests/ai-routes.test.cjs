@@ -105,6 +105,35 @@ for (const [path, spec] of Object.entries(routes)) {
   assert.equal(response.status, 200);
   assert.equal(fakes.openAICalls, 1);
  });
+
+ // Wave 8: OPENAI_BASE_URL in any Vercel environment -> 503 before the ledger and OpenAI.
+ test(`${path}: OPENAI_BASE_URL on Vercel -> 503 without ledger row or OpenAI`, async () => {
+  if (spec.profile) fakes.foodContext = foodContextFor(spec.profile);
+  const saved = {VERCEL_ENV: process.env.VERCEL_ENV, OPENAI_BASE_URL: process.env.OPENAI_BASE_URL};
+  const originalError = console.error;
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+  try {
+   for (const vercelEnv of ["preview", "production", "development"]) {
+    Object.assign(process.env, {VERCEL_ENV: vercelEnv, OPENAI_BASE_URL: "http://127.0.0.1:4010/v1"});
+    const response = await POST(post(path, {body: spec.valid, token: validToken}));
+    assert.equal(response.status, 503, vercelEnv);
+    assert.match((await response.json()).error, /no está disponible/);
+   }
+  } finally {
+   console.error = originalError;
+   for (const [key, value] of Object.entries(saved)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+   }
+  }
+  assert.equal(fakes.begin.length, 0, "no ledger row");
+  assert.equal(fakes.openAICalls, 0);
+  assert.deepEqual(logged.map(([event, fields]) => [event, fields.flow, fields.vercelEnv]), [
+   ["openai_base_url_blocked", path, "preview"], ["openai_base_url_blocked", path, "production"], ["openai_base_url_blocked", path, "development"],
+  ]);
+  assert.doesNotMatch(JSON.stringify(logged), /127\.0\.0\.1|synthetic-test-key/);
+ });
 }
 
 test("import-menu: text over 8000 characters -> 400 before OpenAI", async () => {

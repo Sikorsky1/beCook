@@ -26,7 +26,7 @@ Entornos (ver `AGENTS.md`):
 | `AI_MONTHLY_BUDGET_USD` | defecto 25 | opcional | opcional (defecto 25) | No | Corte global de gasto. **`0` = interruptor de IA** (todas las rutas de IA → 503) |
 | `AI_QUOTA_MENU_DAILY`, `AI_QUOTA_MENU_MONTHLY`, `AI_QUOTA_IMPORT_DAILY`, `AI_QUOTA_SHOPPING_DAILY`, `AI_MAX_CONCURRENT`, `AI_IP_HOURLY` | defectos D3 | opcionales | opcionales | No | Cuotas (4/día y 20/mes de menús; 10/día de importar y compra; 1 concurrente; 30/h por IP) |
 | `OPENAI_MODEL`, `OPENAI_FALLBACK_MODEL`, `MENU_OPENAI_MODEL`, `MENU_OPENAI_FALLBACK_MODEL`, `OPENAI_REASONING_EFFORT` | opcionales | opcionales | opcionales | No | Modelos (defectos en `src/lib/openai/config.ts`) |
-| `OPENAI_BASE_URL` | solo e2e (simulador local) | **nunca** | **nunca** | — | Lo usa el e2e de P35; con `VERCEL_ENV=production` la ruta debe negarse (P35) |
+| `OPENAI_BASE_URL` | solo e2e (simulador local) | **nunca** | **nunca** | — | Lo usa el e2e de P35. En Vercel el build falla si existe (`next.config.ts`) y las rutas de IA responden 503 con cualquier `VERCEL_ENV` |
 | `OPS_ALERT_WEBHOOK_URL` | sin definir | opcional | **pendiente (Sergio)** | Media | Canal de alertas (P37). Sin ella no se envía nada. `https://api.resend.com/emails` → email con Resend; otra URL https → webhook JSON |
 | `OPS_ALERT_WEBHOOK_TOKEN` | — | opcional | pendiente | **Sí** | Clave de API de Resend (o Bearer del webhook) |
 | `OPS_ALERT_EMAIL_TO` | — | opcional | pendiente | Dato personal | Destinatario(s) de las alertas, separados por comas (solo con Resend) |

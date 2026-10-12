@@ -47,8 +47,10 @@ npm run test:e2e      # build + servidores + Playwright (2–3 min en un Mac; ~1
 `imported_menu`, `shopping_list`, `shopping_list_by_dish`, `dish_card`) con
 `fixtures/openai-responses.json` y 120 + 80 tokens por llamada, así que el registro de uso guarda
 coste igual que en producción. Para `menu_selection` elige 7 comidas y 7 cenas válidas del catálogo
-que manda la petición. La librería `openai` lee `OPENAI_BASE_URL`; en producción de Vercel esa
-variable está prohibida (`blockedOpenAIEndpointResponse` en `src/lib/openai/config.ts`).
+que manda la petición. La librería `openai` lee `OPENAI_BASE_URL`; en Vercel (Production, Preview y Development) esa
+variable está prohibida: `next.config.ts` hace fallar el build si existen `VERCEL` y
+`OPENAI_BASE_URL`, y las 5 rutas de IA responden 503 antes del registro de uso si existen
+`VERCEL_ENV` y `OPENAI_BASE_URL` (`blockedOpenAIEndpointResponse` en `src/lib/openai/config.ts`).
 
 ## Recorridos
 
