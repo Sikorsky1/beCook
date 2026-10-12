@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { PrimaryButton, SecondaryButton } from "@/components/ui/Button";
 import { StateMessage } from "@/components/ui/StateMessage";
+import { AccountDeletedNotice } from "@/components/session/AccountDeletedNotice";
 import { useIdentity, useIdentityActions } from "@/components/session/IdentityProvider";
 import {
   declineLegacyImport,
@@ -52,6 +53,7 @@ export function SessionNotices() {
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-3 px-3 pt-3 empty:hidden sm:px-6">
+      <AccountDeletedNotice />
       {/* The account screens already are the way back in: no banner there. */}
       {identity.sessionExpired && !isAuthPath(pathname) ? (
         <StateMessage

@@ -636,6 +636,7 @@ export default function ProfilePage() {
                 </Link>
               )}
             </div>
+            <Link href="/profile/data" className="inline-flex min-h-11 items-center text-sm font-semibold text-[color:var(--color-foreground)] underline underline-offset-4 hover:text-[color:var(--color-accent-hover)]">Tus datos: descargar o eliminar la cuenta</Link>
           </Card>
 
           {!savedProfile && hasLoadedProfile ? (
