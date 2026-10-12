@@ -2,7 +2,7 @@
 
 Fecha: 2026-10-15 · Rama de trabajo: `audit/p34-componentes` (desde `audit-opt` 59a3309), ola 8 en
 paralelo con P35 (E2E) y P37 (operación). Sin migraciones, sin BD y sin dependencias.
-Estado: **pendiente de validación por el revisor delegado** (Sergio delegó la aprobación; el revisor
+Estado: **aplicado en la rama, pendiente de validación por el revisor delegado** (Sergio delegó la aprobación; el revisor
 valida este plan junto con el código).
 
 `AGENTS.md` exige plan aprobado en `design-plans/` antes de tocar `globals.css`, `src/components/ui/*`,
@@ -72,8 +72,8 @@ cambios y, para tener el paso en un solo sitio, también los de pantallas.
    Objetivo ≤ 120 px a 320×568 cumplido. En Semana, ‹ › pasan de la fila del `h1` a la barra (siguen
    a mano al desplazarse); «Semana actual/Volver a hoy» y «Editar menú» se desplazan con el `h1`.
    En Despensa, el selector de categorías se desplaza (no es navegación dentro de la página) y la
-   cabecera interna de la tarjeta de categoría deja de ser `sticky top-0` (se quedaba tapada por la
-   cabecera; la lista ya tiene su propio desplazamiento interno).
+   cabecera interna de la tarjeta de categoría deja de ser `sticky top-0` (no tenía efecto: está
+   dentro de una tarjeta `overflow-hidden`; la lista ya tiene su propio desplazamiento interno).
 3. **Desplazamiento a secciones y días**: `scroll-mt-64` (Compra: `ShoppingSection` y «Ya lo tienes
    habitualmente») y `scroll-mt-[172px]` (Semana) pasan a
    `scroll-mt-[calc(7.5rem+env(safe-area-inset-top))]` (120 px: 113 fijos + 7 de aire). Semana deja
@@ -211,3 +211,24 @@ son regiones `role="status"`.
 - `-mt-4 sm:-mt-5` del bloque desplazable depende del `gap-4 sm:gap-5` de la columna (igual en las 4
   pantallas); si una pantalla cambia su `gap`, revisar.
 - La barra muestra solo el eyebrow al desplazarse: el `h1` sale de la vista (decisión de la ola).
+
+## Medición tras aplicar (2026-10-15)
+
+`next build` de 59a3309 y de esta rama en copias sin `.env*` (variables sintéticas, Supabase
+inaccesible), servidas con `next start` en 127.0.0.1 y abiertas en el navegador integrado como
+invitado (semana y lista de 18 artículos sembradas en `localStorage`). Alto de las piezas `sticky`
+pegadas arriba tras desplazarse:
+
+| Pantalla | 320×568 antes → después | 390×844 antes → después |
+| --- | --- | --- |
+| Semana con menú | 193 → **113** (56 + 57) | 193 → **113** |
+| Compra con lista | 242,8 → **113** (56 + 57) | 242,8 → **113** |
+| Despensa | 350,6 → **57** | 350,6 → **57** |
+| Perfil | 72,6 → **57** | — |
+
+Compra del invitado no tiene raciones, por eso su línea de semana ocupa una sola línea (242,8 px;
+con raciones, a 320 px, 261 px calculados). Padding de `main`: antes 20/16/16 px, después 0/16/16
+(la barra pone el aire superior). Al pulsar un acceso de Compra, la sección queda a 120 px del borde
+(bajo los 113 fijos); en Semana, el día elegido también a 120 px. Sin desplazamiento horizontal a
+320 ni a 390 px. Ajuste tras medir: el eyebrow de la barra pasa a `line-clamp-2` (a 320 px
+«Lista de la compra» junto a «0/18 comprados» se recortaba con `truncate`).
