@@ -1,4 +1,4 @@
-# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1, C2, C3, C4)
+# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1, C2, C3, C4, D5, C6, paso 32)
 
 Pasos 06 y 07 del roadmap (H3, H7), sin cambios de base de datos, y paso 10 (B4, H8):
 escrituras de semana transaccionales con versión e idempotencia.
@@ -371,6 +371,13 @@ Pasos 11 y 15 del roadmap (H9). Sin cambios de base de datos.
   cambios… que no se guardaron» (respuesta perdida).
 - **Compra pendiente**: una lista generada sin guardar en la cuenta o marcados no aceptados marcan
   la caché `shopping` como `pending`, así que el aviso de cierre de sesión los tiene en cuenta.
+- **«Repetir la semana N»** (paso 32, `src/lib/repeatWeek.ts`): en una semana vacía, si la
+  anterior tiene algún plato, copia platos y fichas (`lunchRecipe`/`dinnerRecipe`) con
+  `applyMenuToWeek`/`saveWeek` sin modificarlos, como un menú importado (`generationRequestId:
+  null`: contexto del perfil actual) y sin preparar la compra (se prepara al abrir Compra). Nunca
+  reemplaza un menú: si otro llega entre la lectura y la escritura, se avisa y se vuelve a leer. En
+  `pending` el reintento es el de `SyncStatus` (clave nueva; la versión esperada evita duplicar).
+  Invitado: solo en el dispositivo.
 
 ## Perfil y onboarding (D2)
 
@@ -610,3 +617,13 @@ Nunca se asignan a una cuenta automáticamente. Con sesión iniciada aparece
 - `scripts/recipe-cards-db-tests.cjs` (en `test:db`): catálogo para invitados, guardado de fichas
   estimadas, RLS y permisos, inmutabilidad, enlace y edición por la app, comprobaciones de
   propiedad y título, catálogo revisado, despliegue con el cliente anterior y borrado de cuenta.
+- `tests/shopping-manual.test.cjs` y `tests/pantry-actions.test.cjs` (D5): orígenes `manual` y
+  `user_adjust`, diff sin manuales, alta con id y reenvío, sin conexión, respuesta perdida, lotes de
+  ediciones, cambio de platos con manuales, `fromCards`, «Tengo / Se acabó», básicos en bloque y
+  borrado con «Deshacer».
+- `scripts/shopping-manual-db-tests.cjs` (en `test:db`, D5): alta, reenvío y existente,
+  cantidades, guarda del trigger, cascadas, permisos y validación, dos dispositivos,
+  reconciliación del cliente nuevo y despliegue con el cliente de f810818.
+- `tests/import-local.test.cjs` (C6): ver «Importación y borradores de Crear menú (C6)».
+- `tests/navigation.test.cjs` (paso 32): destinos y sección activa, redirección de `/import`,
+  semana vacía y «Repetir la semana N» (cuenta, invitado, semana ocupada, carrera, pendiente).
