@@ -780,6 +780,15 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | Despliegue be-cook | `dpl_4nyf4yHnbXcijGZRGemEkbzPCGA7` READY en `www.becook.xyz` (anterior para rollback: `dpl_83GDSCktFcRrAWhJBEngpYAfskTj`); `/shopping/pantry` muestra Básicos, Especias, Salsas, Conservas, Congelados y Otros |
 | Reversión | Restaurar la categoría desde `backup_20261012.pantry_items_aceites` y volver al cliente anterior; `add_pantry_items` sigue aceptando el valor antiguo |
 
+## Subir el menú en PDF o foto («Ya tengo un menú») ✅ (2026-10-12)
+| Elemento | Resultado |
+|---|---|
+| Cambio | El panel «¿Ya tienes un menú? Pégalo o súbelo» tiene «Subir PDF o foto». Un PDF con texto se lee en el navegador (`unpdf@1.8.1`, carga bajo demanda), sin IA y también para invitados; las filas de una tabla conservan las columnas como tabuladores. Una foto o un PDF escaneado se reduce en el navegador (1600 px, JPEG) y lo transcribe la IA en `/api/menu-file-text` (sesión obligatoria, `store: false`, cuenta como importación en la cuota y el presupuesto). El texto va a la caja de pegar para revisarlo antes de «Procesar menú». El archivo no se guarda. Límites en `src/lib/menuFile.ts`: PDF/JPG/PNG/WebP/HEIC, 15 MB, 4 páginas, 4 MB de petición. Tras «Procesar menú» la página lleva la vista a la propuesta, al progreso o al error |
+| PR | [#21](https://github.com/Sikorsky1/beCook/pull/21) `audit-opt` → `main`, merge commit `567df93` (2026-10-12); incluye también «Continuar con Google» (oculto en producción: `NEXT_PUBLIC_AUTH_PROVIDERS` solo en Preview de `audit-opt`) y `/privacidad` y `/condiciones` (con la frase sobre fotos y PDF enviados a OpenAI). Checks en verde (application, database, e2e, Vercel) |
+| Migración | Ninguna |
+| Validación | Unitarias 534/534, lint y typecheck; E2E en local con los recorridos nuevos (PDF de invitado sin IA, foto de invitado pide sesión, foto con sesión leída por la IA simulada, error a la vista) y en CI. Producción: PDF de prueba leído en el navegador y ordenado sin IA, propuesta a la vista; `/api/menu-file-text` sin sesión 401. Pendiente: probar una foto real con la IA real |
+| Despliegue be-cook | `dpl_2EPjHBgZrXa73YB5qaTCkBKmX4fo` READY en `www.becook.xyz` (anterior para rollback: `dpl_4nyf4yHnbXcijGZRGemEkbzPCGA7`) |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
