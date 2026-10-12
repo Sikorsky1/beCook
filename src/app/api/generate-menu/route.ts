@@ -9,6 +9,7 @@ import { createMenuCompletion, menuReasoningEffort, menuTimeoutMs, type MenuAtte
 import { aiRequestLimits } from "@/lib/server/ai-limits";
 import { guardAiRequest } from "@/lib/server/ai-request";
 import { readProfileFoodContext } from "@/lib/server/food-context";
+import { blockedOpenAIEndpointResponse } from "@/lib/openai/config";
 import { beginAiUsage, withRequestId } from "@/lib/server/ai-usage";
 
 export const runtime = "nodejs";
@@ -33,6 +34,8 @@ export async function POST(request: Request) {
   const foodContext: VerifiedFoodContext = verifiedFoodContext(context.value, input.peopleCount);
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({error: "Falta configurar OpenAI en el servidor."}, {status: 500});
+  const blockedEndpoint = blockedOpenAIEndpointResponse("generate-menu");
+  if (blockedEndpoint) return blockedEndpoint;
   const begin = await beginAiUsage(request, {userId: guard.user.id, flow: "menu"});
   if (!begin.ok) return begin.response;
   const aiUsage = begin.usage;

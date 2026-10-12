@@ -6,6 +6,7 @@
 // route is replaced by a fixed answer per dish. Scenario weeks live in 2037 and are removed after.
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const { AsyncLocalStorage } = require("node:async_hooks");
 
 const YEAR = 2037;
 const AI = {
@@ -181,13 +182,30 @@ async function runShoppingManualTests({ check: baseCheck, sql, id, supabase, api
       assert.ok(item(1, "Papel de cocina"));
     });
 
-    // 5. Two devices adding the same item at once: one row.
-    const [one, two] = await Promise.all([1, 2].map(async () => {
-      newDevice();
-      const device = freshLayer();
-      await device.shopping.loadShoppingList(asA, week(1), days1);
-      return device.shopping.addManualShoppingItem(asA, week(1), { name: "Servilletas", quantity: 1, unit: "paquete", category: "otros" }, days1);
-    }));
+    // 5. Two devices adding the same item at once: one row. Each device keeps its own storage across
+    // awaits (AsyncLocalStorage, as in the B7 pantry tests): with one global window the second device
+    // replaced the first one's storage mid-flight, so both could read the other's pending add and
+    // answer «existing» locally (flaky under load, never a database defect).
+    const devices = new AsyncLocalStorage();
+    const windowBefore = Object.getOwnPropertyDescriptor(global, "window");
+    const idleWindow = global.window;
+    Object.defineProperty(global, "window", { configurable: true, get: () => devices.getStore() ?? idleWindow });
+    let one;
+    let two;
+    try {
+      [one, two] = await Promise.all([1, 2].map(() => {
+        const storage = createDevice();
+        const deviceWindow = { localStorage: storage.localStorage, sessionStorage: storage.sessionStorage, addEventListener() {}, removeEventListener() {} };
+        return devices.run(deviceWindow, async () => {
+          const device = freshLayer();
+          await device.shopping.loadShoppingList(asA, week(1), days1);
+          return device.shopping.addManualShoppingItem(asA, week(1), { name: "Servilletas", quantity: 1, unit: "paquete", category: "otros" }, days1);
+        });
+      }));
+    } finally {
+      if (windowBefore) Object.defineProperty(global, "window", windowBefore);
+      else delete global.window;
+    }
     observed = { statuses: [one.status, two.status], rows: listsOf(1)[0].items.filter((row) => row.name === "Servilletas").length };
     check("D5 manual: two devices adding the same item at once end with one row", () => {
       assert.deepEqual([one.status, two.status].sort(), ["existing", "synced"]);

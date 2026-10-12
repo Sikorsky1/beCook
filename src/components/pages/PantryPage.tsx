@@ -28,7 +28,8 @@ import {
   type PantryChangeResult,
 } from "@/lib/data/pantry";
 import type { DataIdentity } from "@/lib/data/repositories";
-import { pageShellClass } from "@/lib/ui";
+import { createActionNotices, type ActionNotice } from "@/lib/actionNotices";
+import { pageShellStickyClass, pageStickyColumnClass } from "@/lib/ui";
 import {
   capitalizePantryItemName,
   normalizePantryItemName,
@@ -167,7 +168,7 @@ function PantryItemsForCategory({
 }: PantryItemsForCategoryProps) {
   return (
     <Card className="overflow-hidden">
-      <div className="sticky top-0 z-10 border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-3 sm:px-5">
+      <div className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-3 sm:px-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 tabIndex={-1} className="t-h3 capitalize text-[color:var(--color-foreground)]">
@@ -279,7 +280,9 @@ export default function PantryPage() {
   // D5: deletes waiting ~6 s so they can be undone (hidden meanwhile), with the names shown.
   const [pendingDeletes, setPendingDeletes] = useState<string[]>([]);
   const [deletedNames, setDeletedNames] = useState<Record<string, string>>({});
-  const [basicsMessage, setBasicsMessage] = useState("");
+  // Step 34: the notice of the last action (basics added); any other action clears it.
+  const [notice, setNotice] = useState<ActionNotice>(null);
+  const [notices] = useState(() => createActionNotices(setNotice));
   // An item brought back by «Deshacer», to give it the focus once it is shown again.
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const deletesRef = useRef<ReturnType<typeof createDeferredDeletes> | null>(null);
@@ -347,6 +350,8 @@ export default function PantryPage() {
       const isSameLoad = lastLoadRef.current === loadKey;
       lastLoadRef.current = loadKey;
       setSyncState((current) => (isSameLoad ? { pending: current.pending, offline: current.offline } : {}));
+      // Step 34: another identity: no notice of the previous one.
+      if (!isSameLoad) notices.reset();
       setPantryItems(readPantryView(dataIdentity));
       setHasLoadedPantry(true);
       setIsCheckingAccount(true);
@@ -371,7 +376,8 @@ export default function PantryPage() {
       isCancelled = true;
       window.clearTimeout(loadTimer);
     };
-  }, [identity.status, identity.scope, identity.userId, identity.epoch, reloadCount]);
+    // `notices` never changes (created once with the state setter).
+  }, [identity.status, identity.scope, identity.userId, identity.epoch, reloadCount, notices]);
 
   // B7: each change writes only that item. The device copy changes at once and is shown; the
   // list shown after the account answers is the device copy at that moment (later changes kept).
@@ -410,6 +416,7 @@ export default function PantryPage() {
 
   const addItem = (category: PantryCategory, event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    notices.clear();
 
     const displayName = capitalizePantryItemName(draftItemName);
 
@@ -447,6 +454,7 @@ export default function PantryPage() {
 
   // «Tengo / Se acabó» sets the value (never toggles).
   const setItemActive = (category: PantryCategory, itemName: string, active: boolean) => {
+    notices.clear();
     const normalizedItemName = normalizePantryItemName(itemName);
     const item = pantryItems.find(
       (pantryItem) =>
@@ -461,6 +469,7 @@ export default function PantryPage() {
 
   // The item disappears at once; it is deleted in the account after ~6 s unless «Deshacer».
   const deleteItem = (category: PantryCategory, itemName: string) => {
+    notices.clear();
     const key = pantryItemKey({ category, name: itemName });
     deleteTargets.current.set(key, { identity: dataIdentity, category, name: itemName });
     setDeletedNames((current) => ({ ...current, [key]: itemName }));
@@ -480,6 +489,7 @@ export default function PantryPage() {
   };
 
   const addBasics = (basics: { name: string; category: PantryCategory }[]) => {
+    const show = notices.begin();
     // A basic deleted a moment ago comes back by undoing that delete.
     const toAdd = basics.filter((basic) => {
       const key = pantryItemKey(basic);
@@ -489,16 +499,17 @@ export default function PantryPage() {
     });
     const added = basics.length === 1 ? `«${basics[0].name}» añadido a tu despensa.` : `${basics.length} básicos añadidos a tu despensa.`;
     if (!toAdd.length) {
-      setBasicsMessage(added);
+      show(added);
       return;
     }
     void showChange(addPantryItems(dataIdentity, toAdd)).then((result) =>
-      setBasicsMessage(
+      show(
         result.status === "conflict"
           ? "Tu despensa había cambiado en otro dispositivo: revisa la lista antes de añadir más."
           : result.status === "pending"
             ? `${added} Se guardará en tu cuenta al recuperar la conexión.`
             : added,
+        { failed: result.status === "conflict" },
       ),
     );
   };
@@ -521,10 +532,9 @@ export default function PantryPage() {
     null;
 
   return (
-    <main
-      className={`${pageShellClass} px-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-6`}
-    >
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
+    <main className={pageShellStickyClass}>
+      <div className={pageStickyColumnClass}>
+        {/* Step 34: only the bar (progress) stays; title, tabs and categories scroll. */}
         <StickyPageHeader
           title="Despensa"
           heading="Tu despensa"
@@ -572,14 +582,17 @@ export default function PantryPage() {
               <p className="text-sm font-semibold text-[color:var(--color-foreground)]">«{deletedNames[key]}» borrado de la despensa.</p>
               <button
                 type="button"
-                onClick={() => undoDelete(key, { focus: true })}
+                onClick={() => {
+                  notices.clear();
+                  undoDelete(key, { focus: true });
+                }}
                 className="min-h-11 rounded-[var(--radius-control)] px-3 text-sm font-semibold text-[color:var(--color-accent-hover)] underline underline-offset-4"
               >
                 Deshacer
               </button>
             </div>
           ))}
-          {basicsMessage ? <p className="t-meta px-1">{basicsMessage}</p> : null}
+          {notice ? <p className="t-meta px-1">{notice.text}</p> : null}
         </div>
 
         {hasLoadedPantry ? <PantryBasicsPicker offered={pantryBasicsToOffer(visibleItems)} onAdd={addBasics} /> : null}

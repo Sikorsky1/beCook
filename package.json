@@ -20,10 +20,10 @@
     "db:reset": "node scripts/local-supabase.cjs reset",
     "db:migrate": "node scripts/local-supabase.cjs migrate",
     "db:seed": "node scripts/local-supabase.cjs seed",
-    "test:db": "node scripts/test-local-db.cjs"
+    "test:db": "node scripts/test-local-db.cjs",
+    "test:e2e": "node scripts/e2e.cjs"
   },
   "dependencies": {
-    "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-slot": "^1.2.4",
     "@supabase/supabase-js": "^2.117.2",
     "class-variance-authority": "^0.7.1",
@@ -37,6 +37,7 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -106,6 +106,14 @@
       "sha256": "ee6a1b624225ebe6b9161b5399c76a70c664b4ae7a813176cef2dede3c684a9e",
       "appliedAt": "2026-10-12",
       "notes": "Conector, una parte, sin BEGIN/COMMIT (SET LOCAL mantenidos). prosrc de las 2 funciones idéntico a local (md5); sin EXECUTE para anon."
+    },
+    {
+      "version": "20261012021426",
+      "name": "ai_usage_keep_on_account_delete",
+      "source": "supabase/migrations/20261015090000_ai_usage_keep_on_account_delete.sql",
+      "sha256": "3fdabaddf51bcd2a7705e0b2b687b7fd8e5d40383e06d04ef2aa2d2b25f76ff5",
+      "appliedAt": "2026-10-12",
+      "notes": "Conector, sin BEGIN/COMMIT (SET LOCAL mantenidos). Comprobado: user_id nullable, FK ai_usage_events_user_id_fkey ON DELETE SET NULL validada, 17 filas antes y después."
     }
   ]
 }

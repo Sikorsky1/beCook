@@ -16,6 +16,7 @@ const { runFoodContextTests } = require("./food-context-db-tests.cjs");
 const { runRecipeCardTests } = require("./recipe-cards-db-tests.cjs");
 const { runShoppingReconcileTests } = require("./shopping-reconcile-db-tests.cjs");
 const { runShoppingManualTests } = require("./shopping-manual-db-tests.cjs");
+const { runAccountDataTests } = require("./account-data-db-tests.cjs");
 const { createClient } = require("@supabase/supabase-js");
 const id = (prefix, n) => prefix + "0000000-0000-4000-8000-00000000000" + n;
 let failures = 0, passed = 0;
@@ -112,8 +113,10 @@ async function main() {
   }
   runOwnershipTests({check, outcome, query, id, fixtureId});
   check("all new constraints validated and immediate", () => {
-    const names = delta.constraints.map(c => "'" + c.conname + "'").join(",");
-    assert.equal(sql("SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname IN (" + names + ") AND convalidated AND NOT condeferrable;").trim(), String(delta.constraints.length));
+    // A later migration may recreate a constraint with the same name (P37): count each name once.
+    const unique = [...new Set(delta.constraints.map(c => c.conname))];
+    const names = unique.map(name => "'" + name + "'").join(",");
+    assert.equal(sql("SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname IN (" + names + ") AND convalidated AND NOT condeferrable;").trim(), String(unique.length));
   });
   check("all public fixtures unchanged after SQL probes", () => assert.equal(sql(fingerprintSql), initialState));
   // Auth + Data API and the actual application's singleton/mapper contracts.
@@ -179,6 +182,8 @@ async function main() {
   await runShoppingReconcileTests({check, sql, id, api, createClient, supabase, outcome});
   // D5: items added by hand and adjusted quantities, the manual-item guard, RPC, permissions and rollout.
   await runShoppingManualTests({check, sql, id, api, createClient, supabase, outcome});
+  // P37: export and deletion of an account through its routes; the AI ledger keeps rows without owner.
+  await runAccountDataTests({check, sql, id, api, createClient});
   console.log(passed + " passed; " + failures + " failed. No production connection; SQL probes rolled back.");
   process.exitCode = failures ? 1 : 0;
 }

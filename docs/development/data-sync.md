@@ -1,4 +1,4 @@
-# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1, C2, C3, C4, D5, C6, paso 32)
+# beCook: identidad, datos locales y sincronización (B1, B4, B5, B6, B7, D2, C1, C2, C3, C4, D5, C6, pasos 32, 34 y 37)
 
 Pasos 06 y 07 del roadmap (H3, H7), sin cambios de base de datos, y paso 10 (B4, H8):
 escrituras de semana transaccionales con versión e idempotencia.
@@ -17,6 +17,8 @@ escrituras de semana transaccionales con versión e idempotencia.
 - Sesión caducada (`SIGNED_OUT` sin logout explícito): el ámbito pasa a invitado,
   se muestra «Tu sesión ha caducado» y la caché del usuario, incluidos los cambios
   pendientes, se conserva hasta que vuelva a entrar.
+- Cuenta eliminada (paso 37): `signOut({ localOnly: true })` sin llamada al servidor ni aviso de
+  sesión caducada y borrado de la caché de esa identidad (ver «Exportar y eliminar la cuenta»).
 
 ## Claves locales
 
@@ -565,6 +567,36 @@ Sin cambios de esquema ni de datos remotos: todo vive en el navegador y en `/api
 - Pruebas: `tests/import-local.test.cjs`, más casos en `ai-routes`, `ai-usage`, `openai-retry` y
   `create-menu-proposal`.
 
+## Avisos y raciones de Compra y Despensa (paso 34)
+
+- Un aviso por página (`src/lib/actionNotices.ts`): una acción nueva borra el aviso anterior al
+  empezar; un éxito lento no pisa el de una acción posterior; un fallo (rechazo, conflicto, «no
+  está en tu despensa») se muestra siempre; marcar borra el texto sin descartar respuestas en
+  camino; cerrar el formulario manual borra el suyo; otra identidad o semana lo descarta todo. No
+  cambia ninguna escritura ni la cola de pendientes.
+- `generateShoppingList` y los respaldos de `reconcileShoppingList` que crean lista nueva pasan las
+  raciones de la semana a `storeList`: «N raciones por comida» se ve sin recargar.
+
+## Exportar y eliminar la cuenta (paso 37)
+
+- **Exportar** (`GET /api/account/export`): sesión verificada con Auth; cada tabla del usuario se
+  lee con **su propio JWT** (RLS) y filtro de propietario, paginada; `recipe_versions` solo de sus
+  recetas. El registro de IA (`ai_usage_events`) se lee con la clave de servicio filtrando por el id
+  verificado y **sin `ip_hash`**. Todo o nada (503 si falla una tabla). Exporta la cuenta, no los
+  datos de invitado del dispositivo.
+- **Eliminar** (`POST /api/account/delete`, «ELIMINAR» exacto): `auth.admin.deleteUser(id)`; la
+  base borra en cascada todas las tablas del usuario. El registro de IA conserva sus filas con
+  `user_id NULL` (migración `20261015090000_ai_usage_keep_on_account_delete`): siguen contando para
+  el presupuesto global y el límite por IP, y para la cuota de nadie.
+- **Dispositivo tras eliminar**: `signOut({ localOnly: true })`, se borran las claves
+  `becook:u_<id>:*` de `localStorage` y las `becook*` de `sessionStorage`; los datos de invitado se
+  conservan. La marca de un solo uso en `sessionStorage` muestra «Tu cuenta se ha eliminado.» al
+  volver a Semana. Si el borrado falla, no se toca nada del dispositivo.
+- Otro dispositivo con sesión de esa cuenta: sus escrituras fallan en cuanto el token de acceso
+  caduca o se refresca (el refresh token ya no existe); a partir de ahí se comporta como una
+  sesión caducada y su caché no puede volver a ninguna cuenta. No se ha probado en un segundo
+  dispositivo real.
+
 ## Datos anteriores a B1 (sin ámbito)
 
 Al arrancar, las claves `becook-profile`, `becook-pantry-base` y
@@ -617,6 +649,9 @@ Nunca se asignan a una cuenta automáticamente. Con sesión iniciada aparece
 - `scripts/recipe-cards-db-tests.cjs` (en `test:db`): catálogo para invitados, guardado de fichas
   estimadas, RLS y permisos, inmutabilidad, enlace y edición por la app, comprobaciones de
   propiedad y título, catálogo revisado, despliegue con el cliente anterior y borrado de cuenta.
+- `tests/account-data.test.cjs` y `scripts/account-data-db-tests.cjs` (en `test:db`, paso 37):
+  exportación sin datos de otro usuario ni `ip_hash`, borrado con «ELIMINAR», cascada, registro de
+  IA sin dueño y limpieza del dispositivo; recorrido completo en `tests/e2e/datos-cuenta.spec.ts`.
 - `tests/shopping-manual.test.cjs` y `tests/pantry-actions.test.cjs` (D5): orígenes `manual` y
   `user_adjust`, diff sin manuales, alta con id y reenvío, sin conexión, respuesta perdida, lotes de
   ediciones, cambio de platos con manuales, `fromCards`, «Tengo / Se acabó», básicos en bloque y

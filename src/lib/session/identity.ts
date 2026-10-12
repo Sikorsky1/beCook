@@ -87,11 +87,15 @@ export function createIdentityStore(client: AuthClient | null) {
       started = false;
     },
     // Explicit sign-out: the user's device cache is removed (the account keeps the data).
-    async signOut() {
+    // localOnly (P37, after deleting the account): only this device forgets the session, with no
+    // "session expired" notice. supabase-js still calls /auth/v1/logout?scope=local; the user no
+    // longer exists, so Auth answers 403, which supabase-js ignores (no error) and the local session
+    // is removed anyway.
+    async signOut({ localOnly = false }: { localOnly?: boolean } = {}) {
       if (!client) return;
       const scope = identity.scope;
       explicitSignOut = true;
-      const { error } = await client.auth.signOut();
+      const { error } = await client.auth.signOut(localOnly ? { scope: "local" } : undefined);
       if (error) {
         explicitSignOut = false;
         throw new Error(error.message);

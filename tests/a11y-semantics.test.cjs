@@ -55,7 +55,7 @@ test("profile and onboarding fields use 16px text so iOS Safari does not zoom in
   assert.ok(compactInput.split(" ").includes("text-base"), compactInput);
 });
 
-test("screens changed in step 33 and wave 7 keep no text below 12px and no touch target below 44px", () => {
+test("screens changed in step 33, wave 7 and step 34 keep no text below 12px and no touch target below 44px", () => {
   const screens = [
     "src/app/week/page.tsx",
     "src/components/features/ProposalDayCard.tsx",
@@ -75,6 +75,9 @@ test("screens changed in step 33 and wave 7 keep no text below 12px and no touch
     "src/components/features/PantryBasicsPicker.tsx",
     "src/components/pages/PantryPage.tsx",
     "src/components/layout/BottomNavigation.tsx",
+    // Step 34: the shared header and the Compra/Despensa tabs.
+    "src/components/layout/StickyPageHeader.tsx",
+    "src/components/layout/ShoppingTabs.tsx",
   ];
   for (const file of screens) {
     const source = read(file);

@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-12 · Rama: `audit-opt` (= `main` tras PR #17: C3 y C4 en producción); ola 7 (C6, D5, NAV) integrada en `audit/ola7`, sin push · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-12 · Rama: `audit-opt` (= `main` tras PR #18: C6, D5 y paso 32 en producción); ola 8 (pasos 34, 35 y 37) integrada en local en `audit/ola8` · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -664,6 +664,103 @@ NAV no llega a `main` sin C6 (se integran juntos). Paso 34: el color fijo `text-
 | Observaciones | El aviso de una acción anterior puede seguir visible tras otra distinta (p. ej. «2 básicos añadidos a tu despensa» tras borrar, o «Papel de cocina añadido» con el formulario cerrado); la línea de raciones de Compra aparece al recargar, no justo tras generar la lista; a 320 px la cabecera fija de Despensa ocupa ~60 % de la altura (paso 34). Datos de prueba eliminados con `db:reset` + `db:seed` |
 | Pendiente | Migración `20261014090000_shopping_manual_items` en becook-preview (conector, quitando solo `BEGIN`/`COMMIT`; registrar en `applied-preview.json`) y validación en la Preview (importación con IA real, Compra con manuales); producción con OK, backup completo y copia `backup_AAAAMMDD` **antes** del merge a `main`. CI tras el push |
 
+## C6, D5 y paso 32 en producción ✅ (2026-10-12)
+| Elemento | Resultado |
+|---|---|
+| PR | [#18](https://github.com/Sikorsky1/beCook/pull/18) `audit-opt` → `main`, merge commit `2455498` (2026-10-12); checks en verde (application, database, Vercel) |
+| Migración | `shopping_manual_items` aplicada antes del merge con el conector de Supabase (sin `BEGIN`/`COMMIT`, con los `SET LOCAL`): becook-preview `20261012002220`; becook `20261012002444`, tras backup completo en `~/Backups/becook/2026-10-12-ola7`. Precondición `manual|` = 0; 70 listas y 2217 artículos antes y después; `prosrc` idéntico a local |
+| Validación | Revisión de código de C6, D5 y NAV (y del plan de navegación por el revisor delegado) con sus cambios aplicados; recorrido en navegador en local (invitado y cuenta, 320/390 px); Preview sin sesión (rutas de IA 401) |
+| Despliegue be-cook | `dpl_4EjzprRM38aF7nk39LMygpmAFRyB` READY en `www.becook.xyz` y `becook.xyz` (anterior para rollback: `dpl_GdXzGVQ4Th2uLJPmweME8kxTeBNQ`). Páginas 200 (incluido `/create-menu?mode=import`) · `/import` y `/` 307 · `POST` de las 5 rutas de IA sin sesión 401 |
+| Pendiente | Importación con IA real y compra con sesión (Sergio); avisos que persisten tras otra acción, raciones visibles solo al recargar y cabecera alta de Despensa a 320 px (paso 34); VoiceOver (paso 36). `audit-opt` = `main` por fast-forward antes de este commit |
+
+## Paso 34 — Consolidación de componentes y cabeceras 🟡 (2026-10-12, integrado en local)
+Rama `audit/p34-componentes` desde `audit-opt` (59a3309). Sin migraciones, BD ni dependencias. Plan `design-plans/2026-10-15-consolidacion-paso-34.md` (commit propio antes del código), aprobado por el revisor delegado y aplicado con sus 5 condiciones.
+
+| Elemento | Detalle |
+|---|---|
+| Cabecera compactable (solo CSS) | `StickyPageHeader`: barra fija (56 px + área segura: eyebrow y progreso, o ‹ › en Semana), bloque desplazable (`h1`, pestañas, línea de semana) y hueco fijo opcional (57 px: accesos de Compra, tira de días de Semana). La usan Semana, Perfil, Compra y Despensa. Fijo a 320×568: Semana 193 → 113 px, Compra 243 → 113, Despensa 351 → 57, Perfil 73 → 57 (igual a 390×844). Sin JS de scroll |
+| Desplazamiento y foco (WCAG 2.4.11) | `scroll-padding` en `<html>` (`layout.tsx`): 120 px arriba con cabecera fija, 104 px abajo (240 px con `ProposalActionBar`). Fuera `scroll-mt-64` de Compra y los 172 px de Semana; Semana usa `scrollIntoView` (sin animación con `prefers-reduced-motion`) |
+| Márgenes | `pageShellStickyClass`, `pageStickyColumnClass` y `pageBleedClass` (`max(1rem, env(safe-area-inset-*))`) en `ui.ts`. Fuera los `px-3 pb pt` sin efecto y los `-mx-3 px-3` que dejaban 4 px sin cubrir |
+| Token | `--warning-foreground: #8a4e2a` (5,47:1 sobre `--warning-soft`); los 7 `text-[#8a4e2a]` lo usan; `#e8d5b5`, `#6b7f4a`, `#55633a` → tokens de igual valor |
+| Avisos | `src/lib/actionNotices.ts`: un aviso por página; una acción nueva borra el anterior, un éxito lento no pisa una acción posterior, los fallos se muestran siempre, cerrar el formulario manual borra el suyo (Compra y Despensa) |
+| Raciones | `generateShoppingList` y los respaldos de `reconcileShoppingList` pasan `servings` a `storeList`: «N raciones por comida» sin recargar |
+| Código muerto | Borrados `DayCard.tsx`, `mockImportedWeek.ts`, `mockRecipes.ts`, `layout/SectionHeader.tsx`, `ui/CheckboxItem.tsx`, `shadcn/ui/{badge,card,checkbox}.tsx` y 20 exportaciones de `ui.ts`. `ShoppingTabs` sin `legacyHref` (las redirecciones `/pantry`, `/shopping-list`, `/import` siguen) |
+| Nombres congelados | Tabla en el plan (contrato con E2E); `tests/ui-consolidation.test.cjs` falla si desaparecen |
+| Tests | 440 → 454: `tests/ui-consolidation.test.cjs` (13), raciones en `tests/shopping-manual.test.cjs`; `a11y-semantics` añade `StickyPageHeader` y `ShoppingTabs` |
+| Decisiones | Tres piezas hermanas (un `sticky` solo se fija dentro de su padre); ‹ › en la barra de Semana; Despensa sin hueco fijo; sin variante `link` en `ui/Button` (no eran duplicados exactos); eyebrow con `line-clamp-2` a 320 px |
+
+### Pendiente
+Validación visual en la Preview y en iPhone físico (`safe-area-inset-top` en modo standalone, `scroll-padding` con VoiceOver; paso 36). Hover de `ui/Button` secondary/danger sin token (`#e7efd9`, `#fbe4d5`).
+
+## Paso 35 — Recorridos críticos con E2E 🟡 (2026-10-12, integrado en local)
+Rama `audit/p35-e2e` desde `audit-opt` (59a3309). Sin migraciones. Uso y selectores en `tests/e2e/README.md`.
+
+| Elemento | Detalle |
+|---|---|
+| Dependencia y script | `@playwright/test` **1.61.1** exacta (devDependency aprobada); `npm run test:e2e` → `scripts/e2e.cjs`. En el Mac, Chromium 1228 en caché; en CI, Chrome del runner (`E2E_CHANNEL=chrome`) |
+| OpenAI simulado | `tests/e2e/mock-openai.cjs` (`node:http`, solo 127.0.0.1:4010): `/v1/chat/completions` y `/v1/responses` por nombre de esquema, con platos válidos del catálogo para `menu_selection` y 120 + 80 tokens por llamada (coste en `ai_usage_events`) |
+| Orquestador | Supabase local (`localApi()`/`sql()`), build solo con variables locales explícitas (nombres de `.env*` vacíos + `__NEXT_PROCESSED_ENV`); aborta si el bundle no contiene `127.0.0.1:54321`, menciona `*.supabase.co` o incluye un valor de un `.env*`. Dos `next start` (main y budget con `AI_MONTHLY_BUDGET_USD=0`) desde el puerto 3100. Borra las identidades `e2e-…@example.invalid` antes y tras una ejecución verde |
+| Recorridos | Alta → onboarding → propuesta → aplicar → semana → ficha IA → compra → marcar → recargar (390 y 320); invitado importa sin IA (390 y 320); aislamiento A/B; sin red → «Reintentar»; conflicto de versión entre dos contextos; doble clic en «Usar este menú»; API: 401 en las 5 rutas, token falsificado, 429 por cuota, 503 por presupuesto |
+| CI | Job `e2e` en `.github/workflows/checks.yml`, en paralelo, 25 min (`db:start`, `db:reset`, `db:seed`, `test:e2e`); artefactos solo si falla. No obligatorio (decisión 2 de la ola) |
+| Hallazgo | PostgREST v16.2 local rechaza a veces un JWT recién emitido («JWT issued at future», PGRST303). Mitigación en el E2E: petición anónima cada 250 ms y, si pasa en la primera carga, «Reintentar» anotado como `postgrest-iat`. No comprobado en los proyectos alojados |
+| Decisiones | 320 px solo para los recorridos visuales (`@320`); identidades por API de administración local + un inicio de sesión cada una (límite de Auth: 30 cada 5 min por IP); casillas `sr-only` marcadas por su `label`; CI con `retries: 1` y 2 workers, local sin reintentos |
+
+### Pendiente
+Primera ejecución del job en GitHub Actions (sin push); revisar PGRST303 en becook y becook-preview.
+
+## Paso 37 — Operación, privacidad y recuperación 🟡 (2026-10-12, integrado en local)
+Rama `audit/p37-operacion` desde `audit-opt` (59a3309). Única migración de la ola.
+
+| Elemento | Detalle |
+|---|---|
+| Migración `20261015090000_ai_usage_keep_on_account_delete` | ✅ local. `ai_usage_events.user_id` admite NULL y su FK a `auth.users` pasa a `ON DELETE SET NULL` (mismo nombre, `NOT VALID` + `VALIDATE`, `lock_timeout` 5 s). Sin cambios de filas, funciones, políticas ni permisos. Expectativas con `replaces` |
+| Alertas (`src/lib/server/ops-alert.ts`) | `sendOpsAlert(evento, campos)` a `OPS_ALERT_WEBHOOK_URL` (Resend `https://api.resend.com/emails` + `OPS_ALERT_WEBHOOK_TOKEN`, `OPS_ALERT_EMAIL_TO`, `OPS_ALERT_EMAIL_FROM`, o webhook JSON). 3 s, nunca lanza, no hace nada sin la variable. Lista blanca de campos sin datos personales ni de comidas, más `VERCEL_ENV` y commit. Eventos: `ai_budget_threshold` (50/80 %), `ai_budget_exhausted`, `ai_usage_finish_failed`, `ai_ledger_unavailable`, `account_delete_failed` y `server_error` (`onRequestError` en `src/instrumentation.ts`: ruta sin consulta, método, tipo, digest) |
+| Exportación `GET /api/account/export` | Sesión verificada; tablas del usuario con su propio JWT (RLS) y filtro de propietario, paginadas; `ai_usage_events` con la clave de servicio filtrado por el id verificado y sin `ip_hash`; cuenta (id, email, fechas). JSON `becook-datos-AAAA-MM-DD.json`, `no-store`. Todo o nada |
+| Borrado `POST /api/account/delete` | Token → JSON y tamaño (1 KB) antes de Auth → sesión → `{confirmation: "ELIMINAR"}` exacto → `auth.admin.deleteUser(id)`. Cascada en la BD; el ledger queda con `user_id NULL`. Fallo → 503 + alerta. Inmediato y definitivo (decisión 5) |
+| Pantalla «Tus datos» (`/profile/data`) | Descargar (JSON) y eliminar con «ELIMINAR» escrito. Tras borrar: `signOut({ localOnly: true })`, limpieza de `becook:u_<id>:*` y `becook*` de `sessionStorage`, vuelta a `/week` con «Tu cuenta se ha eliminado.» una vez. Enlace «Tus datos: descargar o eliminar la cuenta» en Perfil |
+| Copias y simulacro | `scripts/ops/backup-production.sh` (llavero o lectura sin eco, `env -i`, `umask 077`, fuera del repo, `data.sql` con `--use-copy`, `counts.txt`, `SHA256SUMS`), `scripts/ops/restore-drill.sh`: con datos locales, 45 tablas comparadas, 0 diferencias, esquema idéntico, ~1 s. `--data-only` incluye `auth.users`, identidades y sesiones |
+| Uptime | `.github/workflows/uptime.yml` cada 4 h: `/login` 200 y `POST /api/generate-menu` sin sesión 401 (activo al llegar a `main`) |
+| Docs | `docs/operations/runbook.md` (interruptor de IA, Instant Rollback, reversión de migraciones, restauración, rotación de claves), `environment.md` (variables por entorno sin valores), `incident-response.md`. Borradores legales `docs/legal/{privacidad,condiciones}-BORRADOR.md` («Borrador, no publicar»: alergias/dietas como posibles datos de salud, art. 9; envío a OpenAI; encargados; plazos con copias) |
+| Tests | 440 → 484: `ops-alerts` 12, `ops-logging` 10, `account-data` 12, `ops-scripts` 5, `ai-routes` +5. `test:db` 432 → 446 (`scripts/account-data-db-tests.cjs`, 14) |
+| Decisiones | Simulacro en una base desechable del mismo contenedor; alertas también para ledger caído y borrado fallido; tras borrar, las filas del ledger conservan `ip_hash` (decisión de retención en el borrador legal); `--data-only` incluye `auth.users` (la copia es tan sensible como la BD) |
+
+### Consentimiento explícito para alergias y dietas (decisión 10 de la ola, solo documentado)
+Propuesta, no implementada: en el onboarding y en Perfil, antes de guardar restricciones, alergias (y datos corporales), una casilla separada y no premarcada («Acepto que beCook use mis alergias, intolerancias y dietas para proponer menús y que se envíen a OpenAI para ello») con enlace a la política. Guardar `health_consent_at` y `health_consent_version` en `profiles` (migración aditiva) y no enviar esas secciones a la IA sin consentimiento vigente (`current_food_context()` devolvería restricciones vacías y el menú avisaría). Retirarlo = desmarcar (decidir si se borran o se dejan de usar). Requiere el texto legal definitivo.
+
+### Aplicación remota de la migración (cuando Sergio lo autorice)
+Orden: becook-preview → validar Preview → producción con OK explícito, **antes** del merge a `main` (sin la migración, borrar una cuenta funciona pero el ledger pierde sus filas y el presupuesto global olvida ese gasto).
+1. Verificar el ref contra `AGENTS.md` (preview `qdhpdhnpcsfhmygjofqb`; producción `wejvptpkxlllfpskyisu`).
+2. Precondiciones (solo lectura): `SELECT count(*), count(*) FILTER (WHERE user_id IS NULL) FROM public.ai_usage_events;` (la segunda = 0); `SELECT confdeltype, convalidated FROM pg_constraint WHERE conname = 'ai_usage_events_user_id_fkey';` → `c`, `true`; `is_nullable` de `ai_usage_events.user_id` → `NO`.
+3. Conector de Supabase, `apply_migration` con nombre `ai_usage_keep_on_account_delete`: el fichero quitando **solo** `BEGIN;` y `COMMIT;` (los `SET LOCAL` se mantienen). DDL sin `DELETE`. Bloqueo breve sobre `ai_usage_events` y `auth.users`; `lock_timeout` 5 s aborta sin cambios.
+4. Verificar: `is_nullable` = `YES`; `confdeltype` = `n`, `convalidated` = `true`; recuentos iguales; `has_table_privilege('authenticated','public.ai_usage_events','SELECT')` = `false`.
+5. Registrar en `supabase/hosted/applied-preview.json` / `applied-production.json` (sha256 `3fdabaddf51bcd2a7705e0b2b687b7fd8e5d40383e06d04ef2aa2d2b25f76ff5` (tras actualizar en la integración el comentario de cabecera, que apunta aquí; antes `8341307b…``).
+6. Producción: avisar a Sergio; copia completa con `bash scripts/ops/backup-production.sh 2026-10-xx-ola8` y comprobarla (`shasum -a 256 -c SHA256SUMS`, `counts.txt`). La migración no modifica filas; si se exige copia interna: `CREATE TABLE public.backup_AAAAMMDD_ai_usage_events AS TABLE public.ai_usage_events;`.
+7. Reversión (solo sin filas sin dueño): `ALTER TABLE public.ai_usage_events DROP CONSTRAINT ai_usage_events_user_id_fkey;` + `ADD CONSTRAINT … FOREIGN KEY (user_id) REFERENCES auth.users (id) ON DELETE CASCADE;` + `ALTER COLUMN user_id SET NOT NULL;`. Probada en local.
+
+### Acciones de Sergio
+1. Canal de alertas: API key de Resend solo de envío para `becook.xyz`; en Vercel Production `OPS_ALERT_WEBHOOK_URL=https://api.resend.com/emails`, `OPS_ALERT_WEBHOOK_TOKEN` (sensible), `OPS_ALERT_EMAIL_TO`; opcional en Preview `audit-opt` con rama. Redesplegar. Prueba en Preview con `AI_MONTHLY_BUDGET_USD=0`.
+2. Migración en becook-preview y producción (arriba), con backup previo.
+3. DPA de Supabase, Vercel, OpenAI y Resend; revisión legal de los borradores (responsable, bases jurídicas, consentimiento art. 9, transferencias, plazos, edad mínima).
+4. Simulacro de restauración con una copia nueva de producción (`--use-copy`) en el Mac; sustituir el script de `~/Backups` por el del repo.
+5. Límites de gasto (OpenAI 30 $/mes, Spend Management de Vercel, cuotas de Supabase y Resend; `AI_MONTHLY_BUDGET_USD`).
+6. Uptime: comprobar que GitHub avisa de los workflows programados que fallan.
+7. Pendiente de D1: protección de contraseñas filtradas en Auth.
+
+## Integración P34 + P37 + P35 en `audit-opt` ✅ local (2026-10-12, sin push)
+| Elemento | Detalle |
+|---|---|
+| Merges | Rama `audit/ola8` = `audit-opt` (59a3309) + `git merge --no-ff` de `audit/p34-componentes` (`5f811f7`), `audit/p37-operacion` (`4bcb301`, migración `20261015090000`) y `audit/p35-e2e` (`cf9ebec`). Sin conflictos |
+| `6c5a1e0` Defensa de `OPENAI_BASE_URL` (condición del revisor antes de `main`) | `next.config.ts` hace fallar el build si existen `VERCEL` y `OPENAI_BASE_URL` (Production, Preview y Development de Vercel; ni el E2E local ni CI tienen `VERCEL`; comprobado: build local OK y `VERCEL=1 OPENAI_BASE_URL=…` → «Build error occurred»). Las 5 rutas de IA llaman a `blockedOpenAIEndpointResponse(ruta)` antes de `beginAiUsage`, con el filtro ampliado a cualquier `VERCEL_ENV`: 503 sin fila en el registro ni llamada a OpenAI; el log lleva ruta y entorno, nunca la URL ni la clave. Tests: 5 en `ai-routes` (las tres `VERCEL_ENV`) y 3 en `openai-config` |
+| `27c31b5` Alertas | Tope global de 10 alertas por minuto e instancia, claves caducadas fuera del mapa y máximo de 200 claves. `notifyOps()` usa `after()` de `next/server` en las rutas (registro de IA y borrado de cuenta), así que un canal lento no retrasa la respuesta; fuera de una petición (tests, scripts) `after()` lanza y la alerta se envía antes de volver. `onRequestError` sigue esperando a `sendOpsAlert` (no es un ámbito de petición). 3 tests nuevos |
+| `eb8db7f` Dependencias | Fuera `@radix-ui/react-checkbox` (sin consumidores) con `npm uninstall`: el lockfile pierde 10 paquetes `@radix-ui/*` transitivos |
+| `3e7dde4` E2E | `cabecera.spec.ts` (390 y 320): Semana, Compra, Despensa y Perfil con ≤ 120 px fijos tras desplazarse (113 medidos en Semana y Compra), h1 fuera de la vista, sin scroll horizontal; foco con teclado (hacia atrás desde la última casilla de Compra y hacia delante desde el h1 en Compra y Perfil) siempre entre la cabecera fija y la barra inferior. `datos-cuenta.spec.ts` (390): Perfil → «Tus datos» → descarga del JSON (email, id, semana; sin `ip_hash`) → «eliminar» no activa el botón → «ELIMINAR» → Semana con «Tu cuenta se ha eliminado.» una sola vez, sin sesión ni caché de esa cuenta, contraseña rechazada. Selectores con los nombres congelados del plan de P34. `scripts/e2e.cjs` borra las filas del registro de IA de las identidades `e2e-…` antes que las identidades y, tras una ejecución verde, las filas sin dueño creadas durante la ejecución |
+| `507090e` D5 inestable | «D5 manual: two devices adding the same item at once end with one row» falló 1 de 5 veces con la base en reposo (antes, 2 con el Docker ocupado). Causa en el test: los dos «dispositivos» compartían un único `window` global y el segundo sustituía el almacenamiento del primero a mitad de la operación, así que ambos leían el alta pendiente del otro y respondían «existing» sin llamar a la base. Cada dispositivo usa ahora su propio `window` con `AsyncLocalStorage` (como B7). 22/22 repeticiones verdes, 10 de ellas con la CPU saturada. El código de la app no cambia |
+| Comprobaciones | lint sin avisos; typecheck OK; `npm test` **511/511** (454 de P34 + 44 de P37 + 3 de P35 + 10 de la integración; con `GITLEAKS_BIN`; el arreglo de «Guardar perfil» amplía un test existente); `next build` OK en una copia sin `.env*` (variables sintéticas, 24 páginas); `db:reset` + `db:seed` + `test:db` **446/446** tres veces (la última con el comentario de la migración ya actualizado); `npm run test:e2e` **15/15** dos veces seguidas y otra tras el arreglo de «Guardar perfil» (build completo en cada una, 12–14 s de pruebas, sin reintentos ni anotaciones `postgrest-iat`) |
+| Recorrido en navegador (local, `npm run dev`) | Cuenta de prueba creada en `localhost` por el formulario de alta (tras el alta, «No se ha podido cargar tu cuenta» por el PGRST303 conocido; «Reintentar» lo resolvió). Menú pegado sin IA y guardado. Fijo tras desplazarse a 390 y 320 px: Semana 113 px (barra «12–18 OCT» con ‹ ›, h1 fuera de la vista), Compra 57 (sin lista: el servidor de desarrollo no tiene clave de OpenAI), Despensa 57, Perfil 57; sin scroll horizontal. Semana a 320 px, Mayús+Tab desde el último plato: 12 elementos, todos bajo la cabecera fija. `/profile/data`: «Descargar mis datos» → `becook-datos-2026-10-12.json` (guardado interceptado; claves `account`, `tables`, `aiUsage`; email y platos presentes, sin `ip_hash`) y aviso «Descarga lista…»; «eliminar» deja el botón desactivado, «ELIMINAR» lo activa; tras borrar, `/week` con «Tu cuenta se ha eliminado.» y el foco en el aviso, sin claves `becook:u_*` ni sesión; al recargar el aviso ya no sale. Viewport restaurado, servidor parado y datos borrados con `db:reset` + `db:seed` |
+| Observaciones | 1) **Corregido**: ver la fila «Foco bajo «Guardar perfil»». 2) Tras borrar la cuenta, `signOut({ localOnly: true })` llama a `/auth/v1/logout?scope=local` y recibe 403 (el usuario ya no existe); supabase-js ignora 401/403/404 y la limpieza se completa (comentario de `identity.ts` corregido). 3) El job `e2e` de CI y `uptime.yml` no se han ejecutado en GitHub (sin push) |
+| Foco bajo «Guardar perfil» (ampliación del plan del paso 34) | En Perfil sin perfil guardado (onboarding saltado), la barra fija «Guardar perfil» (105 px, 6rem sobre el borde) tapaba 201 px desde abajo y el `scroll-padding-bottom` de 104 px no la cubría: al tabular, un chip enfocado quedaba medio debajo («Mejorar rendimiento deportivo» 631–675 px con la barra desde 643 px, a 390×844). La barra lleva `data-profile-save-bar` y `<html>` añade `has-[[data-profile-save-bar]]:scroll-pb-[calc(14rem+env(safe-area-inset-bottom))]` (224 px), solo Tailwind, como con `ProposalActionBar`; anotado en el plan del paso 34 («Revisión y aplicación»). Test en `tests/ui-consolidation.test.cjs`. Navegador a 390×844 con una cuenta local sin perfil: `scroll-padding-bottom` 224 px y 22 elementos enfocados con Tab (personas, objetivos, restricciones, alergias, campos y entrenamiento), ninguno bajo la barra (el más bajo, 585–629 px) |
+| Pendiente | Migración `20261015090000_ai_usage_keep_on_account_delete` en becook-preview y producción (procedimiento en «Paso 37») **antes** del merge a `main`; variables `OPS_ALERT_*` (opcionales); validación en la Preview (cabecera a 320/390 px, exportar y borrar con una cuenta de prueba de preview) y CI tras el push |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
@@ -688,7 +785,7 @@ NAV no llega a `main` sin C6 (se integran juntos). Paso 34: el color fijo `text-
 | 19 Compra desde recetas y despensa | C4 | ✅ | En producción 2026-10-12 (PR #17); ver C3/C4 |
 | 20 Reconciliar cambios de plato | C4 | ✅ | En producción 2026-10-12 (PR #17); ver C3/C4 |
 | 21 Reglas culinarias y sustitución | C5 | ✅ | En producción desde 2026-10-09 (PR #12): reglas de títulos, «Otra idea» con catálogo y luego IA (flujo `menu`); ver C5 |
-| 22 Importación y borradores | C6 | 🟡 | Integrado en local (`audit/ola7`, 2026-10-12): parser local sin IA, errores con motivo, borradores por identidad y semana; ver C6 e integración |
+| 22 Importación y borradores | C6 | ✅ | En producción 2026-10-12 (PR #18) |
 | 23 Alta, login y recuperación | D1 | ✅ | En producción desde 2026-10-09 (PR #12): alta, login con `next`, recuperación. Auth completado el 2026-10-11 en preview y producción: SMTP Resend, plantillas en español, mínimo 8, confirmación de email activada. Solo queda la protección de contraseñas filtradas; ver D1 |
 | 24 Perfil simplificado | D2 | ✅ | Primera mitad en producción (PR #13); resto en `audit-opt` desde 2026-10-10: datos corporales opcionales y `confirmed_sections`. Migración `20261010090000` en preview y producción (2026-10-10); en producción desde 2026-10-10 (PR #14); ver D2 (segunda mitad) |
 | 25 Onboarding y primer menú | D2 | ✅ | En `audit-opt` desde 2026-10-10: onboarding de 3 pasos con `onboarding_progress`; migración `20261010090000` en preview y producción (2026-10-10); en producción desde 2026-10-10 (PR #14); ver D2 (segunda mitad) |
@@ -696,14 +793,14 @@ NAV no llega a `main` sin C6 (se integran juntos). Paso 34: el color fijo `text-
 | 27 Generación honesta | D3 | ✅ | En producción 2026-10-11 (PR #15); ver D3 e integración |
 | 28 «Otra idea» por plato | D3 | ✅ | En producción 2026-10-11 (PR #15); ver D3 e integración |
 | 29 Semana con «Hoy» | D4 | ✅ | En producción desde 2026-10-09 (PR #13): bloque «Hoy» y días compactos; ficha de plato al llegar C2; ver D4 |
-| 30 Compra completa y despensa | D5 | 🟡 | Integrado en local (`audit/ola7`, 2026-10-12): lista continua, artículos manuales y cantidades; migración `20261014090000` solo en local; ver D5 |
-| 31 Despensa con acciones claras | D5 | 🟡 | Integrado en local (`audit/ola7`, 2026-10-12): «Tengo / Se acabó», básicos en bloque, borrar con «Deshacer»; ver D5 |
-| 32 Navegación y estados vacíos | D6 | 🟡 | Integrado en local (`audit/ola7`, 2026-10-12): barra de 3 destinos, semana vacía con «Repetir la semana N» y «Ya tengo un menú»; llega a `main` junto con C6; ver paso 32 (NAV) |
+| 30 Compra completa y despensa | D5 | ✅ | En producción 2026-10-12 (PR #18) |
+| 31 Despensa con acciones claras | D5 | ✅ | En producción 2026-10-12 (PR #18) |
+| 32 Navegación y estados vacíos | D6 | ✅ | En producción 2026-10-12 (PR #18) |
 | 33 Legibilidad y accesibilidad | D6 | ✅ | En producción 2026-10-11 (PR #16); falta iPhone físico/VoiceOver (paso 36); ver paso 33 |
-| 34 Consolidar componentes | D6 | ⏳ | |
-| 35 Tests de recorridos críticos | E1 | ⏳ | Se adelantan tests en cada iteración |
+| 34 Consolidar componentes | D6 | 🟡 | Integrado en local 2026-10-12 (rama `audit/ola8`): cabecera compactable, token de aviso, avisos por página, raciones, código muerto; ver paso 34 e integración |
+| 35 Tests de recorridos críticos | E1 | 🟡 | Integrado en local 2026-10-12: Playwright 1.61.1, OpenAI simulado, 15 recorridos y job `e2e` en CI (sin ejecutar en GitHub); ver paso 35 e integración |
 | 36 Usabilidad en dispositivos | E2 | ⏳ | Requiere a Sergio |
-| 37 Operación y privacidad | E3 | ⏳ | |
+| 37 Operación y privacidad | E3 | 🟡 | Integrado en local 2026-10-12: alertas, exportar y borrar cuenta, copias y simulacro, runbook, borradores legales; migración pendiente en preview y producción; ver paso 37 |
 | 38 Beta cerrada y apertura | E4 | ⏳ | Requiere a Sergio |
 
 ## Migraciones por entorno
@@ -722,6 +819,7 @@ NAV no llega a `main` sin C6 (se integran juntos). Paso 34: el color fijo `text-
 | recipe_cards (`20261012090000`) | ✅ | ✅ 20261011204724 + 20261011204749 (`_apply_week`) | ✅ 20261011205123 + 20261011205211 (tras backup completo en ~/Backups/becook/2026-10-11-ola5) |
 | shopping_item_origins (`20261013090000`) | ✅ | ✅ 20261011223501 | ✅ 20261011223838 (tras backup completo en ~/Backups/becook/2026-10-12-ola6) |
 | shopping_manual_items (`20261014090000`) | ✅ | ✅ 20261012002220 | ✅ 20261012002444 (tras backup completo en ~/Backups/becook/2026-10-12-ola7) |
+| ai_usage_keep_on_account_delete (`20261015090000`) | ✅ | ✅ 20261012021426 | ✅ 20261012060819 (tras backup completo en ~/Backups/becook/2026-10-12-ola8) |
 
 ## Decisiones
 | # | Decisión | Fecha |

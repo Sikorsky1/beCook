@@ -11,7 +11,7 @@ import {
   type GeneratedShoppingDish,
   type GeneratedShoppingListResponse,
 } from "@/lib/shoppingList";
-import { logOpenAIModelUsage, OPENAI_MODEL } from "@/lib/openai/config";
+import { logOpenAIModelUsage, OPENAI_MODEL, blockedOpenAIEndpointResponse } from "@/lib/openai/config";
 import { estimateOpenAICostUsd } from "@/lib/openai/cost";
 import {
   shoppingQuickFailureMs,
@@ -183,6 +183,8 @@ export async function POST(request: Request) {
     );
   }
 
+  const blockedEndpoint = blockedOpenAIEndpointResponse("generate-shopping-list");
+  if (blockedEndpoint) return blockedEndpoint;
   const begin = await beginAiUsage(request, { userId: guard.user.id, flow: "shopping" });
 
   if (!begin.ok) {

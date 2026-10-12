@@ -11,10 +11,10 @@ type StateMessageProps = {
 };
 
 const stateClasses: Record<StateMessageVariant, string> = {
-  loading: "border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] text-[#8a4e2a]",
+  loading: "border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning-foreground)]",
   empty:
     "border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)]",
-  error: "border-[#e8d5b5] bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger)]",
+  error: "border-[color:var(--color-border)] bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger)]",
   success: "border-[color:var(--color-success)] bg-[color:var(--color-success-soft)] text-[color:var(--color-success-hover)]",
 };
 

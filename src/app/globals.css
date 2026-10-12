@@ -19,6 +19,8 @@
   --secondary-soft: #f0f4e7;
   --warning: #d9b879;
   --warning-soft: #f4e9da;
+  /* Texto de avisos sobre --warning-soft: 5,47:1 (6,14:1 sobre --background). */
+  --warning-foreground: #8a4e2a;
   --success: #6b7f4a;
   --success-hover: #55633a;
   --success-soft: #eef3e4;
@@ -62,6 +64,7 @@
   --color-secondary-soft: var(--secondary-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --color-warning-foreground: var(--warning-foreground);
   --color-success: var(--success);
   --color-success-hover: var(--success-hover);
   --color-success-soft: var(--success-soft);

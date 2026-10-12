@@ -49,7 +49,7 @@ import {
 } from "@/lib/data/shopping";
 import { formatIsoWeekTitle, getCurrentIsoWeek, type IsoWeek } from "@/lib/isoWeek";
 import { getAccessToken } from "@/lib/supabase/auth";
-import { pageShellClass } from "@/lib/ui";
+import { pageShellStickyClass, pageStickyColumnClass } from "@/lib/ui";
 import {
   activePantryNames,
   pantryItemsOrDefault,
@@ -69,6 +69,7 @@ import {
   type SupermarketCategory,
 } from "@/lib/shoppingList";
 import { ShoppingListApiError } from "@/lib/shoppingListStorage";
+import { createActionNotices, noticeText, type ActionNotice } from "@/lib/actionNotices";
 import { withWeekDates } from "@/lib/weekStorage";
 
 type ShoppingProgressProps = {
@@ -88,6 +89,9 @@ function ShoppingProgress({
 }
 
 // What the user hears after an edit of the list, by what the account did with it.
+// Step 34: what the account did not accept is a failure, always shown (see actionNotices).
+const editFailed = (status: EditResult["status"] | "existing") => !["synced", "local", "pending", "existing"].includes(status);
+
 function editMessage(status: EditResult["status"], done: string) {
   switch (status) {
     case "synced":
@@ -249,7 +253,9 @@ export default function ShoppingListPage() {
   // D5: the week's servings (when the account told) and the result of the last action of the user
   // on an item (added by hand, quantity, pantry), announced politely.
   const [servings, setServings] = useState<number | null>(null);
-  const [actionMessage, setActionMessage] = useState("");
+  // Step 34: one notice at a time (a new action clears it; closing the add form clears its own).
+  const [notice, setNotice] = useState<ActionNotice>(null);
+  const [notices] = useState(() => createActionNotices(setNotice));
 
   const identity = useIdentity();
   const [isoWeek, setIsoWeek] = useState<IsoWeek | null>(null);
@@ -303,7 +309,7 @@ export default function ShoppingListPage() {
       setListSyncState({});
       setHasCheckedList(false);
       setServings(null);
-      setActionMessage("");
+      notices.reset();
       setIsoWeek(weekToLoad);
       setPantryItems(activePantryNames(pantryItemsOrDefault(readCachedPantry(dataIdentity))));
 
@@ -329,7 +335,8 @@ export default function ShoppingListPage() {
       isCancelled = true;
       window.clearTimeout(loadTimer);
     };
-  }, [identity.status, identity.scope, identity.userId, identity.epoch, syncReload]);
+    // `notices` never changes (created once with the state setter).
+  }, [identity.status, identity.scope, identity.userId, identity.epoch, syncReload, notices]);
 
   useEffect(() => {
     if (!hasLoadedWeek || !weekDays || weekDays.length === 0 || !isoWeek) {
@@ -585,15 +592,16 @@ export default function ShoppingListPage() {
     }
   };
 
-  const addManualItem = async (draft: ManualItemDraft) => {
-    if (!isoWeek || !weekDays) return "Primero necesitas una lista para esta semana.";
+  const addManualItem = async (draft: ManualItemDraft): Promise<{ text: string; failed: boolean }> => {
+    if (!isoWeek || !weekDays) return { text: "Primero necesitas una lista para esta semana.", failed: true };
     const result = await runEdit(() => addManualShoppingItem(dataIdentityOf(), isoWeek, draft, weekDays));
     const name = `«${capitalize(draft.name)}»`;
     // Frozen food is shown under «Otros».
     const section = capitalize(draft.category === "congelados" ? "otros" : draft.category);
-    if (result.status === "existing") return `${name} ya está en la lista.`;
-    if (result.status === "refused") return "Revisa el nombre y la cantidad.";
-    return editMessage(result.status, `${name} añadido a ${section}.`);
+    const failed = editFailed(result.status);
+    if (result.status === "existing") return { text: `${name} ya está en la lista.`, failed };
+    if (result.status === "refused") return { text: "Revisa el nombre y la cantidad.", failed };
+    return { text: editMessage(result.status, `${name} añadido a ${section}.`), failed };
   };
 
   const dataIdentityOf = () => ({ scope: identity.scope, userId: identity.userId });
@@ -601,34 +609,43 @@ export default function ShoppingListPage() {
   const refreshPantry = () => setPantryItems(activePantryNames(readPantryView(dataIdentityOf())));
 
   const rowActions: ShoppingRowActions = {
-    onToggle: (item) => toggleCheckedItem(item.id),
+    onToggle: (item) => {
+      notices.clear();
+      toggleCheckedItem(item.id);
+    },
     onSaveQuantity: (item, quantity, unit) => {
       if (!isoWeek || !weekDays) return;
+      const show = notices.begin();
       void runEdit(() => setShoppingItemQuantity(dataIdentityOf(), isoWeek, item.id, quantity, weekDays, unit)).then((result) =>
-        setActionMessage(
+        show(
           result.status === "refused"
             ? `No se puede cambiar la cantidad de «${capitalize(item.name)}».`
             : editMessage(result.status, `Cantidad de «${capitalize(item.name)}»: ${formatShoppingAmount(quantity, unit ?? item.unit)}.`),
+          { failed: editFailed(result.status) },
         ),
       );
     },
     onRemove: (item) => {
       if (!isoWeek || !weekDays) return;
+      const show = notices.begin();
       void runEdit(() => removeManualShoppingItem(dataIdentityOf(), isoWeek, item.id, weekDays)).then((result) =>
-        setActionMessage(
+        show(
           result.status === "refused"
             ? `No se puede quitar «${capitalize(item.name)}».`
             : editMessage(result.status, `«${capitalize(item.name)}» quitado de la lista.`),
+          { failed: editFailed(result.status) },
         ),
       );
     },
     onAddToPantry: (item) => {
+      const show = notices.begin();
       void ensurePantryItemInStock(dataIdentityOf(), item.name, item.category).then((result) => {
         refreshPantry();
-        setActionMessage(
+        show(
           result.status === "conflict"
             ? "Tu despensa ha cambiado en otro dispositivo. Revisa la despensa."
             : `«${capitalize(item.name)}» está ahora en tu despensa${result.status === "pending" ? " (se guardará al recuperar la conexión)" : ""}.`,
+          { failed: result.status === "conflict" },
         );
       });
     },
@@ -637,14 +654,16 @@ export default function ShoppingListPage() {
   // «Se me acabó» on an item left out because it is usually at home: the pantry marks it as used
   // up, so it goes back to what is still to buy.
   const markUsedUp = (item: ShoppingViewItem) => {
+    const show = notices.begin();
     void markPantryItemUsedUp(dataIdentityOf(), item.name).then((result) => {
       refreshPantry();
-      setActionMessage(
+      show(
         result.status === "missing"
           ? `«${capitalize(item.name)}» no está en tu despensa.`
           : result.status === "conflict"
             ? "Tu despensa ha cambiado en otro dispositivo. Revisa la despensa."
             : `«${capitalize(item.name)}» pasa a la lista: lo hemos marcado como agotado en tu despensa${result.status === "pending" ? " (se guardará al recuperar la conexión)" : ""}.`,
+        { failed: result.status === "missing" || result.status === "conflict" },
       );
     });
   };
@@ -658,10 +677,9 @@ export default function ShoppingListPage() {
     : "";
 
   return (
-    <main
-      className={`${pageShellClass} min-h-dvh px-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-6`}
-    >
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
+    <main className={`${pageShellStickyClass} min-h-dvh`}>
+      <div className={pageStickyColumnClass}>
+        {/* Step 34: the bar (progress) and the section links stay; title, tabs and week line scroll. */}
         <StickyPageHeader
           title="Lista de la compra"
           heading="Tu compra"
@@ -673,12 +691,9 @@ export default function ShoppingListPage() {
               />
             ) : null
           }
-        >
-          <div className="space-y-2.5">
-            <ShoppingTabs />
-            {weekLine && hasLoadedWeek && weekDays && weekDays.length > 0 ? <p className="t-meta px-1">{weekLine}</p> : null}
-            {hasList && (sections.length > 0 || atHome.length > 0) ? (
-              <nav aria-label="Secciones de la lista" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          pinned={
+            hasList && (sections.length > 0 || atHome.length > 0) ? (
+              <nav aria-label="Secciones de la lista" className="-mx-1.5 -my-1.5 flex gap-2 overflow-x-auto px-1.5 py-1.5">
                 {sections.map((section) => (
                   <a
                     key={section.category}
@@ -703,7 +718,12 @@ export default function ShoppingListPage() {
                   </a>
                 ) : null}
               </nav>
-            ) : null}
+            ) : null
+          }
+        >
+          <div className="space-y-2.5">
+            <ShoppingTabs />
+            {weekLine && hasLoadedWeek && weekDays && weekDays.length > 0 ? <p className="t-meta px-1">{weekLine}</p> : null}
           </div>
         </StickyPageHeader>
 
@@ -727,7 +747,7 @@ export default function ShoppingListPage() {
         />
         {/* Persistent live region for the result of the user's last action on an item. */}
         <p role="status" className="t-meta px-1 empty:hidden">
-          {hasList ? actionMessage : ""}
+          {hasList ? noticeText(notice, "list") : ""}
         </p>
 
         <section className="transition-opacity duration-200 ease-out motion-reduce:transition-none">
@@ -828,7 +848,7 @@ export default function ShoppingListPage() {
                 />
               ))}
               {atHome.length > 0 ? (
-                <details id={shoppingSectionId("en-casa")} className="scroll-mt-64 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+                <details id={shoppingSectionId("en-casa")} className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
                   <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-4 py-3">
                     <span className="t-body-strong text-[color:var(--color-foreground)]">
                       Ya lo tienes habitualmente ({atHome.length})
@@ -877,7 +897,15 @@ export default function ShoppingListPage() {
                   </ul>
                 </details>
               ) : null}
-              <ManualItemForm onAdd={addManualItem} />
+              <ManualItemForm
+                onAdd={async (draft) => {
+                  const show = notices.begin("form");
+                  const added = await addManualItem(draft);
+                  show(added.text, { failed: added.failed });
+                }}
+                message={noticeText(notice, "form")}
+                onClose={() => notices.close("form")}
+              />
             </div>
           ) : (
             <StateMessage title="No hay lista de la compra." variant="empty">

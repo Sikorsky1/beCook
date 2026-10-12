@@ -145,6 +145,14 @@
       "sha256": "ee6a1b624225ebe6b9161b5399c76a70c664b4ae7a813176cef2dede3c684a9e",
       "appliedAt": "2026-10-12",
       "notes": "Tras backup completo en ~/Backups/becook/2026-10-12-ola7. Conector, sin BEGIN/COMMIT. Precondición manual|=0. prosrc idéntico a local; 70 listas y 2217 artículos antes y después."
+    },
+    {
+      "version": "20261012060819",
+      "name": "ai_usage_keep_on_account_delete",
+      "source": "supabase/migrations/20261015090000_ai_usage_keep_on_account_delete.sql",
+      "sha256": "3fdabaddf51bcd2a7705e0b2b687b7fd8e5d40383e06d04ef2aa2d2b25f76ff5",
+      "appliedAt": "2026-10-12",
+      "notes": "Tras backup completo en ~/Backups/becook/2026-10-12-ola8. Conector, sin BEGIN/COMMIT. user_id nullable, FK ON DELETE SET NULL validada, 17 filas antes y después."
     }
   ]
 }

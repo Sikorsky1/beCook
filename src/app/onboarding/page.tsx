@@ -302,7 +302,7 @@ export default function OnboardingPage() {
   };
 
   const shell = (children: ReactNode) => (
-    <main className={`${pageShellClass} px-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-8`}>
+    <main className={pageShellClass}>
       <div className="mx-auto flex w-full max-w-xl flex-col gap-4">{children}</div>
     </main>
   );

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 import type { MealKey } from "@/data/mockWeek";
 import { parseIsoWeekId, type IsoWeek } from "@/lib/isoWeek";
-import { OPENAI_MODEL } from "@/lib/openai/config";
+import { OPENAI_MODEL, blockedOpenAIEndpointResponse } from "@/lib/openai/config";
 import { estimateOpenAICostUsd } from "@/lib/openai/cost";
 import {
   isRecipeVersionId,
@@ -180,6 +180,8 @@ export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "Falta configurar OpenAI en el servidor." }, { status: 500 });
 
+  const blockedEndpoint = blockedOpenAIEndpointResponse("dish-card");
+  if (blockedEndpoint) return blockedEndpoint;
   const begin = await beginAiUsage(request, { userId: guard.user.id, flow: "shopping" });
   if (!begin.ok) return begin.response;
   const { usage } = begin;
