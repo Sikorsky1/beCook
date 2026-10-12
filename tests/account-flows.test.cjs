@@ -214,3 +214,74 @@ test("screens exist for every step and speak about the user's plans, not the pro
  assert.match(read("src/app/signup/page.tsx"), /"\/auth\/callback", next/);
  assert.match(read("src/app/forgot-password/page.tsx"), /"\/reset-password", next/);
 });
+
+// Sign-in with Google (and Apple later): NEXT_PUBLIC_AUTH_PROVIDERS switch, redirect and errors.
+test("providers come only from NEXT_PUBLIC_AUTH_PROVIDERS; without it there are no buttons", () => {
+ assert.deepEqual(account.enabledOAuthProviders(undefined), []);
+ assert.deepEqual(account.enabledOAuthProviders(""), []);
+ assert.deepEqual(account.enabledOAuthProviders("google"), ["google"]);
+ assert.deepEqual(account.enabledOAuthProviders(" Google , "), ["google"]);
+ assert.deepEqual(account.enabledOAuthProviders("apple,google,google"), ["google", "apple"], "display order, no duplicates");
+ assert.deepEqual(account.enabledOAuthProviders("github,facebook"), [], "unknown providers are ignored");
+});
+
+test("signInWithProvider asks Auth for the provider with the callback and its destination", async () => {
+ const calls = [];
+ const client = {auth: {signInWithOAuth: async options => { calls.push(options); return {data: {provider: "google", url: "https://x"}, error: null}; }}};
+ const redirectTo = nav.authRedirectUrl("https://www.becook.xyz", "/auth/callback", "/create-menu?week=2026-W42");
+ assert.deepEqual(await account.signInWithProvider(client, "google", {redirectTo}), {ok: true});
+ assert.deepEqual(calls, [{provider: "google", options: {redirectTo: "https://www.becook.xyz/auth/callback?next=%2Fcreate-menu%3Fweek%3D2026-W42"}}]);
+
+ const failing = {auth: {signInWithOAuth: async () => ({data: {}, error: authError("provider_disabled")})}};
+ const disabled = await account.signInWithProvider(failing, "google", {redirectTo});
+ assert.equal(disabled.ok, false);
+ assert.equal(disabled.message, "Ahora mismo no se puede entrar así. Entra con tu email.");
+ const offline = await account.signInWithProvider({auth: {signInWithOAuth: async () => { throw new TypeError("Failed to fetch"); }}}, "google", {redirectTo});
+ assert.equal(offline.code, "offline");
+ const unknown = await account.signInWithProvider({auth: {signInWithOAuth: async () => ({data: {}, error: authError("weird")})}}, "google", {redirectTo});
+ assert.equal(unknown.message, "No se pudo conectar. Inténtalo de nuevo o entra con tu email.");
+ assert.equal((await account.signInWithProvider(null, "google", {redirectTo})).code, "unavailable");
+});
+
+test("the return from Google with an error is explained in Spanish and offers to try again, not an email", () => {
+ const cancelled = account.readAuthLinkError("https://www.becook.xyz/auth/callback?next=%2Fweek&error=access_denied&error_description=The+user+denied");
+ assert.equal(cancelled.message, "Has cancelado el inicio de sesión. Puedes volver a intentarlo o entrar con tu email.");
+ assert.equal(account.isProviderSignInError(cancelled), true);
+ const inFragment = account.readAuthLinkError("https://www.becook.xyz/auth/callback#error=access_denied&error_code=access_denied&error_description=x");
+ assert.equal(account.isProviderSignInError(inFragment), true);
+ const state = account.readAuthLinkError("https://www.becook.xyz/auth/callback?error=invalid_request&error_code=bad_oauth_state&error_description=x");
+ assert.match(state.message, /Vuelve a intentarlo desde el principio/);
+ assert.equal(account.isProviderSignInError(state), true);
+ // An expired email link keeps the «send another link» path.
+ const expired = account.readAuthLinkError("https://www.becook.xyz/auth/callback#error=access_denied&error_code=otp_expired&error_description=x");
+ assert.equal(account.isProviderSignInError(expired), false);
+ assert.equal(account.isProviderSignInError(null), false);
+ for (const failure of [cancelled, state]) assert.doesNotMatch(failure.message, /denied|state|Supabase/i);
+});
+
+test("«Tus datos» names how the account signs in", () => {
+ assert.deepEqual(account.signInMethodLabels([{provider: "email"}]), ["Email y contraseña"]);
+ assert.deepEqual(account.signInMethodLabels([{provider: "google"}, {provider: "email"}]), ["Email y contraseña", "Google"]);
+ assert.deepEqual(account.signInMethodLabels([{provider: "apple"}, {provider: "google"}]), ["Google", "Apple"]);
+ assert.deepEqual(account.signInMethodLabels(undefined), []);
+});
+
+test("Google buttons, callback and legal pages are wired into the account screens", () => {
+ for (const page of ["login", "signup"]) {
+  const source = read(`src/app/${page}/page.tsx`);
+  assert.match(source, /<OAuthButtons next=\{next\} \/>/, page);
+  assert.match(source, /<LegalNotice \/>/, page);
+ }
+ const buttons = read("src/components/session/OAuthButtons.tsx");
+ assert.match(buttons, /enabledOAuthProviders\(process\.env\.NEXT_PUBLIC_AUTH_PROVIDERS\)/);
+ assert.match(buttons, /"\/auth\/callback", next/);
+ assert.match(buttons, /if \(!providers\.length\) return null;/);
+ // After Google the destination is next or the week; OnboardingGate takes new accounts to the onboarding.
+ assert.match(read("src/app/auth/callback/page.tsx"), /next \?\? defaultAfterLoginPath/);
+ assert.match(read("src/app/week/page.tsx"), /<OnboardingGate \/>/);
+ for (const [page, file] of [["privacidad", "privacidad.md"], ["condiciones", "condiciones.md"]]) {
+  assert.match(read(`src/app/${page}/page.tsx`), new RegExp(`file="${file}"`), page);
+  assert.doesNotMatch(read(`docs/legal/${file}`), /\[(REVISAR|DECIDIR)|Borrador|Pendiente antes de publicar|\[fecha|\[email/i, file);
+ }
+ assert.match(read("docs/legal/privacidad.md"), /Si entras con Google, Google nos facilita tu email y tu nombre, y nada más\./);
+});

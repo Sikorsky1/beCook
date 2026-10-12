@@ -18,7 +18,9 @@ import {
   requestAccountExport,
   saveBlob,
 } from "@/lib/account/client";
+import { signInMethodLabels } from "@/lib/auth/account";
 import { loginHrefFor } from "@/lib/navigation";
+import { supabase } from "@/lib/supabase/client";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { pageShellClass } from "@/lib/ui";
 
@@ -58,6 +60,21 @@ export default function AccountDataPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteNotice, setDeleteNotice] = useState<Notice>(null);
   const deleteNoticeRef = useRef<HTMLDivElement>(null);
+  const [signInMethods, setSignInMethods] = useState<{ userId: string; labels: string[] } | null>(null);
+
+  // How this account signs in (email, Google, Apple), from the session kept on this device.
+  useEffect(() => {
+    if (!identity.userId || !supabase) return;
+    let active = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      const user = data.session?.user;
+      if (active && user) setSignInMethods({ userId: user.id, labels: signInMethodLabels(user.identities) });
+    });
+    return () => {
+      active = false;
+    };
+  }, [identity.userId]);
+  const methods = signInMethods?.userId === identity.userId ? signInMethods.labels : [];
 
   // A failed deletion moves the focus to its explanation.
   useEffect(() => {
@@ -139,6 +156,11 @@ export default function AccountDataPage() {
           </Card>
         ) : (
           <>
+            {methods.length ? (
+              <p className="t-body text-[color:var(--color-foreground)]">
+                Entras con: <strong className="font-semibold">{methods.join(" · ")}</strong>
+              </p>
+            ) : null}
             <Card className="space-y-3 p-4 sm:p-5" aria-labelledby="export-title">
               <h2 id="export-title" className="t-h2 text-[color:var(--color-foreground)]">
                 Descargar tus datos

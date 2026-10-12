@@ -64,6 +64,8 @@ function baseEnv(api) {
     __NEXT_PROCESSED_ENV: "true",
     NEXT_PUBLIC_SUPABASE_URL: api.url,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: api.key,
+    // «Continuar con Google» is shown; the journey intercepts the redirection to Auth.
+    NEXT_PUBLIC_AUTH_PROVIDERS: "google",
   });
 }
 

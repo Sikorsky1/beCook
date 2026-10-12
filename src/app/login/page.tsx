@@ -11,10 +11,12 @@ import {
   FieldLabel,
   FormError,
   FormNotice,
+  LegalNotice,
   authTextLinkClass,
   useNextParam,
 } from "@/components/session/AuthPageShell";
 import { useIdentity } from "@/components/session/IdentityProvider";
+import { OAuthButtons } from "@/components/session/OAuthButtons";
 import { PrimaryButton, SecondaryButton, TertiaryButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
 import { resendSignupConfirmation, signInWithEmail } from "@/lib/auth/account";
@@ -103,6 +105,7 @@ function LoginForm() {
         </p>
       }
     >
+      <OAuthButtons next={next} />
       <form onSubmit={handleSubmit} className="space-y-3" noValidate>
         <div className="space-y-1.5">
           <FieldLabel htmlFor="login-email">Email</FieldLabel>
@@ -163,6 +166,7 @@ function LoginForm() {
           </TertiaryButton>
         </div>
       </form>
+      <LegalNotice />
     </AuthPageShell>
   );
 }

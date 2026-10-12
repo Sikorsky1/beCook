@@ -11,9 +11,11 @@ import {
   FieldLabel,
   FormError,
   FormNotice,
+  LegalNotice,
   useNextParam,
 } from "@/components/session/AuthPageShell";
 import { useIdentity } from "@/components/session/IdentityProvider";
+import { OAuthButtons } from "@/components/session/OAuthButtons";
 import { PrimaryButton, SecondaryButton, TertiaryButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
 import {
@@ -135,6 +137,7 @@ function SignupForm() {
         </p>
       }
     >
+      <OAuthButtons next={next} />
       <form onSubmit={handleSubmit} className="space-y-3" noValidate>
         <div className="space-y-1.5">
           <FieldLabel htmlFor="signup-email">Email</FieldLabel>
@@ -196,6 +199,7 @@ function SignupForm() {
           </TertiaryButton>
         </div>
       </form>
+      <LegalNotice />
     </AuthPageShell>
   );
 }
