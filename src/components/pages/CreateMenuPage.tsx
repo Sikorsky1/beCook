@@ -99,6 +99,26 @@ const freeTextPromptMaxLength = 300;
 type CreateMenuMode = "import" | "generate";
 
 const importPanelId = "create-menu-import";
+// What «Procesar menú» produced: the import panel sits above the generator, so on a phone the
+// proposal, the progress or the error appear below the fold unless the page takes the user there.
+const importOutcomeIds = {
+  proposal: "create-menu-proposal",
+  progress: "create-menu-progress",
+  error: "create-menu-error",
+} as const;
+
+function revealImportOutcome(outcome: keyof typeof importOutcomeIds) {
+  // After React has rendered it (two frames: the state update lands in the first).
+  window.requestAnimationFrame(() =>
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(importOutcomeIds[outcome]);
+      if (!target) return;
+      // Lands under the fixed header thanks to the page's scroll-padding (layout.tsx).
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      target.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
+    }),
+  );
+}
 
 type ProposalMeta = Pick<MenuProposal, "source" | "parsedBy" | "contextVersion" | "createdAt">;
 
@@ -651,6 +671,7 @@ function CreateMenuPageContent() {
     setErrorNeedsProfile(false);
     setErrorFixText(true);
     setErrorMessage(message ?? importErrorMessage(reason, "No se pudo procesar el menú."));
+    revealImportOutcome("error");
   };
 
   const handleProcessMenu = async () => {
@@ -695,6 +716,7 @@ function CreateMenuPageContent() {
         targetIsoWeek ?? getCurrentIsoWeek(),
         "import",
       );
+      revealImportOutcome("proposal");
       return;
     }
 
@@ -717,6 +739,7 @@ function CreateMenuPageContent() {
     const previousRequestId = generationRequestId;
     setGenerationRequestId(null);
     const { run, finish, weekForRun } = beginRun("import");
+    revealImportOutcome("progress");
 
     try {
       const response = await postAi("/api/import-menu", { text: checked.text }, run.controller.signal);
@@ -747,11 +770,13 @@ function CreateMenuPageContent() {
         setErrorMessage(message);
         setFailureCount((count) => count + 1);
         finish({ status: "error", message, limit: isLimit });
+        revealImportOutcome("error");
         return;
       }
 
       showNewProposal(data as ImportedMenuResponse, null, weekForRun, "import");
       finish({ status: "proposal" });
+      revealImportOutcome("proposal");
     } catch (error: unknown) {
       // Cancelled: whatever was on screen before stays.
       if (run.controller.signal.aborted) {
@@ -773,6 +798,7 @@ function CreateMenuPageContent() {
       setErrorMessage(message);
       setFailureCount((count) => count + 1);
       finish({ status: "error", message, limit: false });
+      revealImportOutcome("error");
     } finally {
       endRun(run);
       setIsLoading(false);
@@ -1527,12 +1553,14 @@ function CreateMenuPageContent() {
         </Card>
 
         {runView ? (
-          <GenerationProgress
-            mode={runView.mode}
-            startedAt={runView.startedAt}
-            maxSeconds={maxWaitSeconds[runView.mode]}
-            onCancel={cancelGeneration}
-          />
+          <div id={importOutcomeIds.progress}>
+            <GenerationProgress
+              mode={runView.mode}
+              startedAt={runView.startedAt}
+              maxSeconds={maxWaitSeconds[runView.mode]}
+              onCancel={cancelGeneration}
+            />
+          </div>
         ) : null}
 
         {cancelledNotice && !isLoading ? (
@@ -1555,7 +1583,7 @@ function CreateMenuPageContent() {
 
         {errorMessage ? (
           // Announced when it appears (C6: text problems are said at once, without a request).
-          <div role="alert">
+          <div role="alert" id={importOutcomeIds.error}>
             <StateMessage
               className="mt-0"
               title={
@@ -1601,7 +1629,7 @@ function CreateMenuPageContent() {
         ) : null}
 
         {importedMenu && importedWeekDays ? (
-          <section className="space-y-4 border-t border-[color:var(--color-border)] pt-5 transition-opacity duration-200 ease-out motion-reduce:transition-none sm:space-y-5">
+          <section id={importOutcomeIds.proposal} className="space-y-4 border-t border-[color:var(--color-border)] pt-5 transition-opacity duration-200 ease-out motion-reduce:transition-none sm:space-y-5">
             <h2 className="t-h2 text-[color:var(--color-foreground)]">
               Revisa tu semana
             </h2>

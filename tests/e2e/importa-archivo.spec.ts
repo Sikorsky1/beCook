@@ -25,7 +25,8 @@ test("invitado sube un PDF con texto: se lee en el dispositivo, sin IA @320", as
   await expect(pasted).toHaveValue(/Lunes\tCrema de calabaza\tTortilla francesa/);
   await page.getByRole("button", { name: "Procesar menú" }).click();
 
-  await expect(page.getByRole("heading", { level: 2, name: "Revisa tu semana" })).toBeVisible();
+  // The panel is above the generator: the page takes the user to the proposal.
+  await expect(page.getByRole("heading", { level: 2, name: "Revisa tu semana" })).toBeInViewport();
   await expect(page.getByText("Ordenado en este dispositivo, sin IA.", { exact: false })).toBeVisible();
   await expect(page.getByRole("region", { name: "Usar la propuesta" })).toContainText("5 platos · 3 días");
 
@@ -47,7 +48,14 @@ test("con sesión, una foto del menú la lee la IA y el texto se revisa antes de
   await pasted.fill((await pasted.inputValue()).replace("Lentejas estofadas", "Lentejas con arroz"));
   await page.getByRole("button", { name: "Procesar menú" }).click();
 
-  await expect(page.getByRole("heading", { level: 2, name: "Revisa tu semana" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Revisa tu semana" })).toBeInViewport();
   await expect(page.getByRole("region", { name: "Usar la propuesta" })).toContainText("3 platos · 2 días");
   await page.context().close();
+});
+
+test("un texto que no se puede ordenar muestra el problema en pantalla, no fuera de la vista", async ({ page }) => {
+  await page.goto("/create-menu?mode=import");
+  await page.getByRole("textbox", { name: "Pega tu menú de la semana" }).fill(Array.from({ length: 90 }, (_, i) => `Línea ${i + 1}`).join("\n"));
+  await page.getByRole("button", { name: "Procesar menú" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "demasiadas líneas" })).toBeInViewport();
 });
