@@ -362,7 +362,7 @@ test("Crear menú has no tab list any more: generating is the main action and im
  assert.ok(!page.includes('role="tablist"') && !page.includes('role="tab"') && !page.includes('role="tabpanel"'));
  assert.match(page, /aria-expanded=\{/);
  assert.match(page, /aria-controls=/);
- assert.match(page, /¿Ya tienes un menú\? Pégalo/);
+ assert.match(page, /¿Ya tienes un menú\? Pégalo o súbelo/);
  assert.match(page, /searchParams\.get\("mode"\)/);
  assert.match(page, /Volver a Semana/);
  assert.match(panel, /<label|aria-label=/);

@@ -1,3 +1,5 @@
+import { menuFileLimits } from "@/lib/menuFile";
+
 // Request limits for the paid AI routes, sized from real payloads (A3).
 export const aiRequestLimits = {
   generateMenu: { maxBytes: 64 * 1024 },
@@ -8,4 +10,6 @@ export const aiRequestLimits = {
   generateShoppingList: { maxBytes: 16 * 1024, maxDays: 7, maxDayLabelLength: 40, maxSlotLength: 200 },
   // C2: one dish title and where it is in the week.
   dishCard: { maxBytes: 4 * 1024 },
+  // «Ya tengo un menú» from a photo or a scanned PDF: up to 4 page images (see @/lib/menuFile).
+  menuFileText: { maxBytes: menuFileLimits.maxRequestBytes },
 } as const;
