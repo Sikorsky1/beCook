@@ -225,24 +225,98 @@ test("providers come only from NEXT_PUBLIC_AUTH_PROVIDERS; without it there are 
  assert.deepEqual(account.enabledOAuthProviders("github,facebook"), [], "unknown providers are ignored");
 });
 
-test("signInWithProvider asks Auth for the provider with the callback and its destination", async () => {
+test("signInWithProvider (Apple only) asks Auth for the provider with the callback and its destination", async () => {
  const calls = [];
- const client = {auth: {signInWithOAuth: async options => { calls.push(options); return {data: {provider: "google", url: "https://x"}, error: null}; }}};
+ const client = {auth: {signInWithOAuth: async options => { calls.push(options); return {data: {provider: "apple", url: "https://x"}, error: null}; }}};
  const redirectTo = nav.oauthRedirectUrl("https://www.becook.xyz/", "/create-menu?week=2026-W42");
  assert.equal(redirectTo, "https://www.becook.xyz/auth/callback?next=%2Fcreate-menu%3Fweek%3D2026-W42&via=oauth");
  assert.equal(nav.oauthRedirectUrl("https://www.becook.xyz", "https://evil.example/x"), "https://www.becook.xyz/auth/callback?via=oauth", "an off-site next is dropped");
- assert.deepEqual(await account.signInWithProvider(client, "google", {redirectTo}), {ok: true});
- assert.deepEqual(calls, [{provider: "google", options: {redirectTo}}]);
+ assert.deepEqual(await account.signInWithProvider(client, "apple", {redirectTo}), {ok: true});
+ assert.deepEqual(calls, [{provider: "apple", options: {redirectTo}}]);
 
  const failing = {auth: {signInWithOAuth: async () => ({data: {}, error: authError("provider_disabled")})}};
- const disabled = await account.signInWithProvider(failing, "google", {redirectTo});
+ const disabled = await account.signInWithProvider(failing, "apple", {redirectTo});
  assert.equal(disabled.ok, false);
  assert.equal(disabled.message, "Ahora mismo no se puede entrar así. Entra con tu email.");
- const offline = await account.signInWithProvider({auth: {signInWithOAuth: async () => { throw new TypeError("Failed to fetch"); }}}, "google", {redirectTo});
+ const offline = await account.signInWithProvider({auth: {signInWithOAuth: async () => { throw new TypeError("Failed to fetch"); }}}, "apple", {redirectTo});
  assert.equal(offline.code, "offline");
- const unknown = await account.signInWithProvider({auth: {signInWithOAuth: async () => ({data: {}, error: authError("weird")})}}, "google", {redirectTo});
+ const unknown = await account.signInWithProvider({auth: {signInWithOAuth: async () => ({data: {}, error: authError("weird")})}}, "apple", {redirectTo});
  assert.equal(unknown.message, "No se pudo conectar. Inténtalo de nuevo o entra con tu email.");
- assert.equal((await account.signInWithProvider(null, "google", {redirectTo})).code, "unavailable");
+ assert.equal((await account.signInWithProvider(null, "apple", {redirectTo})).code, "unavailable");
+});
+
+// Google signs in on our page (Google Identity Services + ID token), never through supabase.co.
+const google = require("../src/lib/auth/google.ts");
+
+test("Google needs a real web client ID; anything else hides the button", () => {
+ const id = "159899872726-f97ksbdk4qoh63ev05pvmstaggcl3qlb.apps.googleusercontent.com";
+ assert.equal(google.googleClientId(id), id);
+ assert.equal(google.googleClientId(` ${id}\n`), id);
+ for (const value of [undefined, null, "", "GOCSPX-secret", "https://evil.example/x.apps.googleusercontent.com", "x.apps.googleusercontent.com.evil"]) {
+  assert.equal(google.googleClientId(value), null, String(value));
+ }
+ assert.equal(google.googleButtonWidth(0), 200);
+ assert.equal(google.googleButtonWidth(343.6), 344);
+ assert.equal(google.googleButtonWidth(640), 400, "Google's button is at most 400 px wide");
+});
+
+test("each attempt has its own nonce: Google gets the SHA-256, Auth the plain value", async () => {
+ const {createHash} = require("node:crypto");
+ const first = await google.createNonce();
+ const second = await google.createNonce();
+ assert.match(first.raw, /^[0-9a-f]{64}$/);
+ assert.equal(first.hashed, createHash("sha256").update(first.raw).digest("hex"));
+ assert.notEqual(first.raw, second.raw);
+});
+
+test("signInWithGoogleIdToken hands the ID token and the plain nonce to Auth; errors in Spanish", async () => {
+ const calls = [];
+ const session = {data: {session: {access_token: "a"}, user: {id: "u"}}, error: null};
+ const client = {auth: {signInWithIdToken: async credentials => { calls.push(credentials); return session; }}};
+ assert.deepEqual(await account.signInWithGoogleIdToken(client, {token: "jwt", nonce: "plain"}), {ok: true});
+ assert.deepEqual(calls, [{provider: "google", token: "jwt", nonce: "plain"}]);
+
+ const answer = response => ({auth: {signInWithIdToken: async () => response}});
+ const disabled = await account.signInWithGoogleIdToken(answer({data: {}, error: authError("provider_disabled")}), {token: "jwt", nonce: "n"});
+ assert.equal(disabled.message, "Ahora mismo no se puede entrar así. Entra con tu email.");
+ const banned = await account.signInWithGoogleIdToken(answer({data: {}, error: authError("user_banned")}), {token: "jwt", nonce: "n"});
+ assert.equal(banned.message, "Esta cuenta no puede entrar ahora mismo.");
+ const badNonce = await account.signInWithGoogleIdToken(answer({data: {}, error: authError("bad_jwt", "Passed nonce and nonce in id_token should either both exist or not.")}), {token: "jwt", nonce: "n"});
+ assert.equal(badNonce.message, "No se pudo conectar. Inténtalo de nuevo o entra con tu email.");
+ assert.doesNotMatch(badNonce.message, /nonce|id_token/i);
+ const noSession = await account.signInWithGoogleIdToken(answer({data: {session: null}, error: null}), {token: "jwt", nonce: "n"});
+ assert.equal(noSession.ok, false);
+ const offline = await account.signInWithGoogleIdToken({auth: {signInWithIdToken: async () => { throw new TypeError("Failed to fetch"); }}}, {token: "jwt", nonce: "n"});
+ assert.equal(offline.message, "No hay conexión. Comprueba tu red e inténtalo de nuevo.");
+ assert.equal((await account.signInWithGoogleIdToken(client, {token: undefined, nonce: "n"})).ok, false, "no credential, no call");
+ assert.equal(calls.length, 1);
+ assert.equal((await account.signInWithGoogleIdToken(null, {token: "jwt", nonce: "n"})).code, "unavailable");
+
+ assert.equal(account.googleUnavailableFailure(false).message, "No hay conexión. Comprueba tu red e inténtalo de nuevo.");
+ assert.match(account.googleUnavailableFailure(true).message, /^No se pudo cargar el botón de Google\./);
+});
+
+test("Google's script loads once; a failure is reported and the next attempt tries again", async () => {
+ const appended = [];
+ const fakeWindow = (onAppend) => ({
+  document: {
+   head: {appendChild: script => { appended.push(script); onAppend(script); }},
+   createElement: () => ({remove() { this.removed = true; }}),
+  },
+ });
+ const failing = fakeWindow(script => setImmediate(() => script.onerror()));
+ await assert.rejects(google.loadGoogleIdentity(failing), /google_unavailable/);
+ assert.equal(appended[0].src, "https://accounts.google.com/gsi/client");
+ assert.equal(appended[0].removed, true);
+
+ const identity = {initialize() {}, renderButton() {}, cancel() {}};
+ const win = fakeWindow(script => setImmediate(() => { win.google = {accounts: {id: identity}}; script.onload(); }));
+ const [a, b] = [google.loadGoogleIdentity(win), google.loadGoogleIdentity(win)];
+ assert.equal(await a, identity);
+ assert.equal(await b, identity);
+ assert.equal(appended.length, 2, "one script for the failed try and one for the good one, not one per caller");
+ assert.equal(await google.loadGoogleIdentity(win), identity, "already loaded: no new script");
+ assert.equal(appended.length, 2);
 });
 
 test("the return from Google with an error is explained in Spanish and offers to try again, not an email", () => {
@@ -279,17 +353,33 @@ test("«Tus datos» names how the account signs in", () => {
 test("Google buttons, callback and legal pages are wired into the account screens", () => {
  for (const page of ["login", "signup"]) {
   const source = read(`src/app/${page}/page.tsx`);
-  assert.match(source, /<OAuthButtons next=\{next\} \/>/, page);
+  assert.match(source, /<OAuthButtons next=\{next\}[^>]* onBusyChange=\{setIsSubmitting\} \/>/, page);
   assert.match(source, /<LegalNotice \/>/, page);
  }
  const buttons = read("src/components/session/OAuthButtons.tsx");
  assert.match(buttons, /enabledOAuthProviders\(process\.env\.NEXT_PUBLIC_AUTH_PROVIDERS\)/);
- assert.match(buttons, /oauthRedirectUrl\(window\.location\.origin, next\)/);
+ assert.match(buttons, /googleClientId\(process\.env\.NEXT_PUBLIC_GOOGLE_CLIENT_ID\)/);
+ assert.match(buttons, /provider !== "google" \|\| clientId !== null/, "no client ID, no Google button");
+ assert.match(buttons, /signInWithGoogleIdToken\(supabase, \{ token: credential, nonce: nonce\.raw \}\)/);
+ assert.match(buttons, /nonce: nonce\.hashed/);
+ assert.match(buttons, /signInWithProvider\(supabase, "apple"/);
  assert.match(buttons, /if \(!providers\.length\) return null;/);
+ // No way back to Google's redirection through supabase.co (it would need supabase.co in Google's
+ // authorized domains): signInWithOAuth only exists for Apple.
+ assert.doesNotMatch(read("src/lib/auth/account.ts"), /provider: OAuthProvider,\n\s*\{ redirectTo \}/);
+ assert.match(read("src/lib/auth/account.ts"), /provider: "apple",\n\s*\{ redirectTo \}/);
  // After Google the destination is next or the week; OnboardingGate takes new accounts to the onboarding.
  assert.match(read("src/app/auth/callback/page.tsx"), /next \?\? defaultAfterLoginPath/);
  assert.match(read("src/app/week/page.tsx"), /<OnboardingGate \/>/);
- for (const [page, file] of [["privacidad", "privacidad.md"], ["condiciones", "condiciones.md"]]) {
+ assert.match(read("src/components/session/AuthPageShell.tsx"), /<Link href="\/sobre"[^>]*>Qué es beCook<\/Link>/);
+ assert.match(read("src/app/sobre/page.tsx"), /export const dynamic = "force-static";/);
+ const about = read("docs/legal/sobre.md");
+ for (const scope of ["`openid`", "`email`", "`profile`"]) assert.ok(about.includes(scope), scope);
+ assert.match(about, /\[Política de privacidad\]\(\/privacidad\)/);
+ assert.match(about, /\[Condiciones de uso\]\(\/condiciones\)/);
+ assert.match(about, /sergio\.ortiz\.torrijos@gmail\.com/);
+ for (const page of ["privacidad", "condiciones"]) assert.match(read(`src/app/${page}/page.tsx`), /\{ href: "\/sobre", label: "Qué es beCook" \}/, page);
+ for (const [page, file] of [["privacidad", "privacidad.md"], ["condiciones", "condiciones.md"], ["sobre", "sobre.md"]]) {
   assert.match(read(`src/app/${page}/page.tsx`), new RegExp(`file="${file}"`), page);
   assert.doesNotMatch(read(`docs/legal/${file}`), /\[(REVISAR|DECIDIR)|Borrador|Pendiente antes de publicar|\[fecha|\[email/i, file);
  }

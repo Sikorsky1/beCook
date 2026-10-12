@@ -105,7 +105,7 @@ function LoginForm() {
         </p>
       }
     >
-      <OAuthButtons next={next} />
+      <OAuthButtons next={next} onBusyChange={setIsSubmitting} />
       <form onSubmit={handleSubmit} className="space-y-3" noValidate>
         <div className="space-y-1.5">
           <FieldLabel htmlFor="login-email">Email</FieldLabel>

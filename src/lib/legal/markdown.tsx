@@ -88,15 +88,23 @@ export function LegalDocument({ source }: { source: string }) {
   );
 }
 
-// A public legal page: the reviewed file, read once at build time, and a link to the other text.
-export function LegalPage({ file, related }: { file: string; related: { href: string; label: string } }) {
+// A public page from a reviewed file (legal texts, «Qué es beCook»), read once at build time, with
+// links to the others.
+export function LegalPage({ file, related }: { file: string; related: { href: string; label: string }[] }) {
   const source = readFileSync(path.join(process.cwd(), "docs/legal", file), "utf8");
   return (
     <main className={pageShellClass}>
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
         <LegalDocument source={source} />
         <p className="t-meta">
-          Ver también: <Link href={related.href} className={linkClass}>{related.label}</Link>.
+          Ver también:{" "}
+          {related.map((link, index) => (
+            <span key={link.href}>
+              {index ? (index === related.length - 1 ? " y " : ", ") : null}
+              <Link href={link.href} className={linkClass}>{link.label}</Link>
+            </span>
+          ))}
+          .
         </p>
       </div>
     </main>
