@@ -38,7 +38,7 @@ export function StickyPageHeader({
         }`}
       >
         <div className="flex h-14 items-center justify-between gap-3">
-          <p className="t-eyebrow min-w-0 truncate">{title}</p>
+          <p className="t-eyebrow line-clamp-2 min-w-0">{title}</p>
           {action}
         </div>
       </div>
