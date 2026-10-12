@@ -1,5 +1,7 @@
 import "server-only";
 
+import { after } from "next/server";
+
 // P37: operational alerts to one channel (OPS_ALERT_WEBHOOK_URL). Without that variable nothing is
 // sent. An alert never carries personal data or meal content: only the fields listed here, as
 // short scalars, plus the environment and the commit. It never throws and waits at most 3 s.
@@ -46,14 +48,48 @@ const allowedFields = [
 
 const timeoutMs = 3_000;
 const minIntervalMs = 60_000;
+// Wave 8: a global ceiling per server instance, so a burst of distinct routes (or a crawler hitting
+// many failing paths) cannot flood the channel, and a bounded map of recent keys.
+const maxAlertsPerWindow = 10;
+const maxTrackedKeys = 200;
 const resendEmailsUrl = "https://api.resend.com/emails";
 const defaultFrom = "beCook alertas <no-reply@becook.xyz>";
 
-// One alert per event and route (or flow / threshold) per minute in this server instance.
+// One alert per event and route (or flow / threshold) per minute in this server instance, and at
+// most maxAlertsPerWindow alerts per minute in total.
 const lastSent = new Map<string, number>();
+let windowSends: number[] = [];
 
 export function resetOpsAlertLimiter() {
   lastSent.clear();
+  windowSends = [];
+}
+
+export const opsAlertLimits = { maxAlertsPerWindow, maxTrackedKeys, minIntervalMs } as const;
+
+export function trackedOpsAlertKeys() {
+  return lastSent.size;
+}
+
+// True when the alert may be sent now; records it. Expired keys are dropped on every call and the
+// oldest are evicted beyond maxTrackedKeys, so the map stays small whatever the traffic.
+function takeAlertSlot(key: string, now: number) {
+  windowSends = windowSends.filter((sentAt) => now - sentAt < minIntervalMs);
+  for (const [trackedKey, sentAt] of lastSent) {
+    if (now - sentAt >= minIntervalMs) lastSent.delete(trackedKey);
+  }
+  const previous = lastSent.get(key);
+  if (previous !== undefined && now - previous < minIntervalMs) return false;
+  if (windowSends.length >= maxAlertsPerWindow) return false;
+  windowSends.push(now);
+  lastSent.delete(key);
+  lastSent.set(key, now);
+  while (lastSent.size > maxTrackedKeys) {
+    const oldest = lastSent.keys().next().value;
+    if (oldest === undefined) break;
+    lastSent.delete(oldest);
+  }
+  return true;
 }
 
 // Path only: no query string or fragment, and identifiers replaced, so no value typed by a user
@@ -117,10 +153,7 @@ export async function sendOpsAlert(event: OpsAlertEvent, rawFields: Record<strin
     if (!target) return false;
     const fields = sanitizeAlertFields(rawFields);
     const key = `${event}|${fields.route ?? ""}|${fields.flow ?? ""}|${fields.threshold ?? ""}`;
-    const now = Date.now();
-    const previous = lastSent.get(key);
-    if (previous !== undefined && now - previous < minIntervalMs) return false;
-    lastSent.set(key, now);
+    if (!takeAlertSlot(key, Date.now())) return false;
 
     const alert = buildOpsAlert(event, fields);
     const token = process.env.OPS_ALERT_WEBHOOK_TOKEN?.trim();
@@ -153,4 +186,19 @@ export async function sendOpsAlert(event: OpsAlertEvent, rawFields: Record<strin
     // The channel being down never affects the request that raised the alert.
     return false;
   }
+}
+
+// For request code (route handlers, server functions): the alert goes out after the response with
+// next/server after(), so a slow channel never delays the user. Outside a request scope (unit tests,
+// scripts) after() throws and the alert is sent before returning.
+export async function notifyOps(event: OpsAlertEvent, rawFields: Record<string, unknown> = {}): Promise<void> {
+  try {
+    after(async () => {
+      await sendOpsAlert(event, rawFields);
+    });
+    return;
+  } catch {
+    // No request scope.
+  }
+  await sendOpsAlert(event, rawFields);
 }

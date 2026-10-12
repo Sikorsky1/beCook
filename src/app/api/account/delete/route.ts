@@ -11,7 +11,7 @@ import {
   serviceClient,
   verifyAccountSession,
 } from "@/lib/server/account";
-import { sendOpsAlert } from "@/lib/server/ops-alert";
+import { notifyOps } from "@/lib/server/ops-alert";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   const service = serviceClient();
   if (!service) {
     console.warn("account_delete", { outcome: "unconfigured" });
-    await sendOpsAlert("account_delete_failed", { route: "/api/account/delete", status: 503 });
+    await notifyOps("account_delete_failed", { route: "/api/account/delete", status: 503 });
     return accountError(503, "Ahora no podemos eliminar la cuenta. Inténtalo de nuevo más tarde.");
   }
 
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   } catch {
     // No user id, e-mail or provider message in logs or alerts.
     console.warn("account_delete", { outcome: "failed" });
-    await sendOpsAlert("account_delete_failed", { route: "/api/account/delete", status: 503 });
+    await notifyOps("account_delete_failed", { route: "/api/account/delete", status: 503 });
     return accountError(503, "Ahora no podemos eliminar la cuenta. Inténtalo de nuevo más tarde.");
   }
 

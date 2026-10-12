@@ -98,6 +98,52 @@ test("one alert per event and route per minute in an instance", async () => {
  assert.equal(sent.length, 4);
 });
 
+test("global ceiling: at most 10 alerts per minute per instance, then again after the window", async () => {
+ captureFetch();
+ process.env.OPS_ALERT_WEBHOOK_URL = webhook;
+ const realNow = Date.now;
+ let now = realNow();
+ Date.now = () => now;
+ try {
+  const results = [];
+  for (let i = 0; i < 15; i += 1) results.push(await alerts.sendOpsAlert("server_error", {route: `/ruta-${String.fromCharCode(97 + i)}`}));
+  assert.equal(results.filter(Boolean).length, alerts.opsAlertLimits.maxAlertsPerWindow);
+  assert.deepEqual(results.slice(10), [false, false, false, false, false]);
+  now += alerts.opsAlertLimits.minIntervalMs;
+  assert.equal(await alerts.sendOpsAlert("server_error", {route: "/ruta-z"}), true);
+  assert.equal(sent.length, 11);
+ } finally {
+  Date.now = realNow;
+ }
+});
+
+test("the per-key map stays bounded: expired keys are dropped", async () => {
+ captureFetch();
+ process.env.OPS_ALERT_WEBHOOK_URL = webhook;
+ const realNow = Date.now;
+ let now = realNow();
+ Date.now = () => now;
+ try {
+  for (let minute = 0; minute < 30; minute += 1) {
+   for (let i = 0; i < 10; i += 1) await alerts.sendOpsAlert("server_error", {route: `/m${minute}-r${i}`});
+   now += alerts.opsAlertLimits.minIntervalMs;
+  }
+  await alerts.sendOpsAlert("server_error", {route: "/final"});
+  assert.equal(alerts.trackedOpsAlertKeys(), 1);
+  assert.ok(alerts.trackedOpsAlertKeys() <= alerts.opsAlertLimits.maxTrackedKeys);
+ } finally {
+  Date.now = realNow;
+ }
+});
+
+test("notifyOps outside a request scope sends before returning (after() needs a request)", async () => {
+ captureFetch();
+ process.env.OPS_ALERT_WEBHOOK_URL = webhook;
+ await alerts.notifyOps("ai_usage_finish_failed", {flow: "menu", requestId: "req-1"});
+ assert.equal(sent.length, 1);
+ assert.equal(sent[0].body.event, "ai_usage_finish_failed");
+});
+
 test("a failing or slow channel never throws and gives up after 3 s", async () => {
  process.env.OPS_ALERT_WEBHOOK_URL = webhook;
  captureFetch(() => { throw new TypeError("synthetic network failure"); });

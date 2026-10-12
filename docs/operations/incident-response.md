@@ -18,7 +18,8 @@ Guía corta para un equipo de una persona (Sergio) con agentes. Los procedimient
 | Aviso de usuario | Email / beta | Cualquier cosa; pedir pasos, hora y dispositivo, nunca contraseñas |
 
 Las alertas no llevan datos personales ni de comidas, y llegan como mucho una por minuto por ruta e
-instancia. Solo existen si `OPS_ALERT_WEBHOOK_URL` está configurada en Vercel (pendiente de Sergio).
+instancia, con un tope global de 10 por minuto e instancia. En las rutas se envían después de la
+respuesta (`after()` de `next/server`), así que un canal lento no retrasa al usuario. Solo existen si `OPS_ALERT_WEBHOOK_URL` está configurada en Vercel (pendiente de Sergio).
 
 ## Gravedad
 
