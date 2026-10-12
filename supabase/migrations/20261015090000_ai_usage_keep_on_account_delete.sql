@@ -11,7 +11,7 @@
 -- global budget and the per-IP limit keep counting every row.
 --
 -- Hosted (connector apply_migration): remove ONLY the BEGIN; and COMMIT; lines and keep the two
--- SET LOCAL lines. Procedure, verification and reversal: docs/development/progress-p37.md.
+-- SET LOCAL lines. Procedure, verification and reversal: PROGRESS.md, «Paso 37».
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '120s';

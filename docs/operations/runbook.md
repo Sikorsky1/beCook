@@ -55,7 +55,7 @@ merge a `main`. Las migraciones siguen el flujo de `AGENTS.md` (local → previe
 ## 4. Reversión de una migración
 
 - Cada iteración documenta su SQL de reversión en `PROGRESS.md` o en su `progress-*.md`
-  (P37: `docs/development/progress-p37.md`). Una reversión es otra migración: requiere OK
+  (P37: `PROGRESS.md`, «Paso 37»). Una reversión es otra migración: requiere OK
   explícito de Sergio, backup previo y registro en `supabase/hosted/applied-*.json`.
 - Nunca `supabase db push` ni reset remoto. Una migración inversa **no recupera filas borradas**.
 - Los `DELETE` remotos se preparan como SQL y los ejecuta Sergio en el SQL Editor.

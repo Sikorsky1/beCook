@@ -104,7 +104,7 @@ detección de secretos en el código y copias de seguridad antes de cada cambio 
 - [ ] Datos del responsable y email de contacto.
 - [ ] Revisión jurídica completa (bases, transferencias, plazos, menores).
 - [ ] Consentimiento explícito para alergias y dietas (art. 9): propuesta en
-      `docs/development/progress-p37.md` (casilla separada, no premarcada, antes de guardar esas
+      `PROGRESS.md`, «Paso 37» (casilla separada, no premarcada, antes de guardar esas
       secciones; registro de fecha y versión del texto; poder retirarlo).
 - [ ] Plazos de conservación del registro de IA y de las copias de seguridad.
 - [ ] DPA de Supabase, Vercel, OpenAI y Resend.
