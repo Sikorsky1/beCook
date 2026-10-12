@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
 
 import {
   AuthPageShell,
@@ -16,17 +16,31 @@ import {
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { PrimaryButton, SecondaryButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
-import { resendSignupConfirmation } from "@/lib/auth/account";
-import { authHref, authRedirectUrl, defaultAfterSignupPath } from "@/lib/navigation";
+import { isProviderSignInError, readAuthLinkError, resendSignupConfirmation } from "@/lib/auth/account";
+import { authHref, authRedirectUrl, defaultAfterLoginPath } from "@/lib/navigation";
 import { supabase } from "@/lib/supabase/client";
 
-// Landing page of the sign-up confirmation email. The auth client reads the link on load.
+const noSubscription = () => () => {};
+
+// The address carries an error from Google or Apple (not from an email link).
+function useProviderSignInError() {
+  return useSyncExternalStore(
+    noSubscription,
+    () => isProviderSignInError(readAuthLinkError(window.location.href), window.location.href),
+    () => false,
+  );
+}
+
+// Landing page of the sign-up confirmation email and of the return from Google or Apple. The auth
+// client reads the session from the address on load. A new account is sent to the onboarding by
+// OnboardingGate on /week.
 function AuthCallback() {
   const router = useRouter();
   const identity = useIdentity();
   const next = useNextParam();
   const linkError = useAuthLinkErrorMessage();
-  const destination = next ?? defaultAfterSignupPath;
+  const providerError = useProviderSignInError();
+  const destination = next ?? defaultAfterLoginPath;
   const signedIn = identity.status === "ready" && Boolean(identity.userId) && !linkError;
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,10 +72,23 @@ function AuthCallback() {
 
   if (identity.status !== "ready" || signedIn) {
     return (
-      <AuthPageShell title={signedIn ? "Cuenta activada" : "Comprobando el enlace…"}>
+      <AuthPageShell title="Entrando…">
         <p className="text-sm text-[color:var(--color-muted-foreground)]" role="status">
           {signedIn ? "Te llevamos a beCook…" : "Un momento."}
         </p>
+      </AuthPageShell>
+    );
+  }
+
+  // Back from Google or Apple with an error (cancelled, provider unavailable…): resending an email
+  // link does not apply, only trying again.
+  if (providerError) {
+    return (
+      <AuthPageShell title="No has iniciado sesión" guestHref={next ?? "/week"}>
+        <FormError>{linkError}</FormError>
+        <PrimaryButton asChild className="w-full">
+          <Link href={authHref("/login", next)} replace>Volver a iniciar sesión</Link>
+        </PrimaryButton>
       </AuthPageShell>
     );
   }

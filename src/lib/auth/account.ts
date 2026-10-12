@@ -19,6 +19,7 @@ const fallbackByAction = {
   recover: "No se pudo enviar el email. Inténtalo de nuevo.",
   resend: "No se pudo reenviar el email. Inténtalo de nuevo.",
   updatePassword: "No se pudo cambiar la contraseña. Inténtalo de nuevo.",
+  oauth: "No se pudo conectar. Inténtalo de nuevo o entra con tu email.",
 } as const;
 
 export type AccountAction = keyof typeof fallbackByAction;
@@ -46,7 +47,30 @@ const messageByCode: Record<string, string> = {
   session_expired: "Tu sesión ha caducado. Vuelve a pedir el enlace.",
   refresh_token_not_found: "Tu sesión ha caducado. Vuelve a pedir el enlace.",
   reauthentication_needed: "Por seguridad, vuelve a pedir el enlace para cambiar la contraseña.",
+  // Return from Google or Apple (/auth/callback).
+  access_denied: "Has cancelado el inicio de sesión. Puedes volver a intentarlo o entrar con tu email.",
+  user_cancelled_authorize: "Has cancelado el inicio de sesión. Puedes volver a intentarlo o entrar con tu email.",
+  provider_disabled: "Ahora mismo no se puede entrar así. Entra con tu email.",
+  bad_oauth_state: "No se pudo completar el inicio de sesión. Vuelve a intentarlo desde el principio.",
+  bad_oauth_callback: "No se pudo completar el inicio de sesión. Vuelve a intentarlo desde el principio.",
+  provider_email_needs_verification:
+    "Tu cuenta de ese proveedor no tiene el email verificado. Verifícalo allí o entra con tu email.",
+  identity_already_exists: "Esa cuenta ya está vinculada a otro usuario de beCook.",
+  user_banned: "Esta cuenta no puede entrar ahora mismo.",
 };
+
+// Errors that only come back from a provider sign-in: the callback offers to try again, not
+// to resend an email link.
+const providerErrorCodes = new Set([
+  "access_denied",
+  "user_cancelled_authorize",
+  "provider_disabled",
+  "bad_oauth_state",
+  "bad_oauth_callback",
+  "provider_email_needs_verification",
+  "identity_already_exists",
+  "user_banned",
+]);
 
 // Never shows provider wording (English, technical); unknown errors fall back per action.
 export function describeAccountError(error: unknown, action: AccountAction): AccountFailure {
@@ -199,5 +223,66 @@ export function readAuthLinkError(href: string): AccountFailure | null {
   const error = params.get("error");
   if (!code && !error && !params.get("error_description")) return null;
   if (code && messageByCode[code]) return { ok: false, message: messageByCode[code], code };
+  // A cancelled provider screen comes back as error=access_denied, sometimes without error_code.
+  if (!code && error === "access_denied") return { ok: false, message: messageByCode.access_denied, code: error };
+  // Back from Google or Apple with an error we do not name (server_error, unexpected_failure…).
+  if (url.searchParams.get("via") === "oauth") return { ok: false, message: fallbackByAction.oauth, code: code ?? error };
   return { ok: false, message: "El enlace no es válido o ya se ha usado. Pide uno nuevo.", code: code ?? error };
+}
+
+// An error after Google or Apple: the return address says so (via=oauth), and a few codes only
+// ever come from a provider.
+export function isProviderSignInError(failure: AccountFailure | null, href?: string) {
+  if (!failure) return false;
+  if (failure.code && providerErrorCodes.has(failure.code)) return true;
+  if (!href) return false;
+  try {
+    return new URL(href).searchParams.get("via") === "oauth";
+  } catch {
+    return false;
+  }
+}
+
+// --- Sign-in with Google or Apple ---------------------------------------------------------------
+
+export type OAuthProvider = "google" | "apple";
+
+// Display order on the account screens.
+const oauthProviders: readonly OAuthProvider[] = ["google", "apple"];
+
+export const oauthProviderLabels: Record<OAuthProvider, string> = { google: "Google", apple: "Apple" };
+
+// NEXT_PUBLIC_AUTH_PROVIDERS ("google", "google,apple"): providers enabled in this environment.
+// Unset or unknown values show no buttons, so an environment without the provider looks as before.
+export function enabledOAuthProviders(value: string | null | undefined): OAuthProvider[] {
+  const listed = new Set(
+    (value ?? "")
+      .split(",")
+      .map((name) => name.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  return oauthProviders.filter((provider) => listed.has(provider));
+}
+
+// Leaves for the provider's screen (the auth client changes the page); it comes back to
+// `redirectTo` (/auth/callback) with the session or with an error in the address.
+export async function signInWithProvider(
+  client: AuthClient | null,
+  provider: OAuthProvider,
+  { redirectTo }: { redirectTo: string },
+): Promise<{ ok: true } | AccountFailure> {
+  if (!client) return unavailable;
+  return attempt("oauth", async () => {
+    const { error } = await client.auth.signInWithOAuth({ provider, options: { redirectTo } });
+    return error ? describeAccountError(error, "oauth") : { ok: true as const };
+  });
+}
+
+// How the account signs in, from `user.identities` (email first, then providers in display order).
+export function signInMethodLabels(identities: readonly { provider?: string | null }[] | null | undefined) {
+  const providers = new Set((identities ?? []).map((identity) => identity.provider ?? ""));
+  const labels: string[] = [];
+  if (providers.has("email")) labels.push("Email y contraseña");
+  for (const provider of oauthProviders) if (providers.has(provider)) labels.push(oauthProviderLabels[provider]);
+  return labels;
 }

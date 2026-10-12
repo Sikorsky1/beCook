@@ -35,6 +35,8 @@ test("no hex colour outside globals.css, except the documented ones; warnings us
   const allowed = {
     "src/app/layout.tsx": ["#fff6ed"],
     "src/components/ui/Button.tsx": ["#e7efd9", "#fbe4d5"],
+    // Provider brand rules: Google's button (border, text, hover), its four-colour «G» and Apple's hover.
+    "src/components/session/OAuthButtons.tsx": ["#747775", "#1f1f1f", "#f2f2f2", "#333333", "#ea4335", "#4285f4", "#fbbc05", "#34a853"],
   };
   for (const file of sourceFiles("src")) {
     const found = (read(file).match(/#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g) ?? []).map((hex) => hex.toLowerCase());
