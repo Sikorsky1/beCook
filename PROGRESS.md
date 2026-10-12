@@ -810,6 +810,15 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | PR | [#22](https://github.com/Sikorsky1/beCook/pull/22) `audit-opt` → `main`, merge commit `519e08d` (junto con los días de la semana al importar, `7ffaaa4`). Checks en verde (application, database, e2e, Vercel) |
 | Despliegue be-cook | `dpl_8ukytWzYiicL5aeb7tvnoaLXFJPd` READY en `www.becook.xyz` (anterior para rollback: `dpl_6KZPeit1hCeAYEmPSMNrP6Bd6whK`). `/profile` sin sesión a 390 px: primera tarjeta «Guarda tu perfil en una cuenta», «Entra con Google o con tu email…» y «Entrar o crear cuenta» |
 
+## Importar menús sin los días escritos ✅ (2026-10-12)
+| Elemento | Resultado |
+|---|---|
+| Cambio | La importación reconoce los días como «L M X J V S D», abreviados («Lun», «Mié.») o numerados («Día 1» = lunes … «Día 7»). Las tablas con los días en columnas (cabecera de días y filas de comida y cena) y las tablas sin días (la primera fila es el lunes, la segunda el martes…, con aviso) se ordenan en el dispositivo, sin IA. Los prompts de `/api/import-menu` y `/api/menu-file-text` aplican las mismas reglas, y el filtro previo (`mentionsAnyDayName`) deja pasar tablas, palabras de comida y días de una letra |
+| PR | [#22](https://github.com/Sikorsky1/beCook/pull/22) `audit-opt` → `main`, merge commit `519e08d` (2026-10-12), junto con «Perfil sin sesión: entrar primero». Checks en verde (application, database, e2e, Vercel) |
+| Migración | Ninguna |
+| Validación | Unitarias 538/538, lint y typecheck; E2E local 28/28 (nuevo: tabla con L M X en columnas, sin IA) y en CI. Producción: tabla «L M X» pegada y ordenada en el dispositivo |
+| Despliegue be-cook | `dpl_8ukytWzYiicL5aeb7tvnoaLXFJPd` READY en `www.becook.xyz` |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
