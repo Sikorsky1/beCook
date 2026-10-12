@@ -56,3 +56,35 @@ jobs:
       - run: npm run test:db
       - if: always()
         run: npm run db:stop
+  e2e:
+    # P35: critical journeys with Playwright against local Supabase and a simulated OpenAI.
+    # Not a required check yet (decision 2 of wave 8). No repository secrets are used.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      # The runner's Google Chrome: no Playwright browser download.
+      E2E_CHANNEL: chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run db:start
+      - run: npm run db:reset
+      - run: npm run db:seed
+      - run: npm run test:e2e
+      - name: Upload Playwright report (failures only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/playwright/
+          retention-days: 7
+          if-no-files-found: ignore
+      - if: always()
+        run: npm run db:stop
