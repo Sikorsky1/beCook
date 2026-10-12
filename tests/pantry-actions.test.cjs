@@ -56,6 +56,16 @@ test("the basics catalogue offers only what the pantry does not have yet (accent
  assert.equal(new Set(names).size, names.length);
 });
 
+test("«Aceites y vinagres» is no longer a section: its items are basics, and old copies are read as basics", () => {
+ assert.ok(!storage.pantryCategoryOrder.includes("aceites y vinagres"));
+ for (const name of ["Aceite de oliva", "Aceite de girasol", "Vinagre"]) {
+  assert.equal(storage.pantryBasicsCatalog.find((item) => item.name === name).category, "básicos", name);
+ }
+ assert.equal(storage.getPantryItemCategory("vinagre"), "básicos");
+ const stored = storage.parseStoredPantryItems([{name: "Aceite de oliva", category: "aceites y vinagres", active: true}]);
+ assert.deepEqual(stored.map((item) => [item.name, item.category]), [["Aceite de oliva", "básicos"]]);
+});
+
 test("Compra «Se me acabó»: the pantry item with that name (plurals ignored) is marked as used up", async () => {
  account.insert("Tomate", "otros");
  account.insert("Sal", "básicos");

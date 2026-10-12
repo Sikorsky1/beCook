@@ -135,7 +135,7 @@ export function weekOnboardingAction(
 
 // Express pantry: common staples, none marked. Each tap is one B7 pantry write.
 export const expressPantryItems: { name: string; category: PantryCategory }[] = [
-  { name: "Aceite de oliva", category: "aceites y vinagres" },
+  { name: "Aceite de oliva", category: "básicos" },
   { name: "Sal", category: "básicos" },
   { name: "Pimienta", category: "especias" },
   { name: "Arroz", category: "básicos" },
@@ -144,7 +144,7 @@ export const expressPantryItems: { name: string; category: PantryCategory }[] = 
   { name: "Ajo en polvo", category: "especias" },
   { name: "Pimentón", category: "especias" },
   { name: "Orégano", category: "especias" },
-  { name: "Vinagre", category: "aceites y vinagres" },
+  { name: "Vinagre", category: "básicos" },
   { name: "Mostaza", category: "salsas" },
   { name: "Salsa de soja", category: "salsas" },
   { name: "Tomate triturado", category: "conservas" },

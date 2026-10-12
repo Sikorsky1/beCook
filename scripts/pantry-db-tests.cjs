@@ -245,6 +245,19 @@ async function runPantryTests({ check: baseCheck, sql, id, supabase, api, create
       assert.equal(added.status, "synced");
       assert.deepEqual(summary(rolloutRows), ["Aceite:false", "Comino:true", "Pimienta:true", "Sal:true"]);
     });
+
+    // The section «Aceites y vinagres» was removed: a client still sending it gets the item in Básicos.
+    setPantry([["Aceite de oliva", "básicos", true]]);
+    const legacyAdd = await supabase.rpc("add_pantry_items", { p_items: [
+      { id: crypto.randomUUID(), name: "aceite de oliva", category: "aceites y vinagres", active: true },
+      { id: crypto.randomUUID(), name: "Vinagre", category: "aceites y vinagres", active: true },
+    ] });
+    observed = legacyAdd;
+    check("pantry: an item sent with «aceites y vinagres» is stored and matched in «básicos»", () => {
+      assert.equal(legacyAdd.error, null);
+      assert.deepEqual(legacyAdd.data.items.map((item) => [item.result, item.row.category]), [["existing", "básicos"], ["created", "básicos"]]);
+      assert.deepEqual(rowsOf().map((row) => row.name + ":" + row.category), ["Aceite de oliva:básicos", "Vinagre:básicos"]);
+    });
   } finally {
     global.fetch = realFetch;
     if (previousWindow) Object.defineProperty(global, "window", previousWindow);
