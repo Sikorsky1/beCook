@@ -1,0 +1,57 @@
+name: Uptime becook.xyz
+
+# P37: comprobación externa ligera de producción cada 4 horas (GitHub puede retrasar u omitir
+# ejecuciones programadas). Solo peticiones públicas sin sesión ni secretos: la página de login
+# responde 200 y una ruta de IA sin sesión responde 401 (la API está viva y sigue protegida).
+# Si falla, el job falla y GitHub avisa por email al propietario del repositorio.
+# El schedule se activa cuando el archivo llega a la rama por defecto (main).
+
+on:
+  schedule:
+    - cron: '41 */4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  uptime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Login page and protected AI route
+        shell: python3 {0}
+        run: |
+          import sys
+          import urllib.error
+          import urllib.request
+
+          BASE = "https://becook.xyz"
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, *args, **kwargs):
+                  return None
+
+          opener = urllib.request.build_opener(NoRedirect)
+
+          def status(path, method="GET", body=None, headers=None):
+              request = urllib.request.Request(BASE + path, data=body, method=method, headers=headers or {})
+              try:
+                  with opener.open(request, timeout=20) as response:
+                      return response.status
+              except urllib.error.HTTPError as error:
+                  return error.code
+              except Exception as error:
+                  print(f"{path}: sin respuesta ({type(error).__name__})")
+                  return None
+
+          checks = [
+              ("/login", status("/login"), {200}),
+              ("/api/generate-menu sin sesión", status("/api/generate-menu", "POST", b"{}", {"content-type": "application/json"}), {401}),
+          ]
+          failed = False
+          for name, got, expected in checks:
+              ok = got in expected
+              failed |= not ok
+              print(f"{'OK ' if ok else 'FAIL'} {name}: {got} (esperado {sorted(expected)})")
+          sys.exit(1 if failed else 0)
