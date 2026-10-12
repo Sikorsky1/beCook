@@ -94,7 +94,7 @@ import { pageContentClass, pageShellClass } from "@/lib/ui";
 
 const freeTextPromptMaxLength = 300;
 
-// «generate» is the main path; «import» means the «¿Ya tienes un menú? Pégalo» disclosure is open
+// «generate» is the main path; «import» means the «¿Ya tienes un menú? Pégalo o súbelo» disclosure is open
 // (C6, step 32: no tabs any more). ?mode=import opens it.
 type CreateMenuMode = "import" | "generate";
 
@@ -1330,7 +1330,7 @@ function CreateMenuPageContent() {
             className="flex min-h-11 w-full items-center gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-2.5 text-left text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
           >
             <ClipboardPaste aria-hidden="true" className="h-4 w-4 shrink-0 text-[color:var(--color-muted-foreground)]" />
-            <span className="flex-1">¿Ya tienes un menú? Pégalo</span>
+            <span className="flex-1">¿Ya tienes un menú? Pégalo o súbelo</span>
             <ChevronDown
               aria-hidden="true"
               className={`h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none ${mode === "import" ? "rotate-180" : ""}`}

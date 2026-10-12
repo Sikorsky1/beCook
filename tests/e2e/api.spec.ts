@@ -9,6 +9,7 @@ const aiRoutes: Record<string, object> = {
   "import-menu": prose,
   "substitute-dish": { day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: [] },
   "generate-shopping-list": { week: [{ day: "Lunes", date: "12 oct", lunch: "Lentejas", dinner: "LIBRE" }] },
+  "menu-file-text": { images: ["data:image/jpeg;base64,/9j/4AAQSkZJRg=="] },
   "dish-card": { isoWeek: "2026-W42", day: "Lunes", meal: "lunch", dish: "Lentejas estofadas", expectedVersion: 1, requestKey: "50000000-0000-4000-8000-000000000001" },
 };
 

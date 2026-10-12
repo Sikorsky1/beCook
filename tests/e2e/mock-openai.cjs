@@ -6,7 +6,8 @@ const http = require("node:http");
 const fixtures = require("./fixtures/openai-responses.json");
 
 const HOST = "127.0.0.1";
-const MAX_BODY = 1024 * 1024;
+// Above the 4 MB of /api/menu-file-text (page images).
+const MAX_BODY = 5 * 1024 * 1024;
 
 function pickDishes(preferred, catalog, used, count) {
   const chosen = [];
@@ -51,6 +52,7 @@ function chatContent(schema, body) {
   if (schema === "menu_selection") return menuSelection(body);
   if (schema === "dish_substitution") return fixtures.dishSubstitution;
   if (schema === "imported_menu") return fixtures.importedMenu;
+  if (schema === "menu_file_text") return fixtures.menuFileText;
   return null;
 }
 

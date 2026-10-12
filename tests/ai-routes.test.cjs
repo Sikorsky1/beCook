@@ -9,6 +9,7 @@ const selection = {
  dinners: ["Tortilla de patata", "Ensalada de tomate y queso fresco", "Salmón a la plancha", "Crema de calabaza", "Revuelto de champiñones", "Bacalao al pilpil", "Tosta de aguacate"],
 };
 const importedMenu = {week: "Semana importada", days: [{dayName: "Lunes", lunch: {status: "planned", dishName: "Lentejas"}, dinner: {status: "free", dishName: ""}}]};
+let menuFileText = {found: true, text: "Lunes\nComida: Lentejas\nCena: LIBRE"};
 const shoppingList = {items: [{name: "lentejas", quantity: 500, unit: "g", category: "despensa"}]};
 
 const routes = {
@@ -19,23 +20,31 @@ const routes = {
  "substitute-dish": {profile: {dietaryRestrictions: ["vegan"]}, valid: {day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: ["Lentejas estofadas", "Espaguetis con brócoli", "Escalibada", "Espárragos, berenjena, calabacín y zanahoria plancha"]}, invalidShape: {day: "Lunes", meal: "brunch"}, maxBytes: 16 * 1024},
  "generate-shopping-list": {valid: {week: [{day: "Lunes", date: "5 oct", lunch: "Lentejas", dinner: "LIBRE"}]}, invalidShape: {week: [{day: "Lunes", date: "5 oct", lunch: {dish: "x"}, dinner: "LIBRE"}]}, maxBytes: 16 * 1024},
  // C2: one dish of the caller's week (the synthetic week has «Lentejas estofadas» on Monday lunch, version 3).
+ // «Ya tengo un menú» from a photo or a scanned PDF: page images, read by the AI.
+ "menu-file-text": {valid: {images: ["data:image/jpeg;base64,/9j/4AAQSkZJRg=="]}, invalidShape: {images: ["https://example.com/menu.jpg"]}, maxBytes: 4 * 1024 * 1024},
  "dish-card": {valid: {isoWeek: "2026-W41", day: "Lunes", meal: "lunch", dish: "Lentejas estofadas", expectedVersion: 3, requestKey: "50000000-0000-4000-8000-000000000001"}, invalidShape: {isoWeek: "2026-W41", day: "Lunes", meal: "brunch", dish: "Lentejas estofadas", expectedVersion: 3, requestKey: "50000000-0000-4000-8000-000000000001"}, maxBytes: 4 * 1024},
 };
 const dishCard = {baseServings: 2, totalMinutes: 50, ingredients: [{name: "lentejas", quantity: 200, unit: "g", category: "despensa", optional: false}], steps: ["Cocer las lentejas con las verduras."], possibleAllergens: []};
 
 let fakes;
 
+let lastOpenAIBody = null;
+
 function openAIResponder(url, init) {
+ lastOpenAIBody = JSON.parse(init.body);
  if (url.endsWith("/responses")) {
   const content = JSON.parse(init.body).text?.format?.name === "dish_card" ? dishCard : shoppingList;
   return Response.json({id: "resp_test", object: "response", status: "completed", model: "gpt-5.6-sol", output: [{type: "message", id: "msg_test", role: "assistant", status: "completed", content: [{type: "output_text", text: JSON.stringify(content), annotations: []}]}], usage: {input_tokens: 10, output_tokens: 10, total_tokens: 20}});
  }
  const schema = JSON.parse(init.body).response_format?.json_schema?.name;
- const content = schema === "imported_menu" ? importedMenu : schema === "dish_substitution" ? {dish: "Garbanzos con espinacas y comino"} : selection;
+ const content = schema === "menu_file_text" ? menuFileText : schema === "imported_menu" ? importedMenu : schema === "dish_substitution" ? {dish: "Garbanzos con espinacas y comino"} : selection;
  return Response.json({choices: [{finish_reason: "stop", message: {content: JSON.stringify(content)}}], usage: {prompt_tokens: 10, completion_tokens: 10, total_tokens: 20}});
 }
 
-beforeEach(() => { fakes = installFakeBackends(openAIResponder); });
+beforeEach(() => {
+ menuFileText = {found: true, text: "Lunes\nComida: Lentejas\nCena: LIBRE"};
+ fakes = installFakeBackends(openAIResponder);
+});
 afterEach(() => fakes.restore());
 
 function post(path, {body, token, contentType = "application/json", raw, contentLength} = {}) {
@@ -200,5 +209,32 @@ test("account/delete: 415, 413 (header before Auth, and streamed), 400 and wrong
  assert.equal((await send({body: [1]})).status, 400);
  assert.equal((await send({body: {confirmation: "eliminar"}})).status, 400);
  // The admin API is not a known backend of the fakes: any call to it would count here.
+ assert.equal(fakes.openAICalls, 0);
+});
+
+test("menu-file-text: the images go to OpenAI unstored and the text comes back for the paste box", async () => {
+ const {POST} = require("../src/app/api/menu-file-text/route.ts");
+ const response = await POST(post("menu-file-text", {body: {images: ["data:image/jpeg;base64,/9j/4AAQSkZJRg==", "data:image/png;base64,iVBORw0KGgo="]}, token: validToken}));
+ assert.equal(response.status, 200);
+ assert.deepEqual(await response.json(), {text: "Lunes\nComida: Lentejas\nCena: LIBRE"});
+ assert.equal(fakes.begin.length, 1, "counts as an import in the AI ledger");
+ const sent = lastOpenAIBody;
+ assert.equal(sent.store, false);
+ assert.deepEqual(sent.messages[1].content.filter(part => part.type === "image_url").map(part => part.image_url.url.slice(0, 15)), ["data:image/jpeg", "data:image/png;"]);
+});
+
+test("menu-file-text: no menu in the images -> 422 that still counts", async () => {
+ menuFileText = {found: false, text: ""};
+ const {POST} = require("../src/app/api/menu-file-text/route.ts");
+ const response = await POST(post("menu-file-text", {body: {images: ["data:image/jpeg;base64,/9j/4AAQSkZJRg=="]}, token: validToken}));
+ assert.equal(response.status, 422);
+ assert.equal((await response.json()).reason, "no_text_found");
+ assert.equal(fakes.openAICalls, 1);
+});
+
+test("menu-file-text: more than 4 images -> 400 before OpenAI", async () => {
+ const {POST} = require("../src/app/api/menu-file-text/route.ts");
+ const images = Array(5).fill("data:image/jpeg;base64,/9j/4AAQSkZJRg==");
+ assert.equal((await POST(post("menu-file-text", {body: {images}, token: validToken}))).status, 400);
  assert.equal(fakes.openAICalls, 0);
 });

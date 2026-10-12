@@ -295,7 +295,7 @@ test("the accessible names frozen for E2E are still in the code", () => {
       "Repetir la semana ${previousIsoWeek.isoWeek}", 'aria-label="Ir a un día de la semana"',
       'aria-label={`${day.name} ${dayNumber}${cell.isToday ? ", hoy" : ""}${cell.hasMenu ? "" : ", sin menú"}`}',
     ],
-    "src/components/pages/CreateMenuPage.tsx": ["Prepara tu menú semanal", "Volver a Semana", "¿Ya tienes un menú? Pégalo", "Crear menú semanal"],
+    "src/components/pages/CreateMenuPage.tsx": ["Prepara tu menú semanal", "Volver a Semana", "¿Ya tienes un menú? Pégalo o súbelo", "Crear menú semanal"],
     "src/components/features/ImportMenuPanel.tsx": ["Procesar menú"],
     "src/components/features/ProposalActionBar.tsx": ['"Usar este menú"'],
     "src/components/pages/ShoppingListPage.tsx": [
