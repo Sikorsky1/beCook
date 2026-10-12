@@ -71,3 +71,8 @@ service-account*.json
 /.supabase-local/
 /supabase/.temp/
 /supabase/.branches/
+
+# Playwright E2E (P35): reports and traces stay local; CI uploads them only on failure.
+/test-results/
+/playwright-report/
+/blob-report/
