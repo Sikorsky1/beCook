@@ -632,7 +632,7 @@ export default function ProfilePage() {
           </Card>
 
           {!savedProfile && hasLoadedProfile ? (
-            <div className={`sticky bottom-[calc(6rem+env(safe-area-inset-bottom))] z-20 border-t border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 py-3 backdrop-blur ${pageBleedClass}`}>
+            <div data-profile-save-bar className={`sticky bottom-[calc(6rem+env(safe-area-inset-bottom))] z-20 border-t border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 py-3 backdrop-blur ${pageBleedClass}`}>
               <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-h-5 min-w-0">
                   <SectionFeedback state={saveStates.all} />

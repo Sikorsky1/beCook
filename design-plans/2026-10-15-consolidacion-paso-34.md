@@ -267,3 +267,16 @@ Aprobado por el revisor delegado con estas condiciones, ya incorporadas arriba y
 4. Constante `pageStickyColumnClass` con el `gap` del que depende el `-mt-4 sm:-mt-5` de la cabecera.
 5. Avisos: `clear()` ya no descarta respuestas en camino y los fallos se muestran aunque haya una
    acción posterior (`reset()` para cambio de identidad o semana).
+
+### Ampliación en la integración de la ola 8 (2026-10-12)
+
+En el recorrido de integración, una cuenta sin perfil guardado (onboarding saltado) muestra en Perfil
+la barra fija «Guardar perfil» (`sticky`, 6rem sobre el borde; 105 px de alto: borde 1 + `py-3` 24 +
+aviso `min-h-5` 20 + `gap-3` 12 + botón `min-h-12` 48). Tapa 201 px desde abajo (643–748 px a
+390×844) y el `scroll-padding-bottom` de 104 px no la cubría: al tabular, un chip enfocado quedaba
+medio debajo («Mejorar rendimiento deportivo» 631–675 px). Dentro de la condición 1 de arriba
+(aprobación delegada por el coordinador): la barra lleva `data-profile-save-bar` y `<html>` añade
+`has-[[data-profile-save-bar]]:scroll-pb-[calc(14rem+env(safe-area-inset-bottom))]` (224 px), solo
+Tailwind, igual que con `ProposalActionBar`. Test en `tests/ui-consolidation.test.cjs` (clase, marca y
+alto calculado de la barra). Comprobado en el navegador a 390×844 con una cuenta local sin perfil.
+

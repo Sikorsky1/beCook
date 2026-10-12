@@ -165,6 +165,18 @@ test("focus and scrolled-to targets never land under the fixed bars (scroll-padd
   assert.ok(classes.includes("has-[[data-proposal-bar]]:scroll-pb-[calc(15rem+env(safe-area-inset-bottom))]"));
   const bar = read("src/components/features/ProposalActionBar.tsx");
   assert.match(bar, /<div data-proposal-bar className="pointer-events-none fixed inset-x-0 bottom-\[calc\(6\.5rem\+env\(safe-area-inset-bottom\)\)\]/, "position unchanged");
+
+  // With the «Guardar perfil» bar of Perfil (sticky 6rem above the bottom, shown while there is no
+  // saved profile): border-t 1 + py-3 24 + feedback min-h-5 20 + gap-3 12 + button min-h-12 48 =
+  // 105 px, so it covers 96 + 105 = 201 px from the bottom (measured 643–748 px at 390×844);
+  // 14rem = 224 px leaves some air. Before, a focused chip could sit half under it.
+  assert.ok(classes.includes("has-[[data-profile-save-bar]]:scroll-pb-[calc(14rem+env(safe-area-inset-bottom))]"));
+  const profile = read("src/app/profile/page.tsx");
+  assert.match(profile, /<div data-profile-save-bar className=\{`sticky bottom-\[calc\(6rem\+env\(safe-area-inset-bottom\)\)\] z-20 border-t border-\[color:var\(--color-border\)\] bg-\[color:var\(--color-background\)\]\/95 py-3 /);
+  for (const piece of ["flex-col gap-3", '<div className="min-h-5 min-w-0">', 'size="lg"']) assert.ok(profile.includes(piece), piece);
+  assert.match(read("src/components/ui/Button.tsx"), /lg: "min-h-12 /);
+  const saveBarCover = 6 * 16 + 1 + 24 + 20 + 12 + 48;
+  assert.ok(14 * 16 >= saveBarCover + 16, `${saveBarCover} px covered`);
 });
 
 test("ShoppingTabs: only the current routes (the old ones redirect before rendering)", () => {
