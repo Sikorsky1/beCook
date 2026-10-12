@@ -153,7 +153,7 @@ type ShoppingSectionProps = {
 export function ShoppingSection({ category, rows, done, total, actions }: ShoppingSectionProps) {
   const id = shoppingSectionId(category);
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-64">
+    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-[calc(7.5rem+env(safe-area-inset-top))]">
       <div className="flex items-baseline justify-between gap-3 px-1">
         <h2 id={`${id}-title`} tabIndex={-1} className="t-h3 text-[color:var(--color-foreground)]">
           {capitalize(category)}

@@ -14,6 +14,7 @@ import {
   compactInputClass,
   goalOptions,
 } from "@/components/features/ProfileFields";
+import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
 import { useIdentity, useIdentityActions } from "@/components/session/IdentityProvider";
 import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
 import { SyncStatus } from "@/components/session/SyncStatus";
@@ -47,7 +48,7 @@ import {
   type UserProfile,
   type WeeklyTrainingDays,
 } from "@/lib/supabase/profiles";
-import { pageShellClass } from "@/lib/ui";
+import { pageBleedClass, pageShellStickyClass } from "@/lib/ui";
 
 const sexOptions: { label: string; value: Sex }[] = [
   { label: "Hombre", value: "male" },
@@ -377,18 +378,9 @@ export default function ProfilePage() {
     : null;
 
   return (
-    <main
-      className={`${pageShellClass} px-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-6`}
-    >
+    <main className={pageShellStickyClass}>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
-        <section className="sticky top-0 z-30 -mx-3 border-b border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 px-3 pb-3 pt-3 backdrop-blur sm:-mx-6 sm:px-6">
-          <div>
-            <p className="t-eyebrow">Perfil</p>
-            <h1 className="t-h1 mt-2 text-[color:var(--color-foreground)]">
-              Lo que necesita tu menú
-            </h1>
-          </div>
-        </section>
+        <StickyPageHeader title="Perfil" heading="Lo que necesita tu menú" />
 
         <Card className="space-y-3 p-3.5 sm:p-4">
           <div className="flex items-center gap-3">
@@ -639,7 +631,7 @@ export default function ProfilePage() {
           </Card>
 
           {!savedProfile && hasLoadedProfile ? (
-            <div className="sticky bottom-[calc(6rem+env(safe-area-inset-bottom))] z-20 -mx-3 border-t border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 px-3 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+            <div className={`sticky bottom-[calc(6rem+env(safe-area-inset-bottom))] z-20 border-t border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 py-3 backdrop-blur ${pageBleedClass}`}>
               <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-h-5 min-w-0">
                   <SectionFeedback state={saveStates.all} />

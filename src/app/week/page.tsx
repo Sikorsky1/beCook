@@ -7,6 +7,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { DishCard } from "@/components/features/DishCard";
 import { dishCardRestrictions } from "@/lib/recipes/dishCardFlow";
 import { type RequestDishIdea, WeekDayCard } from "@/components/features/WeekDayCard";
+import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { OnboardingGate } from "@/components/session/OnboardingGate";
 import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
@@ -38,7 +39,7 @@ import {
 } from "@/lib/data/repositories";
 import { createMenuImportHref } from "@/lib/navigation";
 import { hasPlannedMeals, repeatPreviousWeek, type RepeatWeekResult } from "@/lib/repeatWeek";
-import { pageShellClass } from "@/lib/ui";
+import { pageShellStickyClass } from "@/lib/ui";
 import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
 import { withWeekDates } from "@/lib/weekStorage";
 import {
@@ -86,7 +87,6 @@ function WeekPageContent() {
   const [profileEntry, setProfileEntry] = useState<{ key: string; data: unknown } | null>(null);
   // C1: the food context this week was planned with, compared with the profile now.
   const [foodContextEntry, setFoodContextEntry] = useState<{ key: string; status: WeekFoodContextStatus | null } | null>(null);
-  const headerRef = useRef<HTMLElement | null>(null);
   // C2: the dish card open (one meal), and «Cambiar plato» handed to that day's editor.
   const [dishCardSlot, setDishCardSlot] = useState<{ day: string; meal: MealKey } | null>(null);
   const [dishEditRequest, setDishEditRequest] = useState<{ day: string; meal: MealKey; key: number } | null>(null);
@@ -382,11 +382,9 @@ function WeekPageContent() {
       return;
     }
 
-    const headerOffset = (headerRef.current?.offsetHeight ?? 164) + 8;
-    const top =
-      dayCard.getBoundingClientRect().top + window.pageYOffset - headerOffset;
-
-    window.scrollTo({ top, behavior: "smooth" });
+    // Step 34: the day lands under the fixed header thanks to its scroll-margin (no measuring).
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    dayCard.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
   };
 
   const handleMealChange = (
@@ -426,84 +424,52 @@ function WeekPageContent() {
   };
 
   return (
-    <main
-      className={`${pageShellClass} px-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-6`}
-    >
+    <main className={pageShellStickyClass}>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
-        <section
-          ref={headerRef}
-          className="sticky top-0 z-30 -mx-3 border-b border-[color:var(--color-border)] bg-[color:var(--color-background)]/90 px-3 pb-3 pt-3 backdrop-blur sm:-mx-6 sm:px-6"
-        >
-          <div>
-            <p className="t-eyebrow">Plan semanal</p>
-            <div className="mt-1.5 flex items-center justify-between gap-2">
-              <h1
-                aria-label={selectedIsoWeek ? formatIsoWeekTitle(selectedIsoWeek) : undefined}
-                className="t-h1 min-w-0 flex-1 text-balance text-[color:var(--color-foreground)]"
-              >
-                {selectedIsoWeek ? (
-                  <>
-                    <span className="sm:hidden">
-                      {formatIsoWeekTitle(selectedIsoWeek, { compact: true })}
-                    </span>
-                    <span className="hidden sm:inline">
-                      {formatIsoWeekTitle(selectedIsoWeek)}
-                    </span>
-                  </>
-                ) : (
-                  "Preparando calendario"
-                )}
-              </h1>
-              <div className="flex shrink-0 items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleNavigateWeek(-1)}
-                  disabled={!selectedIsoWeek}
-                  aria-label="Semana anterior"
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  ‹
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleNavigateWeek(1)}
-                  disabled={!selectedIsoWeek}
-                  aria-label="Semana siguiente"
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  ›
-                </button>
-              </div>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              {isCurrentWeek ? (
-                <span className="text-sm font-semibold text-[color:var(--color-muted-foreground)]">
-                  Semana actual
+        {/* Step 34: the bar (with the week arrows) and the day strip stay; the title scrolls. */}
+        <StickyPageHeader
+          title="Plan semanal"
+          headingLabel={selectedIsoWeek ? formatIsoWeekTitle(selectedIsoWeek) : undefined}
+          heading={
+            selectedIsoWeek ? (
+              <>
+                <span className="sm:hidden">
+                  {formatIsoWeekTitle(selectedIsoWeek, { compact: true })}
                 </span>
-              ) : selectedIsoWeek && today ? (
-                <button
-                  type="button"
-                  onClick={() => goToWeek(today.week)}
-                  className="min-h-11 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)]"
-                >
-                  <span aria-hidden="true">↩</span> Volver a hoy
-                </button>
-              ) : (
-                <span />
-              )}
-              {weekDays && selectedIsoWeek ? (
-                <Link
-                  href={buildWeekHref("/create-menu", selectedIsoWeek)}
-                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-accent-strong)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-colors hover:border-[color:var(--color-accent-strong-hover)] hover:bg-[color:var(--color-accent-strong-hover)]"
-                >
-                  Editar menú
-                </Link>
-              ) : null}
+                <span className="hidden sm:inline">
+                  {formatIsoWeekTitle(selectedIsoWeek)}
+                </span>
+              </>
+            ) : (
+              "Preparando calendario"
+            )
+          }
+          action={
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleNavigateWeek(-1)}
+                disabled={!selectedIsoWeek}
+                aria-label="Semana anterior"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavigateWeek(1)}
+                disabled={!selectedIsoWeek}
+                aria-label="Semana siguiente"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ›
+              </button>
             </div>
-
-            {selectedIsoWeek && weekDayNumbers ? (
+          }
+          pinned={
+            selectedIsoWeek && weekDayNumbers ? (
               <div
-                className="mt-2.5 grid grid-cols-7 gap-1 sm:gap-1.5"
+                className="grid grid-cols-7 gap-1 sm:gap-1.5"
                 role="group"
                 aria-label="Ir a un día de la semana"
               >
@@ -542,9 +508,35 @@ function WeekPageContent() {
                   );
                 })}
               </div>
+            ) : null
+          }
+        >
+          <div className="flex items-center justify-between gap-2">
+            {isCurrentWeek ? (
+              <span className="text-sm font-semibold text-[color:var(--color-muted-foreground)]">
+                Semana actual
+              </span>
+            ) : selectedIsoWeek && today ? (
+              <button
+                type="button"
+                onClick={() => goToWeek(today.week)}
+                className="min-h-11 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)]"
+              >
+                <span aria-hidden="true">↩</span> Volver a hoy
+              </button>
+            ) : (
+              <span />
+            )}
+            {weekDays && selectedIsoWeek ? (
+              <Link
+                href={buildWeekHref("/create-menu", selectedIsoWeek)}
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-accent-strong)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-colors hover:border-[color:var(--color-accent-strong-hover)] hover:bg-[color:var(--color-accent-strong-hover)]"
+              >
+                Editar menú
+              </Link>
             ) : null}
           </div>
-        </section>
+        </StickyPageHeader>
 
         <OnboardingGate />
 
@@ -623,7 +615,7 @@ function WeekPageContent() {
           {weekDays && layout ? (
             <div className="flex flex-col gap-4">
               {layout.todayPosition !== null ? (
-                <div id={`week-day-${layout.todayPosition}`} className="scroll-mt-[172px]">
+                <div id={`week-day-${layout.todayPosition}`} className="scroll-mt-[calc(7.5rem+env(safe-area-inset-top))]">
                   {layout.todayDay ? (
                     <WeekDayCard
                       key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}-${layout.todayDay.day}`}
@@ -656,7 +648,7 @@ function WeekPageContent() {
                     <div
                       key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}-${day.day}`}
                       id={`week-day-${getDayPosition(day.day)}`}
-                      className="scroll-mt-[172px]"
+                      className="scroll-mt-[calc(7.5rem+env(safe-area-inset-top))]"
                     >
                       <WeekDayCard
                         day={day}

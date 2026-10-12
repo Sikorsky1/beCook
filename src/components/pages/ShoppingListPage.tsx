@@ -49,7 +49,7 @@ import {
 } from "@/lib/data/shopping";
 import { formatIsoWeekTitle, getCurrentIsoWeek, type IsoWeek } from "@/lib/isoWeek";
 import { getAccessToken } from "@/lib/supabase/auth";
-import { pageShellClass } from "@/lib/ui";
+import { pageShellStickyClass } from "@/lib/ui";
 import {
   activePantryNames,
   pantryItemsOrDefault,
@@ -658,10 +658,9 @@ export default function ShoppingListPage() {
     : "";
 
   return (
-    <main
-      className={`${pageShellClass} min-h-dvh px-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-6`}
-    >
+    <main className={`${pageShellStickyClass} min-h-dvh`}>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
+        {/* Step 34: the bar (progress) and the section links stay; title, tabs and week line scroll. */}
         <StickyPageHeader
           title="Lista de la compra"
           heading="Tu compra"
@@ -673,12 +672,9 @@ export default function ShoppingListPage() {
               />
             ) : null
           }
-        >
-          <div className="space-y-2.5">
-            <ShoppingTabs />
-            {weekLine && hasLoadedWeek && weekDays && weekDays.length > 0 ? <p className="t-meta px-1">{weekLine}</p> : null}
-            {hasList && (sections.length > 0 || atHome.length > 0) ? (
-              <nav aria-label="Secciones de la lista" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          pinned={
+            hasList && (sections.length > 0 || atHome.length > 0) ? (
+              <nav aria-label="Secciones de la lista" className="-mx-1.5 -my-1.5 flex gap-2 overflow-x-auto px-1.5 py-1.5">
                 {sections.map((section) => (
                   <a
                     key={section.category}
@@ -703,7 +699,12 @@ export default function ShoppingListPage() {
                   </a>
                 ) : null}
               </nav>
-            ) : null}
+            ) : null
+          }
+        >
+          <div className="space-y-2.5">
+            <ShoppingTabs />
+            {weekLine && hasLoadedWeek && weekDays && weekDays.length > 0 ? <p className="t-meta px-1">{weekLine}</p> : null}
           </div>
         </StickyPageHeader>
 
@@ -828,7 +829,7 @@ export default function ShoppingListPage() {
                 />
               ))}
               {atHome.length > 0 ? (
-                <details id={shoppingSectionId("en-casa")} className="scroll-mt-64 rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+                <details id={shoppingSectionId("en-casa")} className="scroll-mt-[calc(7.5rem+env(safe-area-inset-top))] rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
                   <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-4 py-3">
                     <span className="t-body-strong text-[color:var(--color-foreground)]">
                       Ya lo tienes habitualmente ({atHome.length})

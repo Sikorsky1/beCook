@@ -28,7 +28,7 @@ import {
   type PantryChangeResult,
 } from "@/lib/data/pantry";
 import type { DataIdentity } from "@/lib/data/repositories";
-import { pageShellClass } from "@/lib/ui";
+import { pageShellStickyClass } from "@/lib/ui";
 import {
   capitalizePantryItemName,
   normalizePantryItemName,
@@ -167,7 +167,7 @@ function PantryItemsForCategory({
 }: PantryItemsForCategoryProps) {
   return (
     <Card className="overflow-hidden">
-      <div className="sticky top-0 z-10 border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-3 sm:px-5">
+      <div className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-3 sm:px-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 tabIndex={-1} className="t-h3 capitalize text-[color:var(--color-foreground)]">
@@ -521,10 +521,9 @@ export default function PantryPage() {
     null;
 
   return (
-    <main
-      className={`${pageShellClass} px-3 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-6`}
-    >
+    <main className={pageShellStickyClass}>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 sm:gap-5">
+        {/* Step 34: only the bar (progress) stays; title, tabs and categories scroll. */}
         <StickyPageHeader
           title="Despensa"
           heading="Tu despensa"
