@@ -846,12 +846,26 @@ export default function ShoppingListPage() {
                         <button
                           type="button"
                           onClick={(event) => {
-                            // The line leaves this group: the focus goes to the next one (or the group's title).
+                            // The line leaves this group: the focus goes to the next one. When it was
+                            // the last one the whole group goes away, so the focus follows the item to
+                            // its line in the list (its checkbox), once the pantry has been updated.
                             const line = event.currentTarget.closest("li");
-                            const target = (line?.nextElementSibling ?? line?.previousElementSibling)?.querySelector<HTMLElement>("button")
-                              ?? line?.closest("details")?.querySelector<HTMLElement>("summary");
+                            const sibling = (line?.nextElementSibling ?? line?.previousElementSibling)?.querySelector<HTMLElement>("button");
+                            const summary = line?.closest("details")?.querySelector<HTMLElement>("summary") ?? null;
+                            const label = `${capitalize(item.name)},`;
                             markUsedUp(item);
-                            requestAnimationFrame(() => target?.focus());
+                            if (sibling) {
+                              requestAnimationFrame(() => sibling.focus());
+                              return;
+                            }
+                            const followItem = (attempt: number) => {
+                              const moved = Array.from(document.querySelectorAll<HTMLElement>('input[type="checkbox"][aria-label]'))
+                                .find((box) => box.getAttribute("aria-label")?.startsWith(label));
+                              if (moved) moved.focus();
+                              else if (attempt < 40) window.setTimeout(() => followItem(attempt + 1), 50);
+                              else if (summary?.isConnected) summary.focus();
+                            };
+                            window.setTimeout(() => followItem(0), 50);
                           }}
                           aria-label={`Se me acabó: ${capitalize(item.name)}. Pasarlo a la lista`}
                           className="min-h-11 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-foreground)]"
