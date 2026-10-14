@@ -398,7 +398,8 @@ const pick = <T,>(items: T[], random: Random) => items[Math.floor(random() * ite
 type Slot = { protein: PlanProtein | null; carb: PlanCarb | null; free: boolean };
 
 // The rules as seven slots: proteins spread over the week, then each carbohydrate on a day of its
-// own. Days no rule covers are free at dinner (the plan's «Libre», the weekly social meal) and
+// own. Days no rule covers are free at dinner (the plan's «Libre», the weekly social meal: always
+// Saturday) and
 // «carne o pescado» at lunch.
 function slotsFor(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random): Slot[] {
   const proteins = plan[meal].rules.flatMap((rule) => (rule.protein && !rule.carb ? Array(rule.days).fill(rule.protein) : []));
@@ -407,11 +408,9 @@ function slotsFor(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random)
   const freeCount = meal === "dinner" ? Math.max(0, 7 - Math.max(planned.length, carbs.length)) : 0;
 
   const slots: Slot[] = Array.from({ length: 7 }, (_, index) => ({ protein: planned[index] ?? null, carb: null, free: false }));
-  // The free dinner goes where the plan's examples put «Libre» (Día 7: Sunday), else at the end.
+  // The free dinner is always on Saturday (Sergio's choice), then Sunday, Friday… if there are more.
   if (freeCount) {
-    const exampleFree = plan.dinner.examples.findIndex((dish) => /^libre\.?$/i.test(dish.trim()));
-    const order = [...Array(7).keys()].reverse();
-    const freeDays = exampleFree >= 0 ? [exampleFree, ...order.filter((day) => day !== exampleFree)] : order;
+    const freeDays = [5, 6, 4, 3, 2, 1, 0];
     const used = slots.filter((slot) => slot.protein).length;
     // Proteins move off the free days so that every rule keeps its days.
     const proteinsLeft = slots.map((slot) => slot.protein).filter(Boolean) as PlanProtein[];
@@ -697,6 +696,6 @@ export function planWarnings(plan: NutritionPlan, days: ImportedMenuDay[]) {
   const free = days.filter((day) => day.dinner.status === "free").map((day) => day.dayName.toLowerCase());
   return [
     "Es un plan nutricional: hemos elegido las comidas y las cenas siguiendo sus reglas y ejemplos. Cambia con «Otra idea» lo que no te encaje.",
-    ...(free.length ? [`Cena libre el ${free.join(" y el ")}, como indica el plan.`] : []),
+    ...(free.length ? [`Cena libre el ${free.join(" y el ")}: la comida social de la semana del plan.`] : []),
   ];
 }

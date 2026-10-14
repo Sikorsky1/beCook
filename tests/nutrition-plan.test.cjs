@@ -64,7 +64,7 @@ test("a weekly menu is not a plan, and the plan is not something the menu parser
  assert.equal(np.isNutritionPlanText(pdfText), true);
 });
 
-test("every generated week keeps the plan's rules: lunch proteins and carbohydrates, dinners, one free dinner", () => {
+test("every generated week keeps the plan's rules: lunch proteins and carbohydrates, dinners, one free dinner on Saturday", () => {
  for (let seed = 1; seed <= 60; seed++) {
   const days = np.generatePlanWeek(plan, seed);
   assert.deepEqual(days.map((day) => day.dayName), ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]);
@@ -73,7 +73,7 @@ test("every generated week keeps the plan's rules: lunch proteins and carbohydra
   assert.ok(lunches.every((slot) => slot.status === "planned"), `seed ${seed}: every lunch planned`);
   assert.deepEqual(count(lunches.map((slot) => np.dishProtein(slot.dishName))), {red_meat: 1, white_meat: 2, blue_fish: 2, white_fish: 2}, `seed ${seed}: ${lunches.map((slot) => slot.dishName).join(" / ")}`);
   assert.deepEqual(count(lunches.map((slot) => np.dishCarb(slot.dishName)).filter(Boolean)), {legume: 1, rice: 1, pasta: 1, potato: 1}, `seed ${seed}: carbohydrates`);
-  assert.deepEqual(dinners.map((slot) => slot.status), ["planned", "planned", "planned", "planned", "planned", "planned", "free"], "Día 7: Libre");
+  assert.deepEqual(dinners.map((slot) => slot.status), ["planned", "planned", "planned", "planned", "planned", "free", "planned"], "the free dinner is always Saturday");
   assert.deepEqual(count(dinners.filter((slot) => slot.status === "planned").map((slot) => np.dishProtein(slot.dishName))), {white_fish: 2, egg: 2, white_meat: 2}, `seed ${seed}: dinners`);
   assert.ok(dinners.every((slot) => !np.dishCarb(slot.dishName)), "no carbohydrate at dinner");
   const titles = [...lunches, ...dinners].filter((slot) => slot.status === "planned").map((slot) => slot.dishName);
