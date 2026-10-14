@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
-import { accountWithMenu, createUser, pageFor, settleAccountLoad, signIn } from "./helpers";
+import { accountDish, accountWithMenu, createUser, pageFor, settleAccountLoad, signIn } from "./helpers";
 
 // Paso 37: «Tus datos» exporta todo lo de la cuenta y la elimina con «ELIMINAR» escrito; después el
 // dispositivo olvida la sesión y su copia, y la semana avisa una vez.
@@ -8,6 +8,7 @@ test("exportar mis datos y eliminar la cuenta", async ({ browser }, testInfo) =>
   const user = await createUser("datos");
   const page = await pageFor(browser, testInfo, user);
   await accountWithMenu(page);
+  const dish = await accountDish(user);
 
   await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Perfil" }).click();
   await settleAccountLoad(page, page.getByRole("heading", { level: 1, name: "Lo que necesita tu menú" }));
@@ -25,7 +26,7 @@ test("exportar mis datos y eliminar la cuenta", async ({ browser }, testInfo) =>
   expect(text).toContain(user.email);
   expect(text).toContain(user.id);
   expect(text).not.toContain("ip_hash");
-  expect(JSON.stringify(exported)).toContain("Pollo asado con batata");
+  expect(JSON.stringify(exported)).toContain(dish);
   await expect(page.getByRole("status").filter({ hasText: /Descarga lista: becook-datos-/ })).toBeVisible();
 
   // Borrado: el botón espera a «ELIMINAR» exacto.

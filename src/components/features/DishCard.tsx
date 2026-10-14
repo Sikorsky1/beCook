@@ -9,12 +9,11 @@ import type { DataIdentity } from "@/lib/data/repositories";
 import { newRequestKey } from "@/lib/data/repositories";
 import type { IsoWeek } from "@/lib/isoWeek";
 import { loginHrefFor } from "@/lib/navigation";
-import { formatIngredientAmount, recipeAllergenLabels, type RecipeCard } from "@/lib/recipes/card";
+import { formatIngredientAmount, type RecipeCard, type RecipeCardContent } from "@/lib/recipes/card";
 import {
   cardToShow,
   dishCardSlotKey,
-  dishCompatibilityDisclaimer,
-  dishCompatibilityView,
+  dishConflictLabels,
   linkCatalogCard,
   loadDishCardView,
   requestEstimatedCard,
@@ -32,7 +31,7 @@ type DishCardProps = {
   weekDays: WeekDay[] | null;
   identity: DataIdentity;
   isoWeek: IsoWeek | null;
-  // Servings the week was planned for (C1); informative, the card is not scaled.
+  // Servings the week was planned for (C1). Not shown since 2026-10-15: the recipe says its own.
   weekServings: number | null;
   // C3: the current restrictions (account profile when signed in, device profile for a guest).
   restrictions: DishCardRestrictions;
@@ -46,127 +45,67 @@ type DishCardProps = {
 
 const mealLabels: Record<MealKey, string> = { lunch: "Comida", dinner: "Cena" };
 
-const compatibilityToneClasses = {
-  danger: "border-[color:var(--color-danger)] bg-[color:var(--color-danger-soft)]",
-  warning: "border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)]",
-  neutral: "border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)]",
-} as const;
-
-// C3: what the card (or only the title) says about the current profile. Static text, read in
-// order with the card; never «apto», at most «no hemos detectado conflictos».
-function CompatibilitySection({ title, card, restrictions }: { title: string; card: RecipeCard | null; restrictions: DishCardRestrictions }) {
-  const view = dishCompatibilityView(title, card, restrictions);
-  const headingId = `${useId()}-dish-card-compatibility`;
-
+// C3, simplified (2026-10-15): only what the dish certainly breaks, in one short line of labels
+// («Alergia: Gluten»). Nothing when no certain conflict is found.
+function ConflictLabels({ labels }: { labels: string[] }) {
+  if (!labels.length) return null;
   return (
-    <section aria-labelledby={headingId} className={`space-y-1.5 rounded-[var(--radius-input)] border px-3 py-3 ${compatibilityToneClasses[view.tone]}`}>
-      <h3 id={headingId} className="t-meta font-semibold text-[color:var(--color-foreground)]">
-        Compatibilidad con tu perfil
-      </h3>
-      <p className={`t-body-strong ${view.tone === "danger" ? "text-[color:var(--color-danger)]" : "text-[color:var(--color-foreground)]"}`}>
-        {view.heading}
-      </p>
-      {view.basis ? <p className="t-meta text-[color:var(--color-foreground)]">{view.basis}</p> : null}
-      {view.lines.length ? (
-        <ul className="t-body list-disc space-y-1 pl-5 text-[color:var(--color-foreground)]">
-          {view.lines.map((line) => (
-            <li key={line} className="[overflow-wrap:anywhere]">
-              {line}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {view.notes.map((note) => (
-        <p key={note} className="t-meta text-[color:var(--color-foreground)] [overflow-wrap:anywhere]">
-          {note}
-        </p>
+    <ul aria-label="Incompatible con tu perfil" className="flex flex-wrap gap-1.5">
+      {labels.map((label) => (
+        <li
+          key={label}
+          className="t-meta rounded-full border border-[color:var(--color-danger)] bg-[color:var(--color-danger-soft)] px-2.5 py-0.5 font-semibold text-[color:var(--color-danger)]"
+        >
+          {label}
+        </li>
       ))}
-      <p className="t-meta text-[color:var(--color-foreground)]">{dishCompatibilityDisclaimer}</p>
-    </section>
+    </ul>
   );
 }
 
-function CardBody({ card, weekServings }: { card: RecipeCard; weekServings: number | null }) {
-  const reviewed = card.reviewStatus === "reviewed";
+// Ingredients first, then the steps. «estimated»: a card the AI estimated from the title.
+function RecipeBody({ recipe, estimated }: { recipe: RecipeCardContent; estimated: boolean }) {
+  const id = useId();
+  const ingredientsId = `${id}-dish-card-ingredients`;
+  const stepsId = `${id}-dish-card-steps`;
+  const meta = [
+    `Para ${recipe.baseServings} ${recipe.baseServings === 1 ? "persona" : "personas"}`,
+    recipe.totalMinutes ? `${recipe.totalMinutes} min` : null,
+    estimated ? "Estimada por IA · sin revisar" : null,
+  ].filter(Boolean);
 
   return (
     <div className="space-y-4">
-      <p
-        className={`t-meta inline-flex rounded-full border px-3 py-1 font-semibold ${
-          reviewed
-            ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-secondary-hover)]"
-            : "border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] text-[color:var(--color-foreground)]"
-        }`}
-      >
-        {reviewed ? "Revisada" : "Estimada por IA · sin revisar"}
-      </p>
-      {!reviewed ? (
-        <p className="t-meta">
-          Ingredientes, cantidades y pasos estimados a partir del título. Compruébalos antes de cocinar, sobre todo si
-          en casa hay alergias.
-        </p>
-      ) : null}
+      <p className="t-meta">{meta.join(" · ")}</p>
 
-      <dl className="grid grid-cols-2 gap-2">
-        <div className="rounded-[var(--radius-input)] bg-[color:var(--color-surface-muted)] px-3 py-2">
-          <dt className="t-meta">Raciones de la ficha</dt>
-          <dd className="t-body-strong">{card.baseServings}</dd>
-        </div>
-        <div className="rounded-[var(--radius-input)] bg-[color:var(--color-surface-muted)] px-3 py-2">
-          <dt className="t-meta">Tiempo</dt>
-          <dd className="t-body-strong">{card.totalMinutes ? `${card.totalMinutes} min` : "Sin estimar"}</dd>
-        </div>
-      </dl>
-      {weekServings ? (
-        <p className="t-meta">
-          Esta semana está planificada para {weekServings} {weekServings === 1 ? "ración" : "raciones"}. La lista de la
-          compra ajusta las cantidades de esta ficha a esas raciones.
-        </p>
-      ) : null}
-
-      <section aria-labelledby="dish-card-ingredients">
-        <h3 id="dish-card-ingredients" className="t-body-strong">
+      <section aria-labelledby={ingredientsId}>
+        <h3 id={ingredientsId} className="t-body-strong">
           Ingredientes
         </h3>
         <ul className="mt-2 space-y-1.5">
-          {card.ingredients.map((ingredient, index) => (
+          {recipe.ingredients.map((ingredient, index) => (
             <li key={`${ingredient.name}-${index}`} className="t-body flex justify-between gap-3">
               <span className="min-w-0 [overflow-wrap:anywhere]">
                 {ingredient.name}
                 {ingredient.optional ? <span className="t-meta"> (opcional)</span> : null}
               </span>
-              <span className="t-meta shrink-0">{formatIngredientAmount(ingredient)}</span>
+              <span className="t-meta shrink-0">{formatIngredientAmount(ingredient) || "al gusto"}</span>
             </li>
           ))}
         </ul>
       </section>
 
-      <section aria-labelledby="dish-card-steps">
-        <h3 id="dish-card-steps" className="t-body-strong">
+      <section aria-labelledby={stepsId}>
+        <h3 id={stepsId} className="t-body-strong">
           Pasos
         </h3>
-        <ol className="t-body mt-2 list-decimal space-y-1.5 pl-5">
-          {card.steps.map((step, index) => (
+        <ol className="t-body mt-2 list-decimal space-y-2 pl-5">
+          {recipe.steps.map((step, index) => (
             <li key={index} className="[overflow-wrap:anywhere]">
               {step}
             </li>
           ))}
         </ol>
-      </section>
-
-      <section aria-labelledby="dish-card-allergens">
-        <h3 id="dish-card-allergens" className="t-body-strong">
-          Posibles alérgenos
-        </h3>
-        <p className="t-body mt-1">
-          {card.possibleAllergens.length
-            ? card.possibleAllergens.map((allergen) => recipeAllergenLabels[allergen]).join(", ")
-            : "La ficha no identifica ninguno de los 14 alérgenos de declaración obligatoria."}
-        </p>
-        <p className="t-meta mt-1">
-          Según los ingredientes de la ficha. No garantiza la ausencia de alérgenos ni de trazas: revisa siempre la
-          etiqueta de cada producto.
-        </p>
       </section>
     </div>
   );
@@ -177,7 +116,6 @@ export function DishCard({
   weekDays,
   identity,
   isoWeek,
-  weekServings,
   restrictions,
   loginReturnPath,
   onClose,
@@ -301,14 +239,20 @@ export function DishCard({
             </h2>
           </div>
 
-          {card || view?.kind === "title_only" ? <CompatibilitySection title={title} card={card} restrictions={restrictions} /> : null}
+          {card || view ? (
+            <ConflictLabels
+              labels={dishConflictLabels(title, card ?? (view?.kind === "catalog_recipe" ? view.recipe : null), restrictions)}
+            />
+          ) : null}
 
           {card ? (
-            <CardBody card={card} weekServings={weekServings} />
+            <RecipeBody recipe={card} estimated={card.reviewStatus !== "reviewed"} />
           ) : !view ? (
             <p className="t-body" role="status">
               Cargando la ficha…
             </p>
+          ) : view.kind === "catalog_recipe" ? (
+            <RecipeBody recipe={view.recipe} estimated={false} />
           ) : view.kind === "error" ? (
             <div className="space-y-2">
               <p className="t-body text-[color:var(--color-danger)]" role="alert">

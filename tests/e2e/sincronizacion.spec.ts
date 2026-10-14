@@ -1,5 +1,5 @@
 import { expect, test, type Request } from "@playwright/test";
-import { accountWithMenu, completeOnboarding, createUser, dishButton, generateProposal, pageFor, readOwnRows, savedStatus, settleAccountLoad, shoppingItem } from "./helpers";
+import { accountDish, accountWithMenu, completeOnboarding, createUser, dishButton, generateProposal, pageFor, readOwnRows, savedStatus, settleAccountLoad, shoppingItem } from "./helpers";
 
 test("sin red con la cuenta: pendiente de sincronizar, «Reintentar» y guardado al volver", async ({ browser }, testInfo) => {
   const user = await createUser("red");
@@ -29,14 +29,15 @@ test("dos dispositivos editan el mismo plato: el segundo ve el conflicto y la ve
   const user = await createUser("conflicto");
   const first = await pageFor(browser, testInfo, user);
   await accountWithMenu(first);
+  const tuesdayLunch = await accountDish(user);
   // Same account in another browser context (another device), opened before the first edit.
   const second = await pageFor(browser, testInfo, user);
   await second.goto("/week");
   await settleAccountLoad(second, savedStatus(second));
-  await expect(dishButton(second, "Lentejas estofadas")).toBeVisible();
+  await expect(dishButton(second, tuesdayLunch).first()).toBeVisible();
 
   async function editTuesdayLunch(page: typeof first, dish: string) {
-    await dishButton(page, "Lentejas estofadas").click();
+    await dishButton(page, tuesdayLunch).first().click();
     await page.getByRole("button", { name: "Cambiar plato de la comida del Martes" }).click();
     await page.getByRole("textbox", { name: "Comida del Martes" }).fill(dish);
     await page.getByRole("button", { name: "Guardar comida de Martes" }).click();

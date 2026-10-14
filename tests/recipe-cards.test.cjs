@@ -194,7 +194,7 @@ test("linking a card writes only that link (signed in) or this device (guest)", 
  assert.deepEqual(repos.readCachedWeek(guest, week41)[0].lunchRecipe, {versionId: V1});
 });
 
-test("dish card view: a card is shown only for its dish; history says «only the title»; catalogue cards are pending review", async () => {
+test("dish card view: a card is shown only for its dish; history says «only the title»; catalogue titles show their recipe", async () => {
  account.cards[V1] = cardFor("Tortilla de patata");
  const linked = {day: "Lunes", date: "", lunch: "Tortilla de patata", dinner: "Pisto", lunchRecipe: {versionId: V1}, dinnerRecipe: {versionId: V1}};
  const shown = await flow.loadDishCardView(linked, "lunch");
@@ -203,9 +203,8 @@ test("dish card view: a card is shown only for its dish; history says «only the
  const stale = await flow.loadDishCardView(linked, "dinner");
  assert.deepEqual(stale, {kind: "title_only", catalog: null, unreadableLink: false}, "a stale device link never shows another dish's card");
  const historic = await flow.loadDishCardView({day: "Lunes", date: "", lunch: "Tortilla de patata", dinner: "LIBRE"}, "lunch");
- assert.equal(historic.kind, "title_only");
- assert.equal(historic.catalog.catalogKey, "nutri-e41");
- assert.equal(historic.catalog.reviewedVersionId, null, "no reviewed catalogue card yet: «Ficha pendiente de revisión»");
+ assert.equal(historic.kind, "catalog_recipe", "no reviewed catalogue card yet: the repository recipe, without AI");
+ assert.ok(historic.recipe.ingredients.some(i => /huevo/.test(i.name)));
  account.catalog = new Map([["tortilla de patata", {versionId: V2}]]);
  repos.configureRemotes(null);
  account = Object.assign(inMemoryAccount(), {catalog: account.catalog});
@@ -422,11 +421,11 @@ test("C3 dish card: restrictions come from the account (status.current) or, for 
  assert.equal(flow.dishCompatibilityView("Tortilla", null, ready({})).heading, "Tu perfil no tiene restricciones ni alergias");
 });
 
-test("C3 dish card: the dialog shows the compatibility section with its basis and fixed notice; the week page passes the restrictions", () => {
+test("dish card dialog: only certain conflicts, as short labels; ingredients before steps; the week page passes the restrictions", () => {
  const source = fs.readFileSync(path.join(root, "src/components/features/DishCard.tsx"), "utf8");
- assert.match(source, /Compatibilidad con tu perfil/);
- assert.match(source, /dishCompatibilityDisclaimer/);
- assert.match(source, /aria-labelledby=\{headingId\}/);
+ assert.match(source, /dishConflictLabels\(/);
+ assert.doesNotMatch(source, /Compatibilidad con tu perfil|dishCompatibilityDisclaimer|Posibles alérgenos|No garantiza/);
+ assert.ok(source.indexOf("Ingredientes") < source.indexOf("Pasos"));
  assert.doesNotMatch(source, /text-xs|text-\[1[01]px\]/);
  const page = fs.readFileSync(path.join(root, "src/app/week/page.tsx"), "utf8");
  assert.match(page, /restrictions=\{dishCardRestrictions\(/);
@@ -437,4 +436,39 @@ test("C3 dish card: free-text labels without connectors", () => {
  assert.deepEqual(view.lines, ["Alergia: fresas: «fresas» en el nombre."]);
  const disliked = flow.dishCompatibilityView("Coliflor gratinada", null, ready({dislikedFoods: ["No me gusta la coliflor"]}));
  assert.deepEqual(disliked.lines, ["No te gusta «coliflor»: «coliflor» en el nombre."]);
+});
+
+test("dish card conflicts: «Alergia: Gluten» only when certain, by title or recipe; nothing otherwise", () => {
+ const recipe = {ingredients: [{name: "pan de molde", quantity: 2, unit: "rebanadas", category: "despensa", optional: false}, {name: "nueces", quantity: 20, unit: "g", category: "despensa", optional: true}], possibleAllergens: ["gluten"]};
+ assert.deepEqual(flow.dishConflictLabels("Tosta de aguacate", recipe, ready({allergies: ["gluten"]})), ["Alergia: Gluten"]);
+ assert.deepEqual(flow.dishConflictLabels("Tosta de aguacate", recipe, ready({allergies: ["nuts"]})), [], "an optional ingredient is not a certain conflict");
+ assert.deepEqual(flow.dishConflictLabels("Albóndigas de pollo", null, ready({allergies: ["gluten"]})), [], "possible, not certain");
+ assert.deepEqual(flow.dishConflictLabels("Tortilla de patata", null, ready({allergies: ["egg"], dietaryRestrictions: ["vegan"], dislikedFoods: ["patata"]})), ["Vegano", "Alergia: Huevo", "No te gusta: patata"]);
+ assert.deepEqual(flow.dishConflictLabels("Fresas con nata", null, ready({allergies: ["other"], otherAllergies: "fresas"})), ["Alergia: Fresas"]);
+ for (const state of [{state: "loading"}, {state: "unknown"}, {state: "no_profile"}, ready({})]) assert.deepEqual(flow.dishConflictLabels("Tosta de aguacate", recipe, state), []);
+});
+
+test("catalogue recipes: every recipe of the catalogue has a valid recipe for two, found by exact title", async () => {
+ const file = require("../src/data/recipe-cards/catalog-recipes.json");
+ const all = require("../src/data/nutritionist-recipes.json").recipes;
+ const {catalogRecipeIndex, loadCatalogRecipe} = require("../src/lib/recipes/catalogRecipeCards.ts");
+ assert.deepEqual(file.recipes.map(r => r.id).sort(), all.map(r => r.id).sort(), "one recipe per catalogue entry");
+ for (const entry of file.recipes) {
+  assert.equal(entry.title, all.find(r => r.id === entry.id).name, entry.id);
+  const checked = card.validateRecipeCardContent(entry.card);
+  assert.ok(checked.ok, `${entry.id}: ${checked.reason}`);
+  assert.equal(entry.card.baseServings, 2, entry.id);
+  assert.ok(entry.card.steps.length >= 3, entry.id);
+ }
+ assert.equal(catalogRecipeIndex(file).size, new Set(all.map(r => card.recipeTitleKey(r.name))).size);
+ const lentils = await loadCatalogRecipe(" lentejas  ESTOFADAS ");
+ assert.ok(lentils.ingredients.some(i => /lenteja/.test(i.name)));
+ assert.equal(await loadCatalogRecipe("Lentejas estofadas con chorizo"), null, "exact title only");
+});
+
+test("dish card view: a catalogue title without a linked card shows its recipe, without AI", async () => {
+ const day = {day: "Lunes", date: "", lunch: "Lentejas estofadas", dinner: "LIBRE"};
+ const view = await flow.loadDishCardView(day, "lunch");
+ assert.equal(view.kind, "catalog_recipe");
+ assert.equal(view.recipe.baseServings, 2);
 });

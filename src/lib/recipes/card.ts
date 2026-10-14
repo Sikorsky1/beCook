@@ -245,10 +245,18 @@ export function recipeCardFromRow(row: unknown): RecipeCard | null {
   };
 }
 
+// «1 unidades», «1 cucharaditas» read as «1 unidad», «1 cucharadita».
+const singularUnits: Record<string, string> = {
+  unidades: "unidad", cucharadas: "cucharada", cucharaditas: "cucharadita", dientes: "diente", latas: "lata",
+  hojas: "hoja", ramas: "rama", ramitas: "ramita", rebanadas: "rebanada", tazas: "taza", vasos: "vaso",
+  pizcas: "pizca", lonchas: "loncha", botes: "bote", sobres: "sobre", puñados: "puñado", filetes: "filete",
+};
+
 export function formatIngredientAmount(ingredient: RecipeIngredient) {
   if (ingredient.quantity === null) return ingredient.unit ?? "";
   const quantity = Number.isInteger(ingredient.quantity) ? String(ingredient.quantity) : ingredient.quantity.toLocaleString("es-ES");
-  return ingredient.unit ? `${quantity} ${ingredient.unit}` : quantity;
+  const unit = ingredient.quantity === 1 && ingredient.unit ? (singularUnits[ingredient.unit] ?? ingredient.unit) : ingredient.unit;
+  return unit ? `${quantity} ${unit}` : quantity;
 }
 
 // A card as returned by /api/dish-card (camelCase). Null when anything is off.

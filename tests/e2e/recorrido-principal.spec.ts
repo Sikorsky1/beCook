@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { applyProposal, completeOnboarding, dishButton, generateProposal, password, savedStatus, shoppingItem, uniqueEmail } from "./helpers";
+import { applyProposal, completeOnboarding, generateProposal, password, savedStatus, shoppingItem, uniqueEmail } from "./helpers";
 
 // Alta local → onboarding → propuesta → aplicar → semana → ficha → compra → marcar → recargar.
 test("alta, primer menú, ficha y compra que sobrevive a recargar @320", async ({ page }) => {
@@ -21,17 +21,20 @@ test("alta, primer menú, ficha y compra que sobrevive a recargar @320", async (
 
   await expect(page).toHaveURL(/\/week\?week=\d{4}-W\d{2}/);
   await expect(savedStatus(page)).toBeVisible();
-  await expect(dishButton(page, "Pollo asado con batata")).toBeVisible();
-  await expect(dishButton(page, "Tosta de Salmón ahumado")).toBeVisible();
+  // The week comes from the recipe catalogue: the dishes vary, so the first lunch is read back.
+  const firstLunch = page.getByRole("button", { name: /^Comida [^:]+: .+\. Ver ficha$/ }).first();
+  await expect(firstLunch).toBeVisible();
+  const dish = (await firstLunch.getAttribute("aria-label"))!.replace(/^Comida [^:]+: /, "").replace(/\. Ver ficha$/, "");
 
-  // Ficha: the catalogue dish has no card yet; the estimated one comes from the simulated OpenAI.
-  await dishButton(page, "Lentejas estofadas").click();
-  const card = page.getByRole("dialog", { name: "Lentejas estofadas" });
+  // Ficha: a catalogue dish shows its recipe for two (ingredients, then steps), without AI.
+  await firstLunch.click();
+  const card = page.getByRole("dialog", { name: dish });
   await expect(card).toBeVisible();
-  await card.getByRole("button", { name: "Crear ficha estimada (IA)" }).click();
-  await expect(card.getByText("Estimada por IA · sin revisar")).toBeVisible();
-  await expect(card.getByRole("region", { name: "Ingredientes" })).toContainText("tomate");
-  await expect(card.getByRole("region", { name: "Pasos" }).getByRole("listitem")).toHaveCount(2);
+  await expect(card.getByText(/^Para 2 personas/)).toBeVisible();
+  expect(await card.getByRole("region", { name: "Ingredientes" }).getByRole("listitem").count()).toBeGreaterThanOrEqual(3);
+  expect(await card.getByRole("region", { name: "Pasos" }).getByRole("listitem").count()).toBeGreaterThanOrEqual(3);
+  await expect(card.getByRole("button", { name: "Crear ficha estimada (IA)" })).toHaveCount(0);
+  await expect(card.getByText(/alérgenos|trazas|Compatibilidad/)).toHaveCount(0);
   await card.getByRole("button", { name: "Cerrar" }).click();
   await expect(card).toBeHidden();
 
@@ -46,7 +49,8 @@ test("alta, primer menú, ficha y compra que sobrevive a recargar @320", async (
   await eggs.click();
   await expect(eggs).toBeChecked();
   await expect(savedStatus(page)).toBeVisible();
-  await expect(page.getByText(/^1\/\d+ comprados$/)).toBeVisible();
+  // The counter is read once for screen readers and once animated (aria-hidden): the first is the text.
+  await expect(page.getByText(/^1\/\d+ comprados$/).first()).toBeVisible();
 
   await page.reload();
   await expect(page.getByRole("heading", { level: 1, name: "Tu compra" })).toBeVisible();
