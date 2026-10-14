@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, SpringOptions, useScroll, useSpring } from 'motion/react';
+import { motion, SpringOptions, useScroll, useSpring, useTransform } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { RefObject } from 'react';
 
@@ -21,7 +21,7 @@ export function ScrollProgress({
   springOptions,
   containerRef,
 }: ScrollProgressProps) {
-  const { scrollYProgress } = useScroll({
+  const { scrollY, scrollYProgress } = useScroll({
     container: containerRef,
   });
 
@@ -30,11 +30,16 @@ export function ScrollProgress({
     ...(springOptions ?? {}),
   });
 
+  // beCook: hidden at the top of the page (and on pages too short to scroll, where the
+  // progress reads as complete).
+  const opacity = useTransform(scrollY, [0, 24], [0, 1]);
+
   return (
     <motion.div
       className={cn('inset-x-0 top-0 h-1 origin-left', className)}
       style={{
         scaleX,
+        opacity,
       }}
     />
   );
