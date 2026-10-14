@@ -88,7 +88,7 @@ async function readPdf(file: File): Promise<MenuFileReadResult> {
   }
 
   try {
-    if (pdf.numPages > menuFileLimits.maxPages) return fail("too_many_pages");
+    if (pdf.numPages > menuFileLimits.maxTextPdfPages) return fail("too_many_pages");
 
     const pages: string[] = [];
     for (let number = 1; number <= pdf.numPages; number++) {
@@ -112,7 +112,8 @@ async function readPdf(file: File): Promise<MenuFileReadResult> {
     const text = pages.filter(Boolean).join("\n\n");
     if (countLetters(text) >= menuFileLimits.minPdfTextLetters) return { kind: "text", text };
 
-    // Scanned: each page as an image for the AI.
+    // Scanned: each page as an image for the AI, which takes fewer pages.
+    if (pdf.numPages > menuFileLimits.maxPages) return fail("too_many_pages");
     const images: string[] = [];
     for (let number = 1; number <= pdf.numPages; number++) {
       const page = await pdf.getPage(number);

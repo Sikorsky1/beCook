@@ -13,7 +13,10 @@ export type ScopedEntity =
   // B5: a proposed menu not applied yet, per week (never pending: it is not account data).
   | "menu-proposal"
   // C6: the Crear menú form (pasted text and preferences), per week, until the menu is saved.
-  | "menu-draft";
+  | "menu-draft"
+  // A nutritionist's plan applied to a week: what its breakfasts, mid-mornings and snacks need, until
+  // it is in the week's shopping list (as items added by hand).
+  | "plan-extras";
 
 export const STORAGE_FORMAT_VERSION = 1;
 
