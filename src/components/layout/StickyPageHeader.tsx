@@ -28,7 +28,7 @@ export function StickyPageHeader({
   action,
   pinned,
 }: StickyPageHeaderProps) {
-  const surface = "bg-[color:var(--color-background)]/95 backdrop-blur";
+  const surface = "bg-[color:var(--color-background)]/90 backdrop-blur-md";
 
   return (
     <>
@@ -39,7 +39,7 @@ export function StickyPageHeader({
         }`}
       >
         <div className="flex h-14 items-center justify-between gap-3">
-          <p className="t-eyebrow line-clamp-2 min-w-0">{title}</p>
+          <p className="line-clamp-2 min-w-0 text-[0.9375rem] font-semibold tracking-[-0.01em] text-[color:var(--color-foreground)]">{title}</p>
           {action}
         </div>
       </div>

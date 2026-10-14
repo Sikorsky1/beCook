@@ -59,7 +59,7 @@ export function SyncStatus({
           <button
             type="button"
             onClick={() => onRetry?.()}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
           >
             <RefreshCw aria-hidden="true" className="h-4 w-4" />
             Reintentar

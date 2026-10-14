@@ -17,15 +17,17 @@ const buttonSizeClasses: Record<ButtonSize, string> = {
   lg: "min-h-12 px-6 text-sm",
 };
 
+// Marigold: the primary is a raised orange material (gradient + inner highlight); the rest stay flat
+// with a hairline border. No hover lift: depth comes from the shadow alone.
 const buttonVariantClasses: Record<ButtonVariant, string> = {
   primary:
-    "border-[color:var(--color-accent-strong)] bg-[color:var(--color-accent-strong)] text-white hover:border-[color:var(--color-accent-strong-hover)] hover:bg-[color:var(--color-accent-strong-hover)] hover:shadow-[0_12px_28px_rgba(224,112,60,0.18)]",
+    "border-transparent bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] text-[color:var(--color-primary-foreground)] shadow-primary hover:bg-[image:var(--accent-gradient-hover)] hover:shadow-primary-hover focus-visible:shadow-[var(--mg-shadow-focus),var(--mg-shadow-primary)]",
   secondary:
-    "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-secondary-hover)] hover:bg-[#e7efd9] hover:shadow-[0_12px_28px_rgba(107,127,74,0.12)]",
+    "border-transparent bg-[color:var(--color-surface-muted)] text-[color:var(--color-foreground)] hover:bg-[color:var(--color-border)] focus-visible:shadow-focus",
   soft:
-    "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)] hover:bg-[color:var(--color-surface-muted)] hover:shadow-[0_12px_28px_rgba(217,184,121,0.14)]",
+    "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)] shadow-xs hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-background)] focus-visible:shadow-focus",
   danger:
-    "border-[color:var(--color-border)] bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger)] hover:bg-[#fbe4d5]",
+    "border-[color:var(--color-danger-soft)] bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger)] hover:border-[color:var(--color-danger)] focus-visible:shadow-focus",
 };
 
 export function Button({
@@ -40,7 +42,7 @@ export function Button({
     <ShadcnButton
       type={type}
       className={[
-        "inline-flex h-auto touch-manipulation items-center justify-center gap-2 whitespace-normal rounded-[var(--radius-control)] border text-center font-semibold shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-200 ease-out hover:-translate-y-0.5 focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.18),0_8px_22px_rgba(46,42,38,0.04)] active:translate-y-0 active:scale-[0.98] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:grayscale-[0.15] disabled:active:scale-100 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100",
+        "inline-flex h-auto touch-manipulation items-center justify-center gap-2 whitespace-normal rounded-[var(--radius-control)] border text-center font-semibold transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-150 ease-out active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 disabled:shadow-none disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100",
         buttonSizeClasses[size],
         buttonVariantClasses[variant],
         className,

@@ -57,7 +57,7 @@ export function ProposalActionBar({
       <div
         role="region"
         aria-label="Usar la propuesta"
-        className="pointer-events-auto w-full max-w-[25rem] rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]/95 p-3 shadow-[0_18px_48px_rgba(46,42,38,0.18)] backdrop-blur-xl"
+        className="pointer-events-auto w-full max-w-[25rem] rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]/95 p-3 shadow-pop backdrop-blur-xl"
       >
         {/* The live region is always in the DOM so a new message is announced when it appears. */}
         <div role="status" aria-live="polite" aria-atomic="true">

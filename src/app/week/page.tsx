@@ -1,5 +1,6 @@
 "use client";
 
+import { CalendarPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -452,7 +453,7 @@ function WeekPageContent() {
                 onClick={() => handleNavigateWeek(-1)}
                 disabled={!selectedIsoWeek}
                 aria-label="Semana anterior"
-                className="flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-muted-foreground)] shadow-xs transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 ‹
               </button>
@@ -461,7 +462,7 @@ function WeekPageContent() {
                 onClick={() => handleNavigateWeek(1)}
                 disabled={!selectedIsoWeek}
                 aria-label="Semana siguiente"
-                className="flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-muted-foreground)] shadow-xs transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 ›
               </button>
@@ -487,24 +488,30 @@ function WeekPageContent() {
                       aria-label={`${day.name} ${dayNumber}${cell.isToday ? ", hoy" : ""}${cell.hasMenu ? "" : ", sin menú"}`}
                       aria-current={cell.isToday ? "date" : undefined}
                       aria-pressed={cell.hasMenu ? cell.isSelected : undefined}
-                      className={`flex min-h-11 flex-col items-center justify-center rounded-xl border-2 transition-colors disabled:cursor-default disabled:opacity-45 ${
-                        cell.isToday
-                          ? "bg-[color:var(--color-accent-strong)] text-white"
-                          : "bg-[color:var(--color-surface)] text-[color:var(--color-foreground)]"
-                      } ${
+                      // Marigold: the selected day is the filled orange material; today keeps an orange dot (and
+                      // orange text when not selected), so both can be told apart at a glance.
+                      className={`relative flex min-h-12 flex-col items-center justify-center rounded-[var(--radius-control)] border transition-[background-color,border-color,color,box-shadow] duration-150 disabled:cursor-default disabled:opacity-45 ${
                         cell.isSelected
-                          ? "border-[color:var(--color-foreground)]"
+                          ? "border-transparent bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] text-[color:var(--color-primary-foreground)] shadow-primary"
                           : cell.isToday
-                            ? "border-[color:var(--color-accent-strong)]"
-                            : "border-[color:var(--color-border)] hover:border-[color:var(--color-border-strong)]"
+                            ? "border-[color:color-mix(in_oklch,var(--color-accent)_45%,transparent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent-strong-hover)]"
+                            : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)] shadow-xs hover:border-[color:var(--color-border-strong)]"
                       }`}
                     >
-                      <span className="text-sm font-bold leading-none">
+                      <span className="text-xs font-semibold uppercase leading-none tracking-[0.04em] opacity-80">
                         {day.initial}
                       </span>
-                      <span className="mt-1 text-xs font-semibold leading-none">
+                      <span className="mt-1 text-[0.9375rem] font-semibold leading-none tabular-nums">
                         {dayNumber}
                       </span>
+                      {cell.isToday ? (
+                        <span
+                          aria-hidden="true"
+                          className={`absolute bottom-1 h-1 w-1 rounded-full ${
+                            cell.isSelected ? "bg-[color:var(--color-primary-foreground)]" : "bg-[color:var(--color-accent)]"
+                          }`}
+                        />
+                      ) : null}
                     </button>
                   );
                 })}
@@ -521,7 +528,7 @@ function WeekPageContent() {
               <button
                 type="button"
                 onClick={() => goToWeek(today.week)}
-                className="min-h-11 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)]"
+                className="min-h-11 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-muted-foreground)] shadow-xs transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)]"
               >
                 <span aria-hidden="true">↩</span> Volver a hoy
               </button>
@@ -531,7 +538,7 @@ function WeekPageContent() {
             {weekDays && selectedIsoWeek ? (
               <Link
                 href={buildWeekHref("/create-menu", selectedIsoWeek)}
-                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-accent-strong)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white shadow-[0_8px_22px_rgba(46,42,38,0.04)] transition-colors hover:border-[color:var(--color-accent-strong-hover)] hover:bg-[color:var(--color-accent-strong-hover)]"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-transparent bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] px-4 text-sm font-semibold text-white shadow-xs transition-colors hover:border-[color:var(--color-accent-strong-hover)] hover:bg-[color:var(--color-accent-strong-hover)] hover:bg-[image:var(--accent-gradient-hover)]"
               >
                 Editar menú
               </Link>
@@ -631,7 +638,7 @@ function WeekPageContent() {
                     />
                   ) : (
                     <p className="rounded-[var(--radius-card)] border-2 border-dashed border-[color:var(--color-accent)] bg-[color:var(--color-surface)] px-4 py-3 text-sm leading-6 text-[color:var(--color-muted-foreground)]">
-                      <span className="mr-1.5 rounded-full bg-[color:var(--color-accent-strong)] px-2.5 py-1 text-xs font-semibold text-white">
+                      <span className="mr-1.5 rounded-full bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] px-2.5 py-1 text-xs font-semibold text-white">
                         Hoy
                       </span>
                       No hay comidas planificadas para hoy en este menú.
@@ -699,18 +706,31 @@ function EmptyWeekState({
   onRepeat: () => void;
 }) {
   const secondaryClass =
-    "inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-5 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)] sm:w-auto";
+    "inline-flex min-h-11 w-full items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-5 text-sm font-semibold text-[color:var(--color-foreground)] shadow-xs transition-[background-color,border-color] hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-background)] sm:w-auto";
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] p-6 text-center">
-      <p className="text-base font-semibold text-[color:var(--color-foreground)]">
+    <div className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-5 py-7 text-center shadow-card">
+      {!isLoading ? (
+        <span
+          aria-hidden="true"
+          className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-[var(--radius-control)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent-strong)]"
+        >
+          <CalendarPlus className="h-6 w-6" strokeWidth={2} />
+        </span>
+      ) : null}
+      <p className="t-h3 text-[color:var(--color-foreground)]">
         {isLoading ? "Cargando esta semana..." : "No hay menú para esta semana"}
       </p>
       {!isLoading && isoWeek ? (
-        <div className="mt-4 flex flex-col items-center gap-3">
+        <p className="mx-auto mt-1.5 max-w-xs text-sm leading-6 text-[color:var(--color-muted-foreground)]">
+          Prepara el menú de la semana o trae uno que ya tengas.
+        </p>
+      ) : null}
+      {!isLoading && isoWeek ? (
+        <div className="mt-5 flex flex-col items-center gap-3">
           <Link
             href={buildWeekHref("/create-menu", isoWeek)}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-accent-strong-hover)] sm:w-auto"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] px-5 text-sm font-semibold text-white shadow-primary transition-colors hover:bg-[color:var(--color-accent-strong-hover)] hover:bg-[image:var(--accent-gradient-hover)] sm:w-auto"
           >
             Crear menú
           </Link>

@@ -288,7 +288,7 @@ export function DishCard({
         event.preventDefault();
         close();
       }}
-      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-0 text-[color:var(--color-foreground)] shadow-[0_24px_60px_rgba(32,28,23,0.22)] backdrop:bg-[rgba(46,42,38,0.45)]"
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-0 text-[color:var(--color-foreground)] shadow-pop backdrop:bg-[color:var(--color-foreground)]/40"
     >
       {open && slot ? (
         <div className="space-y-4 p-5">
@@ -355,7 +355,7 @@ export function DishCard({
                     <p className="t-meta">
                       <Link
                         href={loginHrefFor(loginReturnPath)}
-                        className="inline-flex min-h-11 items-center font-semibold underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)]"
+                        className="inline-flex min-h-11 items-center font-semibold underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent-strong)]"
                       >
                         Inicia sesión para crear una ficha estimada con IA
                       </Link>
@@ -374,7 +374,7 @@ export function DishCard({
               {currentNotice.login ? (
                 <Link
                   href={loginHrefFor(loginReturnPath)}
-                  className="inline-flex min-h-11 items-center font-semibold underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)]"
+                  className="inline-flex min-h-11 items-center font-semibold underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent-strong)]"
                 >
                   {currentNotice.text}
                 </Link>

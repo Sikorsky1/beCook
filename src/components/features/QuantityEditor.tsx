@@ -32,7 +32,7 @@ export function QuantityEditor({ name, quantity, unit, editable, manual, checked
     requestAnimationFrame(() => triggerRef.current?.focus());
   };
   const shown = formatShoppingAmount(quantity, unit);
-  const badgeClass = `inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold ${
+  const badgeClass = `inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] px-3 text-sm font-semibold ${
     checked ? "bg-white text-[color:var(--color-muted-foreground)]" : "bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
   }`;
 
@@ -105,7 +105,7 @@ export function QuantityEditor({ name, quantity, unit, editable, manual, checked
           )}
           <button
             type="submit"
-            className="min-h-11 self-end rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white hover:bg-[color:var(--color-accent-strong-hover)]"
+            className="min-h-11 self-end rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] px-4 text-sm font-semibold text-white hover:bg-[color:var(--color-accent-strong-hover)] hover:bg-[image:var(--accent-gradient-hover)]"
           >
             Guardar
           </button>

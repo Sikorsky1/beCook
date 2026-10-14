@@ -91,15 +91,16 @@ test("screens changed in step 33, wave 7 and step 34 keep no text below 12px and
 
 test("approved plan: CTA token, focus ring, 44px shared controls and safe areas", () => {
   const css = read("src/app/globals.css");
-  assert.match(css, /--accent-strong: #b8532a;/);
-  assert.match(css, /--focus-ring: var\(--accent-hover\);/);
-  // shadcn's ring stays pale so it does not add a second orange band to the global outline.
-  assert.match(css, /--ring: color-mix\(in srgb, var\(--accent\) 48%, white\);/);
+  // Marigold (design-plans/2026-10-14-rediseno-marigold.md): CTA orange darkened for AA, focus outline on it.
+  assert.match(css, /--accent-strong: oklch\(0\.575 0\.165 47\);/);
+  assert.match(css, /--focus-ring: var\(--accent-strong\);/);
+  // shadcn's ring stays translucent so it does not add a second solid orange band to the global outline.
+  assert.match(css, /--ring: color-mix\(in oklch, var\(--accent\) 45%, transparent\);/);
   assert.ok(!css.includes(".ui-eyebrow"));
   assert.ok(!/font-size: 0\.6\d*rem/.test(css), "no type token below 12px");
 
   const button = read("src/components/ui/Button.tsx");
-  assert.ok(button.includes("bg-[color:var(--color-accent-strong)] text-white"));
+  assert.ok(button.includes("bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] text-[color:var(--color-primary-foreground)]"));
   assert.ok(!button.includes("min-h-10"));
   assert.ok(read("src/components/ui/IconButton.tsx").includes("h-11 w-11"));
   assert.ok(read("src/components/ui/TextInput.tsx").split(/\s|"/).includes("text-base"));

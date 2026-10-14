@@ -125,7 +125,7 @@ export default function AccountDataPage() {
         <section>
           <Link
             href="/profile"
-            className="-ml-2 inline-flex min-h-11 items-center gap-1.5 rounded-full px-2 text-sm font-semibold text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)]"
+            className="-ml-2 inline-flex min-h-11 items-center gap-1.5 rounded-[var(--radius-control)] px-2 text-sm font-semibold text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)]"
           >
             <ArrowLeft aria-hidden="true" className="h-4 w-4" />
             Perfil

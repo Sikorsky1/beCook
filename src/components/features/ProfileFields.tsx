@@ -63,7 +63,7 @@ export const compactInputClass =
   "w-full rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5 text-base font-medium text-[color:var(--color-foreground)] transition-colors placeholder:text-[color:var(--color-muted-foreground)] focus:border-[color:var(--color-accent)]";
 
 const chipBaseClass =
-  "inline-flex min-h-11 cursor-pointer items-center justify-center rounded-full border px-3.5 py-2 text-center text-sm font-semibold leading-tight transition-colors has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-[color:var(--color-accent)]";
+  "inline-flex min-h-11 cursor-pointer items-center justify-center rounded-[var(--radius-control)] border px-3.5 py-2 text-center text-sm font-semibold leading-tight transition-colors has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-[color:var(--color-accent-strong)]";
 
 export function ChoiceChips<T extends string | number>({
   legend,
@@ -92,8 +92,8 @@ export function ChoiceChips<T extends string | number>({
               key={String(option.value)}
               className={`${chipBaseClass} ${type === "radio" ? "min-w-11" : ""} ${
                 checked
-                  ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-foreground)]"
-                  : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
+                  ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent-strong-hover)] shadow-[0_0_0_1px_var(--color-accent)]"
+                  : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)] shadow-xs hover:border-[color:var(--color-border-strong)]"
               }`}
             >
               <input

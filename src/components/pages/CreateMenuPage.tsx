@@ -1320,7 +1320,7 @@ function CreateMenuPageContent() {
         <section>
           <Link
             href={weekHrefForBack}
-            className="-ml-2 mb-2 inline-flex min-h-11 items-center gap-1 rounded-full px-2 text-sm font-semibold text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)]"
+            className="-ml-2 mb-2 inline-flex min-h-11 items-center gap-1 rounded-[var(--radius-control)] px-2 text-sm font-semibold text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)]"
           >
             <ChevronLeft aria-hidden="true" className="h-4 w-4" />
             Volver a Semana
@@ -1392,7 +1392,7 @@ function CreateMenuPageContent() {
             <span className="t-body-strong text-[color:var(--color-foreground)]">
               Número de personas
             </span>
-            <div className="inline-flex items-center gap-2 rounded-full bg-[color:var(--color-surface-muted)] p-1">
+            <div className="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-[color:var(--color-surface-muted)] p-1 shadow-inset">
               <button
                 type="button"
                 disabled={peopleCount === 1 || isLoading}
@@ -1401,7 +1401,7 @@ function CreateMenuPageContent() {
                   setPeopleCount((value) => value - 1);
                 }}
                 aria-label="Reducir personas"
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-sm font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+                className="flex h-11 w-11 items-center justify-center rounded-[calc(var(--radius-control)-0.25rem)] bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-foreground)] shadow-raise disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
               >
                 -
               </button>
@@ -1416,7 +1416,7 @@ function CreateMenuPageContent() {
                   setPeopleCount((value) => value + 1);
                 }}
                 aria-label="Aumentar personas"
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-sm font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+                className="flex h-11 w-11 items-center justify-center rounded-[calc(var(--radius-control)-0.25rem)] bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-foreground)] shadow-raise disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
               >
                 +
               </button>
@@ -1434,10 +1434,10 @@ function CreateMenuPageContent() {
                 return (
                   <label
                     key={option.id}
-                    className={`inline-flex min-h-11 cursor-pointer items-center justify-center rounded-full border px-3.5 py-2 text-center text-sm font-semibold leading-tight transition-colors has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-[color:var(--color-accent)] ${
+                    className={`inline-flex min-h-11 cursor-pointer items-center justify-center rounded-[var(--radius-control)] border px-3.5 py-2 text-center text-sm font-semibold leading-tight transition-colors has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-[color:var(--color-accent-strong)] ${
                       isSelected
-                        ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
-                        : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
+                        ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent-strong-hover)] shadow-[0_0_0_1px_var(--color-accent)]"
+                        : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)] shadow-xs hover:border-[color:var(--color-border-strong)]"
                     }`}
                   >
                     <input
@@ -1484,7 +1484,7 @@ function CreateMenuPageContent() {
                     aria-pressed={isSelected}
                     className={`flex min-h-11 min-w-0 items-center justify-center rounded-[var(--radius-input)] px-1 text-[0.8125rem] font-semibold transition-colors sm:px-2 sm:text-sm ${
                       isSelected
-                        ? "bg-[color:var(--color-accent-strong)] text-white"
+                        ? "bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] text-white"
                         : "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-accent-soft)] hover:text-[color:var(--color-foreground)]"
                     } disabled:cursor-not-allowed disabled:opacity-60`}
                   >
@@ -1642,7 +1642,7 @@ function CreateMenuPageContent() {
                   type="button"
                   onClick={discardProposal}
                   disabled={useWeekStatus === "applying"}
-                  className="min-h-11 rounded-full px-3 text-sm font-semibold text-[color:var(--color-muted-foreground)] underline underline-offset-2 hover:text-[color:var(--color-foreground)] disabled:opacity-50"
+                  className="min-h-11 rounded-[var(--radius-control)] px-3 text-sm font-semibold text-[color:var(--color-muted-foreground)] underline underline-offset-2 hover:text-[color:var(--color-foreground)] disabled:opacity-50"
                 >
                   Descartar propuesta
                 </button>

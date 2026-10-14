@@ -58,7 +58,7 @@ export function ShoppingRow({ row, actions }: { row: ShoppingRowData; actions: S
   return (
     <li
       className={`transition-colors duration-200 ease-out motion-reduce:transition-none ${
-        checked ? "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)]" : "text-[color:var(--color-foreground)]"
+        checked ? "bg-[color:var(--color-success-soft)]/60 text-[color:var(--color-muted-foreground)]" : "text-[color:var(--color-foreground)]"
       }`}
     >
       <div className="flex flex-wrap items-start gap-x-2 px-2 py-2 sm:px-3">
@@ -70,7 +70,7 @@ export function ShoppingRow({ row, actions }: { row: ShoppingRowData; actions: S
             aria-label={`${name}, ${amount}`}
             aria-describedby={`${baseId}-state`}
             onChange={() => actions.onToggle(item)}
-            className="h-6 w-6 cursor-pointer accent-[color:var(--color-accent-strong)]"
+            className="h-6 w-6 cursor-pointer rounded-md accent-[color:var(--color-success-hover)]"
           />
         </label>
         <div className="min-w-0 flex-1 py-2.5">

@@ -33,8 +33,7 @@ const stickyScreens = [
 test("no hex colour outside globals.css, except the documented ones; warnings use the token", () => {
   // Without a token of their own (out of scope) or metadata that must be a literal.
   const allowed = {
-    "src/app/layout.tsx": ["#fff6ed"],
-    "src/components/ui/Button.tsx": ["#e7efd9", "#fbe4d5"],
+    "src/app/layout.tsx": ["#fcfaf7"],
     // Provider brand rules: Google's button (border, text, hover), its four-colour «G» and Apple's hover.
     "src/components/session/OAuthButtons.tsx": ["#747775", "#1f1f1f", "#f2f2f2", "#333333", "#ea4335", "#4285f4", "#fbbc05", "#34a853"],
   };
@@ -43,9 +42,10 @@ test("no hex colour outside globals.css, except the documented ones; warnings us
     assert.deepEqual(found.filter((hex) => !(allowed[file] ?? []).includes(hex)), [], file);
   }
   const css = read("src/app/globals.css");
-  assert.match(css, /--warning-foreground: #8a4e2a;/);
+  assert.match(css, /--warning-foreground: oklch\(0\.5 0\.1 62\);/);
   assert.match(css, /--color-warning-foreground: var\(--warning-foreground\);/);
-  assert.match(css, /--background: #fff6ed;/, "themeColor matches the background");
+  // Marigold: oklch(0.985 0.004 70) is #fcfaf7, the themeColor of layout.tsx.
+  assert.match(css, /--background: oklch\(0\.985 0\.004 70\); \/\* #fcfaf7 \*\//, "themeColor matches the background");
   const uses = sourceFiles("src").reduce((total, file) => total + (read(file).match(/text-\[color:var\(--color-warning-foreground\)\]/g) ?? []).length, 0);
   assert.ok(uses >= 7, `the 7 warning texts use the token (${uses})`);
 });

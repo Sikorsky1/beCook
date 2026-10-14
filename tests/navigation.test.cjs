@@ -173,7 +173,7 @@ test("empty week: «Crear menú» first (accent-strong), «Repetir la semana N»
   // Busy, not dimmed or disabled (it keeps the focus).
   assert.ok(empty.includes("aria-disabled={isRepeating}"));
   assert.ok(!/\sdisabled=\{/.test(empty) && !empty.includes("disabled:opacity"));
-  assert.equal((empty.match(/min-h-11/g) ?? []).length, 2, "primary link and the shared secondary class");
+  assert.equal((empty.match(/min-h-1[12]/g) ?? []).length, 2, "primary link and the shared secondary class");
   assert.ok(!/\bmin-h-(?:9|10)\b/.test(empty) && !/text-\[0\.[0-6]\d*rem\]/.test(empty));
   // Shown to guests too: nothing in the empty state depends on being signed in.
   assert.ok(!empty.includes("isSignedIn") && !empty.includes("userId"));

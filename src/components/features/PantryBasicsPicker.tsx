@@ -75,7 +75,7 @@ export function PantryBasicsPicker({ offered, onAdd }: PantryBasicsPickerProps) 
               // The panel closes: the focus goes back to the button that opened it.
               requestAnimationFrame(() => toggleRef.current?.focus());
             }}
-            className="mt-4 min-h-11 rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white hover:bg-[color:var(--color-accent-strong-hover)] disabled:opacity-60"
+            className="mt-4 min-h-11 rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] px-4 text-sm font-semibold text-white hover:bg-[color:var(--color-accent-strong-hover)] hover:bg-[image:var(--accent-gradient-hover)] disabled:opacity-60"
           >
             {visible.length === 0 ? "Elige uno o varios" : `Añadir ${visible.length} a la despensa`}
           </button>

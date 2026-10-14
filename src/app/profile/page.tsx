@@ -95,7 +95,7 @@ function StatusBadge({ status }: { status: SectionStatus }) {
     status === "saved"
       ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-secondary-hover)]"
       : status === "unsaved" || status === "assumed"
-        ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-foreground)]"
+        ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent-strong-hover)] shadow-[0_0_0_1px_var(--color-accent)]"
         : "border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)]";
 
   return (
@@ -173,7 +173,7 @@ function SectionCard({
       </div>
       <p className="t-meta">{info.usage}</p>
       {status === "assumed" ? (
-        <p className="t-meta text-[color:var(--color-accent)]">
+        <p className="t-meta text-[color:var(--color-accent-hover)]">
           Esto se guardó con el formulario anterior, que rellenaba algunas respuestas solo. Revísalo y pulsa Confirmar.
         </p>
       ) : null}
@@ -409,7 +409,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-3">
               <span
                 aria-hidden="true"
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-soft)] text-lg font-semibold text-[color:var(--color-accent)]"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-soft)] text-lg font-semibold text-[color:var(--color-accent-hover)]"
               >
                 {userEmail[0].toUpperCase()}
               </span>
@@ -467,7 +467,7 @@ export default function ProfilePage() {
               <div
                 role="group"
                 aria-labelledby="training-days-label"
-                className="inline-flex items-center gap-2 rounded-full bg-[color:var(--color-surface-muted)] p-1"
+                className="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-[color:var(--color-surface-muted)] p-1 shadow-inset"
               >
                 <button
                   type="button"
@@ -476,7 +476,7 @@ export default function ProfilePage() {
                     updateDraft("training", { weeklyTrainingDays: toWeeklyTrainingDays(draft.weeklyTrainingDays - 1) })
                   }
                   aria-label="Reducir días de entrenamiento"
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-foreground)] shadow-card disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
                 >
                   -
                 </button>
@@ -491,7 +491,7 @@ export default function ProfilePage() {
                     updateDraft("training", { weeklyTrainingDays: toWeeklyTrainingDays(draft.weeklyTrainingDays + 1) })
                   }
                   aria-label="Aumentar días de entrenamiento"
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-foreground)] shadow-card disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
                 >
                   +
                 </button>

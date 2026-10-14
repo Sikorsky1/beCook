@@ -52,7 +52,7 @@ export function ReplaceMenuDialog({
         event.preventDefault();
         onCancel();
       }}
-      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-0 text-[color:var(--color-foreground)] shadow-[0_24px_60px_rgba(32,28,23,0.22)] backdrop:bg-[rgba(46,42,38,0.45)]"
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-0 text-[color:var(--color-foreground)] shadow-pop backdrop:bg-[color:var(--color-foreground)]/40"
     >
       {/* Only the content scrolls: the two actions stay visible on short screens (320×640). */}
       <div className="flex max-h-[calc(100dvh-2rem)] flex-col">

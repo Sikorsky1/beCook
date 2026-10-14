@@ -1,49 +1,80 @@
 @import "tailwindcss";
 
+/*
+ * Marigold (better-design.com/design-systems/marigold), adaptado a beCook.
+ * Lienzo blanco roto cálido, tarjetas blancas nítidas, naranja cálido en las acciones principales,
+ * radios amables y profundidad discreta: un filo de 1 px y una sombra ambiental suave, nunca un brillo.
+ * Contrastes AA comprobados (texto normal >= 4,5:1) sobre --background, --surface y --surface-muted.
+ */
 :root {
-  --background: #fff6ed;
-  --foreground: #2e2a26;
-  --surface: #fffcf8;
-  --surface-muted: #f6f0e6;
-  --muted-foreground: #68665c;
-  --border: #e8d5b5;
-  --border-strong: #d9b879;
-  --accent: #e0703c;
-  --accent-hover: #cc5f30;
-  /* Fondo de CTA con texto blanco: 4,87:1 (hover 6,02:1). --accent da 3,20:1. */
-  --accent-strong: #b8532a;
-  --accent-strong-hover: #a24822;
-  --accent-soft: #fff0e3;
-  --secondary: #6b7f4a;
-  --secondary-hover: #55633a;
-  --secondary-soft: #f0f4e7;
-  --warning: #d9b879;
-  --warning-soft: #f4e9da;
-  /* Texto de avisos sobre --warning-soft: 5,47:1 (6,14:1 sobre --background). */
-  --warning-foreground: #8a4e2a;
-  --success: #6b7f4a;
-  --success-hover: #55633a;
-  --success-soft: #eef3e4;
-  --danger: #8a4e2a;
-  --danger-soft: #fff0e3;
+  --background: oklch(0.985 0.004 70); /* #fcfaf7 */
+  --foreground: oklch(0.27 0.012 60); /* 14,5:1 */
+  --surface: oklch(1 0 0);
+  --surface-muted: oklch(0.965 0.006 70);
+  /* Marigold usa L 0,55; se oscurece a 0,52 para pasar 4,5:1 también sobre --surface-muted (4,99:1). */
+  --muted-foreground: oklch(0.52 0.013 60);
+  --border: oklch(0.915 0.006 70);
+  --border-strong: oklch(0.85 0.012 65);
+
+  /* Naranja Marigold. --accent es el tono de marca (iconos, bordes, foco, decoración). */
+  --accent: oklch(0.7 0.17 52);
+  /* Texto naranja sobre blanco: 4,57:1. */
+  --accent-hover: oklch(0.58 0.165 47);
+  /* Fondo de CTA con texto blanco (4,6:1; hover 5,6:1). El naranja vivo da 2,8:1. */
+  --accent-strong: oklch(0.575 0.165 47);
+  --accent-strong-hover: oklch(0.53 0.155 45);
+  --accent-soft: oklch(0.965 0.03 62);
+  /* Material naranja Marigold oscurecido para AA: degradado de CTA (texto blanco 4,6–5,4:1). */
+  --accent-gradient: linear-gradient(to bottom, oklch(0.6 0.165 50), oklch(0.55 0.16 46));
+  --accent-gradient-hover: linear-gradient(to bottom, oklch(0.56 0.16 48), oklch(0.51 0.155 44));
+
+  /* Verde Marigold (tb-success) para lo conseguido: comprado, en despensa, completado. */
+  --secondary: oklch(0.6 0.14 152);
+  --secondary-hover: oklch(0.47 0.115 152); /* texto: 6,3:1 sobre blanco */
+  --secondary-soft: oklch(0.97 0.025 152);
+  --success: var(--secondary);
+  --success-hover: var(--secondary-hover);
+  --success-soft: var(--secondary-soft);
+
+  /* Oro Marigold (tb-gold) para avisos y estados en curso. */
+  --warning: oklch(0.8 0.13 78);
+  --warning-soft: oklch(0.975 0.03 82);
+  --warning-foreground: oklch(0.5 0.1 62); /* 5,6:1 sobre --warning-soft */
+
+  --danger: oklch(0.52 0.19 27); /* 6,1:1 sobre blanco */
+  --danger-soft: oklch(0.97 0.018 27);
+
   --card: var(--surface);
   --card-foreground: var(--foreground);
-  --primary: var(--accent);
-  --primary-foreground: #ffffff;
+  --primary: var(--accent-strong);
+  --primary-foreground: oklch(0.99 0.005 80);
   --secondary-foreground: var(--secondary-hover);
   --accent-foreground: var(--foreground);
   --destructive: var(--danger);
-  --destructive-foreground: #ffffff;
+  --destructive-foreground: oklch(0.99 0.005 80);
   --input: var(--border);
-  /* Anillo de shadcn (ring-ring/50): se mantiene pálido para no sumar una banda naranja al outline global. */
-  --ring: color-mix(in srgb, var(--accent) 48%, white);
-  --radius-card: 1.5rem;
-  --radius-control: 1rem;
-  --radius-input: 0.875rem;
+  --ring: color-mix(in oklch, var(--accent) 45%, transparent);
+
+  --radius-card: 1rem;
+  --radius-control: 0.75rem;
+  --radius-input: 0.625rem;
   --radius-chip: 999px;
-  --shadow-card: 0 10px 30px rgba(46, 42, 38, 0.055);
-  /* Outline global de foco: 3,9:1 sobre surface, 3,75:1 sobre background. */
-  --focus-ring: var(--accent-hover);
+
+  /* Sombras Marigold: filo + ambiente cálido de baja opacidad. */
+  --mg-shadow-xs: 0 0.0625rem 0.125rem oklch(0.27 0.03 60 / 0.06), 0 0.0625rem 0.0625rem oklch(0.27 0.03 60 / 0.04);
+  --mg-shadow-raise: 0 0.0625rem 0.125rem oklch(0.27 0.03 60 / 0.07), 0 0.125rem 0.375rem -0.0625rem oklch(0.27 0.03 60 / 0.08);
+  --mg-shadow-card: 0 0 0 0.0625rem oklch(0.27 0.03 60 / 0.03), 0 0.0625rem 0.125rem oklch(0.27 0.03 60 / 0.05), 0 0.375rem 1.25rem -0.5rem oklch(0.27 0.03 60 / 0.1);
+  --mg-shadow-pop: 0 0 0 0.0625rem oklch(0.27 0.03 60 / 0.04), 0 0.25rem 0.75rem -0.125rem oklch(0.27 0.03 60 / 0.1), 0 0.875rem 2.25rem -0.75rem oklch(0.27 0.03 60 / 0.14);
+  --mg-shadow-inset: inset 0 0.0625rem 0.125rem oklch(0.27 0.03 60 / 0.05);
+  --mg-shadow-primary: inset 0 0.0625rem 0 oklch(1 0 0 / 0.22), 0 0.0625rem 0.125rem oklch(0.45 0.15 45 / 0.35), 0 0.25rem 0.75rem -0.1875rem oklch(0.6 0.17 50 / 0.4);
+  --mg-shadow-primary-hover: inset 0 0.0625rem 0 oklch(1 0 0 / 0.26), 0 0.125rem 0.25rem oklch(0.45 0.15 45 / 0.35), 0 0.375rem 1rem -0.1875rem oklch(0.6 0.17 50 / 0.5);
+  --mg-shadow-focus: 0 0 0 0.25rem color-mix(in oklch, var(--accent) 24%, transparent);
+
+  /* Movimiento Marigold (perfil estándar). */
+  --mg-ease-out: cubic-bezier(0.165, 0.84, 0.44, 1);
+
+  /* Outline global de foco: 4,4:1 sobre --background. */
+  --focus-ring: var(--accent-strong);
 }
 
 @theme inline {
@@ -80,8 +111,19 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
+  --shadow-xs: var(--mg-shadow-xs);
+  --shadow-raise: var(--mg-shadow-raise);
+  --shadow-card: var(--mg-shadow-card);
+  --shadow-pop: var(--mg-shadow-pop);
+  --shadow-inset: var(--mg-shadow-inset);
+  --shadow-primary: var(--mg-shadow-primary);
+  --shadow-primary-hover: var(--mg-shadow-primary-hover);
+  --shadow-focus: var(--mg-shadow-focus);
+  --ease-out: var(--mg-ease-out);
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: var(--mg-ease-out);
 }
 
 * {
@@ -96,7 +138,8 @@ html {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  letter-spacing: -0.006em;
   line-height: 1.5;
   text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
@@ -110,8 +153,12 @@ select {
 }
 
 ::selection {
-  background: var(--accent-soft);
-  color: var(--foreground);
+  background: var(--accent-strong);
+  color: var(--primary-foreground);
+}
+
+textarea {
+  resize: vertical;
 }
 
 :focus-visible {
@@ -124,7 +171,7 @@ select {
   h2,
   h3,
   h4 {
-    letter-spacing: -0.04em;
+    letter-spacing: -0.022em;
   }
 
   p {
@@ -136,8 +183,8 @@ select {
   .ui-title {
     color: var(--foreground);
     font-weight: 600;
-    letter-spacing: -0.07em;
-    line-height: 0.95;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
   }
 
   .ui-copy {
@@ -146,12 +193,12 @@ select {
   }
 
   /* Jerarquía tipográfica beCook */
-  .t-eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted-foreground); line-height: 1; }
-  .t-h1      { font-size: 1.5rem;  font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; }   /* Título de página */
+  .t-eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground); line-height: 1; }
+  .t-h1      { font-size: 1.625rem; font-weight: 650; letter-spacing: -0.025em; line-height: 1.15; }   /* Título de página */
   .t-h2      { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }    /* Título de sección */
   .t-h3      { font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }  /* Título de tarjeta / día */
   .t-body-strong { font-size: 1rem; font-weight: 600; line-height: 1.4; }   /* valor de plato, label de item de lista */
   .t-body    { font-size: 0.9375rem; font-weight: 500; line-height: 1.5; }  /* cuerpo general */
   .t-meta    { font-size: 0.8125rem; font-weight: 500; line-height: 1.4; color: var(--muted-foreground); } /* fecha, meta, valores secundarios */
-  .t-micro   { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted-foreground); line-height: 1; } /* COMIDA/CENA, estado, meta de item */
+  .t-micro   { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground); line-height: 1; } /* COMIDA/CENA, estado, meta de item */
 }

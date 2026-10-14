@@ -261,7 +261,7 @@ export function WeekDayCard({
   // Tapping a planned dish opens its card (C2); editing that meal (saved per slot, B4) is
   // «Cambiar plato» inside the card. A free meal is edited directly.
   const mealButtonClass = (isFree: boolean, size: string) =>
-    `flex w-full rounded-[var(--radius-input)] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)] transition-[background-color,color,transform] duration-200 ease-out active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 ${size} ${
+    `flex w-full rounded-[var(--radius-input)] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent-strong)] transition-[background-color,color,transform] duration-200 ease-out active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 ${size} ${
       isFree
         ? "border border-dashed border-[color:var(--color-border-strong)] bg-transparent hover:bg-[color:var(--color-accent-soft)]/45"
         : "bg-[color:var(--color-surface-muted)] hover:bg-[color:var(--color-accent-soft)]"
@@ -275,10 +275,10 @@ export function WeekDayCard({
     return (
       <article
         aria-labelledby={headingId}
-        className="rounded-[var(--radius-card)] border-2 border-[color:var(--color-accent)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-card)] sm:p-5"
+        className="rounded-[var(--radius-card)] border border-[color:var(--color-accent)] bg-[color:var(--color-surface)] p-4 shadow-[var(--mg-shadow-card),0_0_0_0.25rem_var(--color-accent-soft)] sm:p-5"
       >
         <div className="flex items-baseline gap-2">
-          <span className="t-meta rounded-full bg-[color:var(--color-accent-strong)] px-2.5 py-1 font-semibold leading-none text-white">
+          <span className="t-meta rounded-full bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] px-2.5 py-1 font-semibold leading-none text-white">
             Hoy
           </span>
           <h2 id={headingId} className="t-h2 text-[color:var(--color-foreground)]">
@@ -327,7 +327,7 @@ export function WeekDayCard({
   return (
     <article
       aria-labelledby={headingId}
-      className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5 shadow-[0_6px_18px_rgba(46,42,38,0.04)]"
+      className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5 shadow-xs"
     >
       <div className="flex gap-3">
         <h2 id={headingId} className="w-11 shrink-0 pt-1.5 leading-tight">

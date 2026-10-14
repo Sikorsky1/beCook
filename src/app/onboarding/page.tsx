@@ -88,7 +88,7 @@ function Feature({ icon, title, children }: { icon: ReactNode; title: string; ch
     <li className="flex gap-3">
       <span
         aria-hidden="true"
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent-hover)]"
       >
         {icon}
       </span>
@@ -336,13 +336,13 @@ export default function OnboardingPage() {
         <div className="flex flex-col gap-2 sm:flex-row">
           <Link
             href={authHref("/signup", onboardingPath)}
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--color-accent-strong-hover)]"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--color-accent-strong-hover)] hover:bg-[image:var(--accent-gradient-hover)]"
           >
             Crear cuenta
           </Link>
           <Link
             href={authHref("/login", onboardingPath)}
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)]"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)]"
           >
             Ya tengo cuenta
           </Link>
@@ -370,13 +370,13 @@ export default function OnboardingPage() {
         <div className="flex flex-col gap-2 sm:flex-row">
           <Link
             href="/create-menu"
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--color-accent-strong-hover)]"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--color-accent-strong-hover)] hover:bg-[image:var(--accent-gradient-hover)]"
           >
             Crear menú
           </Link>
           <Link
             href="/profile"
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)]"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-sm font-semibold text-[color:var(--color-foreground)]"
           >
             Revisar perfil
           </Link>
@@ -465,9 +465,9 @@ export default function OnboardingPage() {
                   type="button"
                   aria-pressed={checked}
                   onClick={() => void togglePantryItem(item.name, item.category)}
-                  className={`inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-semibold ${
+                  className={`inline-flex min-h-11 items-center gap-1.5 rounded-[var(--radius-control)] border px-3.5 py-2 text-sm font-semibold ${
                     checked
-                      ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-foreground)]"
+                      ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent-strong-hover)] shadow-[0_0_0_1px_var(--color-accent)]"
                       : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)]"
                   }`}
                 >

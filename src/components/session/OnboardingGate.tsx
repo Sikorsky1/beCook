@@ -70,7 +70,7 @@ export function OnboardingGate() {
       <Link
         href={onboardingPath}
         aria-label="Continuar la configuración de beCook"
-        className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--color-accent-strong-hover)]"
+        className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--color-accent-strong-hover)] hover:bg-[image:var(--accent-gradient-hover)]"
       >
         Continuar
       </Link>

@@ -32,7 +32,7 @@ export function GenerationProgress({ mode, startedAt, maxSeconds, onCancel }: Ge
       <div className="flex items-start gap-3">
         <LoaderCircle
           aria-hidden="true"
-          className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-[color:var(--color-accent)] motion-reduce:animate-none"
+          className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-[color:var(--color-accent-hover)] motion-reduce:animate-none"
         />
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-[color:var(--color-foreground)]" role="status">

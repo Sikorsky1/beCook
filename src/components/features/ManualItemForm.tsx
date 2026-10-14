@@ -140,7 +140,7 @@ export function ManualItemForm({ onAdd, message, onClose }: ManualItemFormProps)
             <button
               type="submit"
               disabled={saving}
-              className="min-h-11 rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white hover:bg-[color:var(--color-accent-strong-hover)] disabled:opacity-60"
+              className="min-h-11 rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] px-4 text-sm font-semibold text-white hover:bg-[color:var(--color-accent-strong-hover)] hover:bg-[image:var(--accent-gradient-hover)] disabled:opacity-60"
             >
               {saving ? "Añadiendo…" : "Añadir a la lista"}
             </button>

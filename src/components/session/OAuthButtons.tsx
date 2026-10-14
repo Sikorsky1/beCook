@@ -26,7 +26,7 @@ const providers = enabledOAuthProviders(process.env.NEXT_PUBLIC_AUTH_PROVIDERS).
 // Same height and shape as the app buttons; colours follow each provider's brand rules
 // (Google: white with a grey border and the four-colour «G»; Apple: black with the white logo).
 const baseClass =
-  "inline-flex min-h-11 w-full touch-manipulation items-center justify-center gap-3 rounded-[var(--radius-control)] border px-5 text-sm font-medium transition-[background-color,box-shadow,opacity] duration-200 ease-out focus-visible:outline-none focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.18)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none";
+  "inline-flex min-h-11 w-full touch-manipulation items-center justify-center gap-3 rounded-[var(--radius-control)] border px-5 text-sm font-medium transition-[background-color,box-shadow,opacity] duration-200 ease-out focus-visible:outline-none focus-visible:shadow-focus disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none";
 
 const providerClass: Record<OAuthProvider, string> = {
   google: "border-[#747775] bg-white text-[#1f1f1f] hover:bg-[#f2f2f2]",

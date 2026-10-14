@@ -178,7 +178,7 @@ function ListNotices({ change, pendingDishes, aiError, fromCards, notUpdated, di
       type="button"
       onClick={onCalculate}
       disabled={calculating}
-      className="mt-4 min-h-11 rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] px-4 text-sm font-semibold text-white hover:bg-[color:var(--color-accent-strong-hover)] disabled:opacity-60"
+      className="mt-4 min-h-11 rounded-[var(--radius-control)] bg-[color:var(--color-accent-strong)] bg-[image:var(--accent-gradient)] px-4 text-sm font-semibold text-white hover:bg-[color:var(--color-accent-strong-hover)] hover:bg-[image:var(--accent-gradient-hover)] disabled:opacity-60"
     >
       {calculating ? "Calculando…" : label}
     </button>
@@ -699,7 +699,7 @@ export default function ShoppingListPage() {
                     key={section.category}
                     href={`#${shoppingSectionId(section.category)}`}
                     aria-label={`${capitalize(section.category)}: ${section.done} de ${section.total} comprados`}
-                    className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-sm font-semibold ${
+                    className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[var(--radius-control)] border px-3 text-sm font-semibold ${
                       section.total > 0 && section.done === section.total
                         ? "border-[color:var(--color-success)] bg-[color:var(--color-success-soft)] text-[color:var(--color-success-hover)]"
                         : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)]"
@@ -712,7 +712,7 @@ export default function ShoppingListPage() {
                 {atHome.length > 0 ? (
                   <a
                     href={`#${shoppingSectionId("en-casa")}`}
-                    className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-foreground)]"
+                    className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-foreground)]"
                   >
                     En casa ({atHome.length})
                   </a>

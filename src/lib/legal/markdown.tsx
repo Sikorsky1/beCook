@@ -60,7 +60,7 @@ export function LegalDocument({ source }: { source: string }) {
                 role="region"
                 aria-label={`Tabla: ${block.head.join(", ")}`}
                 tabIndex={0}
-                className="overflow-x-auto rounded-[var(--radius-control)] border border-[color:var(--color-border)] focus-visible:outline-none focus-visible:shadow-[0_0_0_4px_rgba(224,112,60,0.18)]"
+                className="overflow-x-auto rounded-[var(--radius-control)] border border-[color:var(--color-border)] focus-visible:outline-none focus-visible:shadow-focus"
               >
                 <table className="w-full border-collapse text-left text-sm leading-5">
                   <thead className="bg-[color:var(--color-surface-muted)]">
