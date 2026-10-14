@@ -7,7 +7,8 @@ const path = require("node:path");
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= "http://supabase.test";
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??= "synthetic-anon-key";
 const root = path.join(__dirname, "..");
-const catalog = require("../src/data/nutritionist-recipes.json");
+// The 27 nutritionist recipes with a database identity (the rest of the catalogue has none yet).
+const catalog = {recipes: require("../src/data/nutritionist-recipes.json").recipes.filter(recipe => recipe.id.startsWith("nutri-"))};
 const draft = require("../src/data/recipe-cards/catalog-v1.json");
 const card = require("../src/lib/recipes/card.ts");
 const {weekToApplyWeekDays} = require("../src/lib/supabase/weeks.ts");
@@ -50,6 +51,7 @@ test("title key and catalogue identity: exact title only (case and spacing aside
  assert.equal(card.findCatalogRecipeIdentity("Tortilla de patatas"), null);
  assert.equal(card.findCatalogRecipeIdentity("Salmon a la plancha"), null);
  assert.equal(card.findCatalogRecipeIdentity("LIBRE"), null);
+ assert.equal(card.findCatalogRecipeIdentity("Tortilla de espinacas"), null, "website recipes of the catalogue have no identity yet");
 });
 
 test("migration inserts exactly the 27 catalogue identities, without any reviewed version", () => {

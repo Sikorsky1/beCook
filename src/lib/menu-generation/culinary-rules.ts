@@ -18,8 +18,9 @@ const openElement = /\b(salsas?|alino|aderezo|marinada|adobo|guarnicion|acompana
 const namedSauce =
   /\bsalsas? (verde|brava|bravas|romesco|vizcaina|pesto|teriyaki|bechamel|holandesa|barbacoa|bbq|alioli|tartara|rosa|carbonara|bolonesa|marinera|americana|espanola|agridulce|chimichurri|tzatziki|tahini|curry|pico de gallo|mojo|mojo picon|mojo verde|mojo rojo|ponzu|hoisin|sriracha|kimchi|satay|gribiche|bearnesa|pizzaiola|puttanesca|arrabbiata|napolitana|cesar|ranchera|criolla|picante de tomate)\b/;
 
-// «salsa de/al/a la X», «salsa con X»: the sauce is specified by what follows.
-const specifiedSauce = /\bsalsas? (de|del|al|a la|a las|con) [a-z]/;
+// «salsa de/al/a la X», «salsa con X»: the sauce is specified by what follows, also after a
+// texture word («salsa cremosa de limón», «salsa ligera de vino blanco»).
+const specifiedSauce = /\bsalsas? (?:(?:ligera|ligeras|cremosa|cremosas|suave|suaves|fresca|frescas|templada|templadas) )?(de|del|al|a la|a las|con) [a-z]/;
 
 // Traditional dishes whose name already fixes the sauce.
 const traditionalSauceDishes = /\b(albondigas en salsa|pollo en pepitoria|callos|bacalao al pil ?pil|merluza en salsa verde|chipirones en su tinta|calamares en su tinta)\b/;

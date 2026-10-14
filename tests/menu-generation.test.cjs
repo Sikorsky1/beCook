@@ -73,7 +73,8 @@ test("HTTP route rejects invalid input before billing and invalid output without
  const fakes = installFakeBackends(() => Response.json({choices:[{finish_reason:"stop",message:{content:JSON.stringify(responseSelection)}}],usage:{prompt_tokens:100,completion_tokens:100,total_tokens:200}}));
  try {
   const {POST} = require("../src/app/api/generate-menu/route.ts");
-  const request = body => aiRequest("generate-menu", body);
+  // A weekly request in words goes to the AI; without one the catalogue answers (tested below).
+  const request = body => aiRequest("generate-menu", {freeTextPrompt: "algo de cuchara", ...body});
   assert.equal((await POST(request({peopleCount:8}))).status,400);
   assert.equal(fakes.openAICalls,0);
   assert.equal(fakes.begin.length,0, "invalid input never opens a usage record");
@@ -90,6 +91,80 @@ test("HTTP route rejects invalid input before billing and invalid output without
   assert.equal((await POST(request({peopleCount:2}))).status,422);
   assert.equal(fakes.openAICalls,3);
   assert.deepEqual(fakes.finish.map(f => f.p_status), ["succeeded","failed","failed"]);
+ } finally {
+  fakes.restore();
+ }
+});
+
+const {catalogMenu, catalogRecipes, elaborationForLevel, readCatalogMenuStyles} = require("../src/lib/menu-generation/catalog-menu.ts");
+const {normalizeFood} = require("../src/lib/menu-generation/validation.ts");
+const {dishProtein} = require("../src/lib/nutritionPlan.ts");
+const weekOf = menu => menu.days.flatMap(d => [d.lunch.dishName, d.dinner.dishName]);
+// A title may be in the catalogue twice (once per meal), with its own types.
+const hasStyle = (name, style) => catalogRecipes.some(r => r.name === name && r.menuStyles.includes(style));
+
+test("catalogue week: 14 different catalogue recipes in their meal, of the chosen type and level", () => {
+ for (const seed of [1, 2, 3, 4, 5]) {
+  const menu = catalogMenu({profile, styles: ["mediterranean"], elaboration: "simple", seed});
+  assert.ok(isImportedMenuResponse(menu));
+  const dishes = weekOf(menu);
+  assert.equal(new Set(dishes.map(normalizeFood)).size, 14);
+  menu.days.forEach(d => {
+   assert.ok(catalogRecipes.some(r => r.name === d.lunch.dishName && r.slot === "lunch"));
+   assert.ok(catalogRecipes.some(r => r.name === d.dinner.dishName && r.slot === "dinner"));
+  });
+  assert.ok(dishes.every(n => hasStyle(n, "mediterranean")), "every dish of the chosen type");
+  assert.ok(dishes.filter(n => catalogRecipes.some(r => r.name === n && r.elaboration === "simple")).length >= 12, "nearly all of the chosen level");
+  assert.ok(menu.days.filter(d => dishProtein(d.lunch.dishName) && dishProtein(d.lunch.dishName) === dishProtein(d.dinner.dishName)).length <= 1, "lunch and dinner proteins differ");
+ }
+ assert.notDeepEqual(weekOf(catalogMenu({profile, styles: ["fat_loss"], elaboration: "balanced", seed: 1})), weekOf(catalogMenu({profile, styles: ["fat_loss"], elaboration: "balanced", seed: 2})), "another seed, another week");
+ assert.equal(elaborationForLevel(2), "simple");
+ assert.equal(elaborationForLevel(4), "balanced");
+ assert.equal(elaborationForLevel(6), "elaborate");
+ assert.deepEqual(readCatalogMenuStyles(["high_protein", "nope"]), ["high_protein"]);
+ assert.deepEqual(readCatalogMenuStyles(undefined), ["healthy_balanced"]);
+});
+
+test("catalogue week: allergies, diets, disliked foods and recent dishes leave recipes out", () => {
+ for (const [key, value] of [["allergies","gluten"],["allergies","lactose"],["allergies","egg"],["allergies","nuts"],["allergies","shellfish"],["dietaryRestrictions","vegan"],["dietaryRestrictions","vegetarian"],["dietaryRestrictions","pescatarian"],["dietaryRestrictions","no_pork"]]) {
+  const restricted = readMenuProfile({[key]: [value]});
+  for (const seed of [7, 8]) {
+   const menu = catalogMenu({profile: restricted, styles: ["healthy_balanced"], elaboration: "balanced", seed});
+   assert.ok(menu, `${value}: the catalogue fills the week`);
+   for (const dish of weekOf(menu)) assert.equal(visibleFoodConflict(dish, restricted), false, `${value}: ${dish}`);
+  }
+ }
+ // Minced meat usually carries breadcrumbs and egg; pasta shapes and noodles carry gluten.
+ const gluten = readMenuProfile({allergies: ["gluten"]});
+ for (const dish of ["Albóndigas de pollo y champiñón salteado", "Noodles salteados con brócoli y pollo", "Ensalada de fusilli con mozzarella, atún y tomate cherry", "Hamburguesas de atún fresco"]) assert.ok(visibleFoodConflict(dish, gluten), dish);
+ const dislikes = readMenuProfile({dislikedFoods: ["garbanzos", "salmón"]});
+ assert.ok(weekOf(catalogMenu({profile: dislikes, styles: ["healthy_balanced"], elaboration: "simple", seed: 3})).every(d => !/garbanzo|salm[oó]n/i.test(d)));
+ const first = weekOf(catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed: 9}));
+ const next = weekOf(catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", recentDishes: first, seed: 9}));
+ assert.ok(next.every(d => !first.includes(d)), "recent weeks are not repeated");
+ // Nothing left for a meal: no catalogue week (the AI decides).
+ const vegan = readMenuProfile({dietaryRestrictions: ["vegan"]});
+ const veganDinners = catalogRecipes.filter(r => r.slot === "dinner" && !visibleFoodConflict(r.name, vegan)).map(r => r.name);
+ assert.equal(catalogMenu({profile: vegan, styles: ["healthy_balanced"], elaboration: "balanced", recentDishes: veganDinners, seed: 1}), null);
+});
+
+test("HTTP route: without a weekly request the catalogue answers, without OpenAI, quota or cost", async () => {
+ const fakes = installFakeBackends(() => { throw new Error("OpenAI must not be called"); });
+ try {
+  const {POST} = require("../src/app/api/generate-menu/route.ts");
+  const response = await POST(aiRequest("generate-menu", {peopleCount: 2, menuStyle: ["high_protein"], elaborationLevel: 6}));
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.days.length, 7);
+  assert.ok(weekOf(data).every(n => hasStyle(n, "high_protein")));
+  assert.deepEqual({model: data.openaiTelemetry.modelUsed, cost: data.openaiTelemetry.estimatedCostUsd}, {model: "catalog", cost: 0});
+  assert.equal(fakes.openAICalls, 0);
+  assert.equal(fakes.begin.length, 0, "no usage record: the catalogue is free and outside the AI quota");
+  // A weekly request in words still goes to the AI, with a short sample of the catalogue.
+  const input = buildMenuInput({peopleCount: 2, freeTextPrompt: "pescado al horno", menuStyle: ["mediterranean"], elaborationLevel: 2}, profile);
+  const examples = JSON.parse(input.userPrompt).nutritionistExamples;
+  assert.ok(examples.length > 0 && examples.length <= 40);
+  assert.ok(examples.every(n => hasStyle(n, "mediterranean")));
  } finally {
   fakes.restore();
  }

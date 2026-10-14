@@ -174,14 +174,16 @@ export function validateRecipeCardContent(
   };
 }
 
-// Catalogue identities (27 recipes, src/data/nutritionist-recipes.json): the same rows the migration
-// inserts into public.recipes with origin «catalog». Exact title match only.
+// Catalogue identities (the nutritionist's 27 recipes, ids «nutri-…», in src/data/nutritionist-recipes.json):
+// the same rows the migration inserts into public.recipes with origin «catalog». Exact title match
+// only. The other catalogue recipes (titles taken from recipe websites) have no identity yet.
+export const catalogIdentityRecipes = catalog.recipes.filter((recipe) => recipe.id.startsWith("nutri-"));
 export type CatalogRecipeIdentity = { catalogKey: string; title: string; meal: "lunch" | "dinner" };
 
 export function findCatalogRecipeIdentity(title: string): CatalogRecipeIdentity | null {
   const key = recipeTitleKey(title);
   if (!key) return null;
-  const recipe = catalog.recipes.find((candidate) => recipeTitleKey(candidate.name) === key);
+  const recipe = catalogIdentityRecipes.find((candidate) => recipeTitleKey(candidate.name) === key);
   return recipe ? { catalogKey: recipe.id, title: recipe.name, meal: recipe.slot === "dinner" ? "dinner" : "lunch" } : null;
 }
 

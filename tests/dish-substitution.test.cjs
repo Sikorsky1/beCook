@@ -11,8 +11,14 @@ const {installFakeBackends, aiRequest, foodContextFor} = require("./helpers/fake
 // Synthetic data only: no real Supabase project or OpenAI key is contacted.
 const anyone = readMenuProfile(null);
 const vegan = {dietaryRestrictions: ["vegan"]};
+const {visibleFoodConflict: conflicts} = require("../src/lib/menu-generation/validation.ts");
 // Every vegan-compatible catalogue recipe, so the catalogue has nothing left for a vegan week.
-const veganCatalog = ["Lentejas estofadas", "Espaguetis con brócoli", "Escalibada", "Espárragos, berenjena, calabacín y zanahoria plancha"];
+const veganCatalog = [...new Set(catalog.recipes.map(r => r.name).filter(name => !conflicts(name, readMenuProfile(vegan))))];
+// A saved profile the catalogue barely serves (vegan, gluten, nuts, soy, sesame and legumes out):
+// its few recipes fit in a request body (13 other dishes and 10 discarded), so the AI is reached.
+const narrow = {dietaryRestrictions: ["vegan"], allergies: ["gluten", "nuts"], otherAllergies: "soja, sésamo", dislikedFoods: ["garbanzos", "lentejas", "alubias", "judías", "patatas"]};
+const {catalogRecipeFits} = require("../src/lib/menu-generation/catalog-menu.ts");
+const narrowCatalog = [...new Set(catalog.recipes.map(r => r.name).filter(name => catalogRecipeFits(name, readMenuProfile(narrow))))];
 const selection = {
  lunches: ["Pollo asado con batata", "Lentejas estofadas", "Arroz meloso de sepia", "Espaguetis con setas", "Garbanzos con espinacas", "Merluza al horno", "Paella de pollo"],
  dinners: ["Tortilla de patata", "Ensalada de tomate y queso fresco", "Salmón a la plancha", "Crema de calabaza", "Revuelto de champiñones", "Bacalao al pilpil", "Tosta de aguacate"],
@@ -57,13 +63,14 @@ test("catalogue idea is compatible, new for the week and never a discarded one",
  // Restrictions and free-text constraints are applied to every catalogue idea.
  const vegetarian = readMenuProfile({dietaryRestrictions: ["vegetarian"], allergies: ["gluten"], dislikedFoods: ["brócoli"], otherAllergies: "berenjena"});
  const seen = [];
- for (let idea; (idea = catalogAlternative(substitutionRequestFor(week, slot, seen), vegetarian)); ) seen.push(idea.dish);
+ // Every discarded idea (the request body would keep only the latest ten).
+ for (let idea; (idea = catalogAlternative({...substitutionRequestFor(week, slot, []), rejected: seen}, vegetarian)); ) seen.push(idea.dish);
  assert.ok(seen.length > 0);
  for (const dish of seen) assert.doesNotMatch(dish, /pollo|pavo|cordero|jamón|salmón|bacalao|merluza|pulpo|anchoas|ventresca|gambas|espaguetis|tosta|brócoli|berenjena/i, dish);
  // Exhausted: nothing compatible is left.
- const veganWeek = replaceSlot(week, {day: "Lunes", meal: "lunch"}, "Crema de calabaza").map((day, i) => ({...day, dinner: i < veganCatalog.length ? veganCatalog[i] : day.dinner}));
- assert.equal(catalogAlternative(substitutionRequestFor(veganWeek, {day: "Lunes", meal: "lunch"}, []), readMenuProfile(vegan)), null);
- assert.deepEqual(nextCatalogIdea(veganWeek, {day: "Lunes", meal: "lunch"}, [], vegan), {status: "catalog_exhausted"});
+ const lunes = {day: "Lunes", meal: "lunch"};
+ assert.equal(catalogAlternative({...substitutionRequestFor(week, lunes, []), rejected: veganCatalog}, readMenuProfile(vegan)), null);
+ assert.deepEqual(nextCatalogIdea(week, lunes, veganCatalog, vegan), {status: "catalog_exhausted"});
  assert.equal(nextCatalogIdea(week, slot, [], {allergies: "nuts"}).status, "error", "malformed safety constraints are never ignored");
 });
 
@@ -118,17 +125,17 @@ let aiReply;
 let logs;
 const originalInfo = console.info;
 beforeEach(() => {
- aiReply = () => Response.json({choices: [{finish_reason: "stop", message: {content: JSON.stringify({dish: "Garbanzos con espinacas y comino"})}}], usage: {prompt_tokens: 400, completion_tokens: 20, total_tokens: 420}});
+ aiReply = () => Response.json({choices: [{finish_reason: "stop", message: {content: JSON.stringify({dish: "Pisto de calabacín y berenjena"})}}], usage: {prompt_tokens: 400, completion_tokens: 20, total_tokens: 420}});
  fakes = installFakeBackends((url, init) => { fakes.lastBody = JSON.parse(init.body); return aiReply(); });
- // C1: the route reads the saved profile (vegan here); the profile in the body is ignored.
- fakes.foodContext = foodContextFor(vegan);
+ // C1: the route reads the saved profile (narrow here); the profile in the body is ignored.
+ fakes.foodContext = foodContextFor(narrow);
  logs = [];
  console.info = (...args) => logs.push(JSON.stringify(args));
 });
 afterEach(() => { fakes.restore(); console.info = originalInfo; });
 
 const {POST} = require("../src/app/api/substitute-dish/route.ts");
-const veganBody = {profile: null, day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: veganCatalog, rejected: []};
+const veganBody = {profile: null, day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: narrowCatalog.slice(0, 13), rejected: narrowCatalog.slice(13)};
 
 test("route: a compatible catalogue recipe is returned without AI, quota or cost", async () => {
  const response = await POST(aiRequest("substitute-dish", {profile: null, day: "Martes", meal: "lunch", currentDish: "Lentejas estofadas", otherDishes: []}));
@@ -144,25 +151,25 @@ test("route: catalogue exhausted -> one bounded AI attempt, billed as a menu", a
  const response = await POST(aiRequest("substitute-dish", veganBody));
  assert.equal(response.status, 200);
  const {foodContext, ...idea} = await response.json();
- assert.deepEqual(idea, {dish: "Garbanzos con espinacas y comino", source: "ai"});
+ assert.deepEqual(idea, {dish: "Pisto de calabacín y berenjena", source: "ai"});
  assert.deepEqual(foodContext.dietaryRestrictions, ["vegan"]);
  assert.ok(response.headers.get("X-Request-Id"));
  assert.equal(fakes.openAICalls, 1);
  assert.equal(fakes.lastBody.max_completion_tokens, 120);
  assert.equal(fakes.lastBody.response_format.json_schema.name, "dish_substitution");
  const prompt = JSON.parse(fakes.lastBody.messages[1].content);
- assert.deepEqual(prompt.otherDishesThisWeek, veganCatalog);
+ assert.deepEqual(prompt.otherDishesThisWeek, narrowCatalog.slice(0, 13));
  assert.deepEqual(prompt.mandatory.dietaryRestrictions, ["vegan"]);
  assert.equal(fakes.begin.length, 1);
  assert.equal(fakes.begin[0].p_flow, "menu");
  assert.equal(fakes.finish.length, 1);
  assert.equal(fakes.finish[0].p_status, "succeeded");
  assert.ok(fakes.finish[0].p_cost_usd > 0, "cost recorded");
- assert.ok(!logs.join("").includes("Garbanzos"), "no dishes in logs");
+ assert.ok(!logs.join("").includes("Pisto"), "no dishes in logs");
 });
 
 test("route: invalid AI output -> 422 without retry or repair, failure recorded", async () => {
- for (const [dish, issue] of [["Garbanzos con salsa especial", "ambiguous_dish"], ["Pollo al ajillo con patatas", "restriction_conflict"], ["Escalibada", "duplicate_dish"], ["Crema de calabaza", "same_dish"]]) {
+ for (const [dish, issue] of [["Calabacín con salsa especial", "ambiguous_dish"], ["Pollo al ajillo con patatas", "restriction_conflict"], ["Escalibada", "duplicate_dish"], ["Crema de calabaza", "same_dish"]]) {
   fakes.openAICalls = 0; fakes.finish.length = 0;
   aiReply = () => Response.json({choices: [{finish_reason: "stop", message: {content: JSON.stringify({dish})}}], usage: {prompt_tokens: 400, completion_tokens: 20, total_tokens: 420}});
   const response = await POST(aiRequest("substitute-dish", veganBody));
