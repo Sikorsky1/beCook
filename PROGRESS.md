@@ -819,6 +819,16 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | Validación | Unitarias 538/538, lint y typecheck; E2E local 28/28 (nuevo: tabla con L M X en columnas, sin IA) y en CI. Producción: tabla «L M X» pegada y ordenada en el dispositivo |
 | Despliegue be-cook | `dpl_8ukytWzYiicL5aeb7tvnoaLXFJPd` READY en `www.becook.xyz` |
 
+## Rediseño Motion Primitives en producción ✅ (2026-10-14)
+| Elemento | Resultado |
+|---|---|
+| Cambio | Rediseño completo con [motion-primitives](https://github.com/ibelick/motion-primitives) (`motion@12.43.0`; componentes en `src/components/motion-primitives/`): paleta afinada con los mismos anclajes, Fraunces en títulos, navegación inferior con píldora deslizante, títulos y listas animados, contadores con barra de progreso, progreso de IA con brillo y borde. `reducedMotion="user"`. Plan: `design-plans/2026-10-14-motion-primitives.md`; AGENTS.md actualizado con el OK de Sergio. Incluye también Google con GIS (`signInWithIdToken`) y `/sobre` de `audit-opt` |
+| Migración | Ninguna. Variables nuevas solo en Preview de la rama `motionPrimitives` (Supabase de becook-preview, Google y `VERCEL_FORCE_NO_BUILD_CACHE`) |
+| Validación | Unitarias 542/542, lint, typecheck y build; Preview `be-cook-git-motionprimitives-sikorsky1991.vercel.app` revisada por Sergio y comprobada contra becook-preview |
+| PR | [#23](https://github.com/Sikorsky1/beCook/pull/23) `motionPrimitives` → `main`, merge commit `519aa8a`. Checks en verde (application, database, e2e, Vercel) |
+| Despliegue be-cook | `dpl_4bfGyLyXm4CamQtd5xFQSsQRVn7v` READY en `www.becook.xyz` (anterior para rollback: `dpl_8ukytWzYiicL5aeb7tvnoaLXFJPd`). `/login` con el diseño nuevo y el botón de Google |
+| Pendiente (Sergio) | Probar «Continuar con Google» en `www.becook.xyz/login` (orígenes de JavaScript autorizados en Google Cloud) |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
