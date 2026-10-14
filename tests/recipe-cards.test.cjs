@@ -462,8 +462,14 @@ test("catalogue recipes: every recipe of the catalogue has a valid recipe for tw
  }
  assert.equal(catalogRecipeIndex(file).size, new Set(all.map(r => card.recipeTitleKey(r.name))).size);
  const lentils = await loadCatalogRecipe(" lentejas  ESTOFADAS ");
- assert.ok(lentils.ingredients.some(i => /lenteja/.test(i.name)));
- assert.equal(await loadCatalogRecipe("Lentejas estofadas con chorizo"), null, "exact title only");
+ assert.ok(lentils.recipe.ingredients.some(i => /lenteja/.test(i.name)));
+ assert.equal(lentils.base, null);
+ // A dish that adds a side to a catalogue recipe shows that recipe, said as such.
+ const withSide = await loadCatalogRecipe("Salmón a la plancha y ensalada mixta");
+ assert.equal(withSide.base, "Salmón a la plancha");
+ assert.equal((await loadCatalogRecipe("Salmón a la plancha con guarnición de verduras al horno")).base, "Salmón a la plancha");
+ assert.equal(await loadCatalogRecipe("Lentejas estofadasss"), null, "only a whole title followed by «y», «con» or a comma");
+ assert.equal(await loadCatalogRecipe("Pollo a la plancha"), null, "no recipe for a title outside the catalogue");
 });
 
 test("dish card view: a catalogue title without a linked card shows its recipe, without AI", async () => {
@@ -471,4 +477,5 @@ test("dish card view: a catalogue title without a linked card shows its recipe, 
  const view = await flow.loadDishCardView(day, "lunch");
  assert.equal(view.kind, "catalog_recipe");
  assert.equal(view.recipe.baseServings, 2);
+ assert.equal(view.base, null);
 });

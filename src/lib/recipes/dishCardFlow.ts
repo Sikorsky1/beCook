@@ -38,7 +38,8 @@ import { mealRecipeLink, withMealRecipe } from "@/lib/weekStorage";
 export type DishCardView =
   | { kind: "card"; card: RecipeCard }
   // The catalogue recipe of exactly this title (src/data/recipe-cards/catalog-recipes.json).
-  | { kind: "catalog_recipe"; recipe: RecipeCardContent }
+  // base: the catalogue title when the dish only starts with it (a side added), else null.
+  | { kind: "catalog_recipe"; recipe: RecipeCardContent; base: string | null }
   | {
       kind: "title_only";
       catalog: (CatalogRecipeIdentity & { reviewedVersionId: string | null }) | null;
@@ -76,8 +77,8 @@ export async function loadDishCardView(day: WeekDay, meal: MealKey): Promise<Dis
   const reviewed = identity ? (await loadCatalogRecipeIndex()).get(recipeTitleKey(title)) ?? null : null;
   // A reviewed catalogue card (database) wins; otherwise the catalogue recipe of the repository.
   if (!reviewed) {
-    const recipe = await loadCatalogRecipe(title);
-    if (recipe) return { kind: "catalog_recipe", recipe };
+    const match = await loadCatalogRecipe(title);
+    if (match) return { kind: "catalog_recipe", recipe: match.recipe, base: match.base };
   }
   return {
     kind: "title_only",
