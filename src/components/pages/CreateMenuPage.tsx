@@ -19,7 +19,6 @@ import { useIdentity } from "@/components/session/IdentityProvider";
 import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { StateMessage } from "@/components/ui/StateMessage";
-import { TextArea } from "@/components/ui/TextArea";
 import { isAiLoginRequiredError, postAi } from "@/lib/ai-client";
 import type { MealKey, WeekDay } from "@/data/mockWeek";
 import {
@@ -96,7 +95,6 @@ import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
 import type { UserProfile } from "@/lib/supabase/profiles";
 import { pageContentClass, pageShellClass } from "@/lib/ui";
 
-const freeTextPromptMaxLength = 300;
 
 // «generate» is the main path; «import» means the «¿Ya tienes un menú? Pégalo o súbelo» disclosure is open
 // (C6, step 32: no tabs any more). ?mode=import opens it.
@@ -217,7 +215,9 @@ function CreateMenuPageContent() {
   const [elaborationLevel, setElaborationLevel] = useState(
     defaultElaborationLevel,
   );
-  const [freeTextPrompt, setFreeTextPrompt] = useState("");
+  // «¿Qué te apetece esta semana?» was removed (2026-10-15): the week always comes from the recipe
+  // catalogue. Drafts and runs keep the field, always empty.
+  const freeTextPrompt = "";
   const [generationRequestId, setGenerationRequestId] = useState<string | null>(
     null,
   );
@@ -348,7 +348,6 @@ function CreateMenuPageContent() {
     if (draft) {
       setMode(modeParam === "import" ? "import" : draft.mode);
       setMenuText(draft.menuText);
-      setFreeTextPrompt(draft.freeTextPrompt.slice(0, freeTextPromptMaxLength));
       setPeopleCount(normalizePeopleCount(draft.peopleCount));
       draftPeopleScopeRef.current = dataIdentity.scope;
       const restoredStyles = draft.menuStyles.filter(isMenuStyle);
@@ -1543,25 +1542,6 @@ function CreateMenuPageContent() {
               })}
             </div>
           </fieldset>
-
-          <label className="block space-y-2">
-            <span className="t-body-strong text-[color:var(--color-foreground)]">
-              ¿Qué te apetece esta semana?
-            </span>
-            <TextArea
-              value={freeTextPrompt}
-              maxLength={freeTextPromptMaxLength}
-              onChange={(event) => {
-                touchForm();
-                setFreeTextPrompt(event.target.value.slice(0, freeTextPromptMaxLength));
-              }}
-              placeholder="Ejemplo: cenas ligeras, comidas fáciles de tupper, algo mediterráneo y sin mucho pescado."
-              className="min-h-28 resize-y bg-[color:var(--color-surface)]"
-            />
-            <span className="t-meta block text-right">
-              {freeTextPrompt.length}/{freeTextPromptMaxLength}
-            </span>
-          </label>
 
           <GenerationContextSummary
             profile={profile}

@@ -99,9 +99,8 @@ export async function completeOnboarding(page: Page, { pantryItem }: { pantryIte
   await expect(page).toHaveURL(/\/create-menu/);
 }
 
-// A weekly request in words sends the menu to the (simulated) AI; without one, the catalogue answers.
-export async function generateProposal(page: Page, weeklyRequest = "Algo de cuchara") {
-  if (weeklyRequest) await page.getByRole("textbox", { name: "¿Qué te apetece esta semana?" }).fill(weeklyRequest);
+// The week comes from the recipe catalogue (no AI), so its dishes vary: tests read them back.
+export async function generateProposal(page: Page) {
   await page.getByRole("button", { name: "Crear menú semanal" }).click();
   await expect(page.getByRole("heading", { level: 2, name: "Revisa tu semana" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Usar la propuesta" })).toContainText("14 platos · 7 días");
@@ -126,8 +125,17 @@ export async function accountWithMenu(page: Page) {
 
 export const savedStatus = (page: Page) => page.getByRole("main").getByRole("status").filter({ hasText: "Guardado en tu cuenta" });
 
+// A dish of the account's saved week («Martes» lunch by default), read under its own session.
+export async function accountDish(user: TestUser, day = "Martes", meal: "lunch" | "dinner" = "lunch") {
+  const rows = await readOwnRows<Record<string, string>>(user, "week_days", `select=${meal}_dish_name&day_name=eq.${encodeURIComponent(day)}`);
+  const dish = rows[0]?.[`${meal}_dish_name`];
+  if (!dish) throw new Error(`no ${meal} on ${day}`);
+  return dish;
+}
+
 // The week's dish buttons read «Comida de hoy: X. Ver ficha» or «Comida del Martes: X. Ver ficha».
-export const dishButton = (page: Page, dish: string) => page.getByRole("button", { name: new RegExp(`: ${dish}\\. Ver ficha$`) });
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export const dishButton = (page: Page, dish: string) => page.getByRole("button", { name: new RegExp(`: ${escapeRegExp(dish)}\\. Ver ficha$`) });
 
 // Shopping rows: «Tomate, 28 ud» (the quantity depends on the week, the name does not).
 export const shoppingItem = (page: Page, name: string) => page.getByRole("checkbox", { name: new RegExp(`^${name}, `) });

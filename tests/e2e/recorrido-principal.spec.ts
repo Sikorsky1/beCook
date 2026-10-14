@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { applyProposal, completeOnboarding, dishButton, generateProposal, password, savedStatus, shoppingItem, uniqueEmail } from "./helpers";
+import { applyProposal, completeOnboarding, generateProposal, password, savedStatus, shoppingItem, uniqueEmail } from "./helpers";
 
 // Alta local → onboarding → propuesta → aplicar → semana → ficha → compra → marcar → recargar.
 test("alta, primer menú, ficha y compra que sobrevive a recargar @320", async ({ page }) => {
@@ -21,15 +21,17 @@ test("alta, primer menú, ficha y compra que sobrevive a recargar @320", async (
 
   await expect(page).toHaveURL(/\/week\?week=\d{4}-W\d{2}/);
   await expect(savedStatus(page)).toBeVisible();
-  await expect(dishButton(page, "Pollo asado con batata")).toBeVisible();
-  await expect(dishButton(page, "Tosta de Salmón ahumado")).toBeVisible();
+  // The week comes from the recipe catalogue: the dishes vary, so the first lunch is read back.
+  const firstLunch = page.getByRole("button", { name: /^Comida [^:]+: .+\. Ver ficha$/ }).first();
+  await expect(firstLunch).toBeVisible();
+  const dish = (await firstLunch.getAttribute("aria-label"))!.replace(/^Comida [^:]+: /, "").replace(/\. Ver ficha$/, "");
 
   // Ficha: a catalogue dish shows its recipe for two (ingredients, then steps), without AI.
-  await dishButton(page, "Lentejas estofadas").click();
-  const card = page.getByRole("dialog", { name: "Lentejas estofadas" });
+  await firstLunch.click();
+  const card = page.getByRole("dialog", { name: dish });
   await expect(card).toBeVisible();
   await expect(card.getByText(/^Para 2 personas/)).toBeVisible();
-  await expect(card.getByRole("region", { name: "Ingredientes" })).toContainText("lentejas");
+  expect(await card.getByRole("region", { name: "Ingredientes" }).getByRole("listitem").count()).toBeGreaterThanOrEqual(3);
   expect(await card.getByRole("region", { name: "Pasos" }).getByRole("listitem").count()).toBeGreaterThanOrEqual(3);
   await expect(card.getByRole("button", { name: "Crear ficha estimada (IA)" })).toHaveCount(0);
   await expect(card.getByText(/alérgenos|trazas|Compatibilidad/)).toHaveCount(0);
