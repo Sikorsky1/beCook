@@ -11,6 +11,7 @@ import {
 } from "@/lib/data/repositories";
 import type { IsoWeek } from "@/lib/isoWeek";
 import { getIsoWeekStorageId } from "@/lib/isoWeek";
+import { loadCatalogRecipe } from "@/lib/recipes/catalogRecipeCards";
 import {
   findCatalogRecipeIdentity,
   parseRecipeCard,
@@ -18,6 +19,7 @@ import {
   sameDishTitle,
   type CatalogRecipeIdentity,
   type RecipeCard,
+  type RecipeCardContent,
 } from "@/lib/recipes/card";
 import {
   checkDish,
@@ -35,6 +37,8 @@ import { mealRecipeLink, withMealRecipe } from "@/lib/weekStorage";
 // reviewed version it can be used without AI, otherwise the catalogue card is pending review.
 export type DishCardView =
   | { kind: "card"; card: RecipeCard }
+  // The catalogue recipe of exactly this title (src/data/recipe-cards/catalog-recipes.json).
+  | { kind: "catalog_recipe"; recipe: RecipeCardContent }
   | {
       kind: "title_only";
       catalog: (CatalogRecipeIdentity & { reviewedVersionId: string | null }) | null;
@@ -70,6 +74,11 @@ export async function loadDishCardView(day: WeekDay, meal: MealKey): Promise<Dis
   }
   const identity = findCatalogRecipeIdentity(title);
   const reviewed = identity ? (await loadCatalogRecipeIndex()).get(recipeTitleKey(title)) ?? null : null;
+  // A reviewed catalogue card (database) wins; otherwise the catalogue recipe of the repository.
+  if (!reviewed) {
+    const recipe = await loadCatalogRecipe(title);
+    if (recipe) return { kind: "catalog_recipe", recipe };
+  }
   return {
     kind: "title_only",
     catalog: identity ? { ...identity, reviewedVersionId: reviewed?.versionId ?? null } : null,
@@ -309,4 +318,29 @@ export function dishCompatibilityView(
     return { tone: "warning", heading: check.basis === "title_only" ? "No podemos comprobarlo" : "No podemos comprobarlo del todo", basis, lines, notes };
   }
   return { tone: "neutral", heading: "No hemos detectado conflictos con tu perfil", basis, lines, notes };
+}
+
+// What the dialog says about the profile: only the restrictions the dish certainly breaks, by its
+// title or its recipe, one short label each («Alergia: Gluten», «Vegano», «No te gusta: coliflor»).
+// Nothing when there is no certain conflict or the profile is not ready.
+export function dishConflictLabels(
+  title: string,
+  recipe: Pick<RecipeCardContent, "ingredients" | "possibleAllergens"> | null,
+  restrictions: DishCardRestrictions,
+): string[] {
+  if (restrictions.state !== "ready" || !hasFoodRestrictions(restrictions.profile)) return [];
+  const card = recipe ? { ingredients: recipe.ingredients, possibleAllergens: recipe.possibleAllergens, reviewStatus: "inferred" as const } : null;
+  const labels: string[] = [];
+  for (const finding of checkDish({ title, card }, restrictions.profile).findings) {
+    if (finding.certainty !== "certain") continue;
+    const { kind, label } = finding.restriction;
+    const text =
+      kind === "allergy" || kind === "other_allergy"
+        ? `Alergia: ${label.charAt(0).toUpperCase()}${label.slice(1)}`
+        : kind === "disliked"
+          ? `No te gusta: ${label}`
+          : label;
+    if (!labels.includes(text)) labels.push(text);
+  }
+  return labels;
 }

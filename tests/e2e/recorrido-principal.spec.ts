@@ -24,14 +24,15 @@ test("alta, primer menú, ficha y compra que sobrevive a recargar @320", async (
   await expect(dishButton(page, "Pollo asado con batata")).toBeVisible();
   await expect(dishButton(page, "Tosta de Salmón ahumado")).toBeVisible();
 
-  // Ficha: the catalogue dish has no card yet; the estimated one comes from the simulated OpenAI.
+  // Ficha: a catalogue dish shows its recipe for two (ingredients, then steps), without AI.
   await dishButton(page, "Lentejas estofadas").click();
   const card = page.getByRole("dialog", { name: "Lentejas estofadas" });
   await expect(card).toBeVisible();
-  await card.getByRole("button", { name: "Crear ficha estimada (IA)" }).click();
-  await expect(card.getByText("Estimada por IA · sin revisar")).toBeVisible();
-  await expect(card.getByRole("region", { name: "Ingredientes" })).toContainText("tomate");
-  await expect(card.getByRole("region", { name: "Pasos" }).getByRole("listitem")).toHaveCount(2);
+  await expect(card.getByText(/^Para 2 personas/)).toBeVisible();
+  await expect(card.getByRole("region", { name: "Ingredientes" })).toContainText("lentejas");
+  expect(await card.getByRole("region", { name: "Pasos" }).getByRole("listitem").count()).toBeGreaterThanOrEqual(3);
+  await expect(card.getByRole("button", { name: "Crear ficha estimada (IA)" })).toHaveCount(0);
+  await expect(card.getByText(/alérgenos|trazas|Compatibilidad/)).toHaveCount(0);
   await card.getByRole("button", { name: "Cerrar" }).click();
   await expect(card).toBeHidden();
 
