@@ -9,7 +9,8 @@ import type { SupermarketCategory } from "@/lib/shoppingList";
 // with a few examples. Read on the device, without the AI:
 // - parseNutritionPlan turns the text (as the PDF reader or a paste gives it) into the plan;
 // - generatePlanWeek picks seven lunches and dinners that keep the rules, from the plan's examples,
-//   the catalogue (src/data/nutritionist-recipes.json) and similar ideas below;
+//   the catalogue (src/data/nutritionist-recipes.json, first and by exact title, so the week's card
+//   shows its recipe) and similar ideas below;
 // - planDailyMeals rotates the options day by day (option 1 on Monday, 2 on Tuesday, 3 on
 //   Wednesday, 1 again on Thursday…) and planShoppingItems adds up what they need for the week.
 // Pure: no network, no storage.
@@ -501,13 +502,15 @@ function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Ran
         dish.carb === slot.carb &&
         (slot.protein ? dish.protein === slot.protein : dish.protein !== null && dish.protein !== "egg" && dish.protein !== "red_meat"),
     );
-    // The plan's own examples first, then the catalogue and the ideas.
+    // Catalogue recipes first, by their exact title (the week's card then shows their recipe), then
+    // the plan's own examples and the ideas, which take the plan's vegetable side.
+    const fromCatalog = matches.filter((dish) => dish.source === "catalog");
     const own = matches.filter((dish) => dish.source === "plan");
-    const chosen = own.length && random() < 0.6 ? pick(own, random) : matches.length ? pick(matches, random) : null;
+    const chosen = fromCatalog.length ? pick(fromCatalog, random) : own.length ? pick(own, random) : matches.length ? pick(matches, random) : null;
     const side = pick(sides, random);
     if (chosen) {
       used.add(chosen.title);
-      return withSide(chosen.title, side);
+      return chosen.source === "catalog" ? chosen.title : withSide(chosen.title, side);
     }
     const rule = plan[meal].rules.find((candidate) => candidate.protein === slot.protein && !candidate.carb);
     let composed = composeDish(slot, plan, rule, side, random);

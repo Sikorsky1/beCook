@@ -84,6 +84,15 @@ test("every generated week keeps the plan's rules: lunch proteins and carbohydra
  assert.notDeepEqual(np.generatePlanWeek(plan, 7), np.generatePlanWeek(plan, 8));
 });
 
+test("the plan's week takes catalogue recipes by their exact title, so every card shows its recipe", () => {
+ const {recipeTitleKey} = require("../src/lib/recipes/card.ts");
+ const catalogTitles = new Set(require("../src/data/nutritionist-recipes.json").recipes.map((recipe) => recipeTitleKey(recipe.name)));
+ for (let seed = 1; seed <= 30; seed++) {
+  const titles = np.generatePlanWeek(plan, seed).flatMap((day) => [day.lunch, day.dinner]).filter((slot) => slot.status === "planned").map((slot) => slot.dishName);
+  assert.ok(titles.every((title) => catalogTitles.has(recipeTitleKey(title))), `seed ${seed}: ${titles.filter((title) => !catalogTitles.has(recipeTitleKey(title))).join(" / ")}`);
+ }
+});
+
 test("with the profile, the week leaves out dishes that show its allergies, diets and disliked foods", () => {
  const {checkDish, blocksAutomaticProposal, mentionsDislikedFood} = require("../src/lib/recipes/restriction-check.ts");
  const profile = {dietaryRestrictions: [], allergies: ["shellfish", "nuts"], otherAllergies: "", dislikedFoods: ["salmón", "garbanzos"]};

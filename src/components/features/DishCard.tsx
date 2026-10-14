@@ -64,7 +64,8 @@ function ConflictLabels({ labels }: { labels: string[] }) {
 }
 
 // Ingredients first, then the steps. «estimated»: a card the AI estimated from the title.
-function RecipeBody({ recipe, estimated }: { recipe: RecipeCardContent; estimated: boolean }) {
+// base: the catalogue recipe the dish starts with, when the dish adds something to it.
+function RecipeBody({ recipe, estimated, base = null }: { recipe: RecipeCardContent; estimated: boolean; base?: string | null }) {
   const id = useId();
   const ingredientsId = `${id}-dish-card-ingredients`;
   const stepsId = `${id}-dish-card-steps`;
@@ -72,6 +73,7 @@ function RecipeBody({ recipe, estimated }: { recipe: RecipeCardContent; estimate
     `Para ${recipe.baseServings} ${recipe.baseServings === 1 ? "persona" : "personas"}`,
     recipe.totalMinutes ? `${recipe.totalMinutes} min` : null,
     estimated ? "Estimada por IA · sin revisar" : null,
+    base ? `Receta de «${base}»` : null,
   ].filter(Boolean);
 
   return (
@@ -252,7 +254,7 @@ export function DishCard({
               Cargando la ficha…
             </p>
           ) : view.kind === "catalog_recipe" ? (
-            <RecipeBody recipe={view.recipe} estimated={false} />
+            <RecipeBody recipe={view.recipe} estimated={false} base={view.base} />
           ) : view.kind === "error" ? (
             <div className="space-y-2">
               <p className="t-body text-[color:var(--color-danger)]" role="alert">
