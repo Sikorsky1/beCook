@@ -49,7 +49,8 @@ test("alta, primer menú, ficha y compra que sobrevive a recargar @320", async (
   await eggs.click();
   await expect(eggs).toBeChecked();
   await expect(savedStatus(page)).toBeVisible();
-  await expect(page.getByText(/^1\/\d+ comprados$/)).toBeVisible();
+  // The counter is read once for screen readers and once animated (aria-hidden): the first is the text.
+  await expect(page.getByText(/^1\/\d+ comprados$/).first()).toBeVisible();
 
   await page.reload();
   await expect(page.getByRole("heading", { level: 1, name: "Tu compra" })).toBeVisible();
