@@ -163,8 +163,11 @@ test("HTTP route: without a weekly request the catalogue answers, without OpenAI
   // A weekly request in words still goes to the AI, with a short sample of the catalogue.
   const input = buildMenuInput({peopleCount: 2, freeTextPrompt: "pescado al horno", menuStyle: ["mediterranean"], elaborationLevel: 2}, profile);
   const examples = JSON.parse(input.userPrompt).nutritionistExamples;
-  assert.ok(examples.length > 0 && examples.length <= 40);
-  assert.ok(examples.every(n => hasStyle(n, "mediterranean")));
+  const own = new Set(catalogRecipes.filter(r => r.id.startsWith("nutri-")).map(r => r.name));
+  const sample = examples.filter(n => !own.has(n));
+  assert.ok(examples.includes("Pollo asado con batata"), "the nutritionist's recipes are always references");
+  assert.ok(sample.length > 0 && sample.length <= 40);
+  assert.ok(sample.every(n => hasStyle(n, "mediterranean")));
  } finally {
   fakes.restore();
  }

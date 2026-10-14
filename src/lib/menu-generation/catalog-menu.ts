@@ -168,7 +168,8 @@ export function catalogMenu(request: CatalogMenuRequest): ImportedMenuResponse |
 }
 
 // A short list of catalogue references for the AI prompt (when the user writes a weekly request):
-// recipes of the chosen types, compatible with the profile, a few per meal.
+// the nutritionist's own recipes compatible with the profile, then a few recipes of the chosen
+// types per meal.
 export function catalogExamples(request: CatalogMenuRequest, perMeal = 20): string[] {
   const random = seededRandom(request.seed);
   return (["lunch", "dinner"] as const).flatMap((meal) => {
@@ -179,6 +180,8 @@ export function catalogExamples(request: CatalogMenuRequest, perMeal = 20): stri
       const other = Math.floor(random() * (index + 1));
       [best[index], best[other]] = [best[other], best[index]];
     }
-    return best.slice(0, perMeal).map((candidate) => candidate.name);
+    const own = pool.filter((candidate) => candidate.id.startsWith("nutri-"));
+    const others = best.filter((candidate) => !candidate.id.startsWith("nutri-")).slice(0, perMeal);
+    return [...own, ...others].map((candidate) => candidate.name);
   });
 }
