@@ -452,15 +452,19 @@ test("catalogue recipes: every recipe of the catalogue has a valid recipe for tw
  const file = require("../src/data/recipe-cards/catalog-recipes.json");
  const all = require("../src/data/nutritionist-recipes.json").recipes;
  const {catalogRecipeIndex, loadCatalogRecipe} = require("../src/lib/recipes/catalogRecipeCards.ts");
- assert.deepEqual(file.recipes.map(r => r.id).sort(), all.map(r => r.id).sort(), "one recipe per catalogue entry");
+ const catalogEntries = file.recipes.filter(r => !r.id.startsWith("idea-"));
+ assert.deepEqual(catalogEntries.map(r => r.id).sort(), all.map(r => r.id).sort(), "one recipe per catalogue entry");
+ // Plus the nutritionist plan's fallback ideas, so a week from the plan has every recipe.
+ const ideaTitles = [...fs.readFileSync(path.join(root, "src/lib/nutritionPlan.ts"), "utf8").matchAll(/\{ title: "([^"]+)", meals:/g)].map(m => m[1]);
+ for (const title of ideaTitles) assert.ok(await loadCatalogRecipe(title), title);
  for (const entry of file.recipes) {
-  assert.equal(entry.title, all.find(r => r.id === entry.id).name, entry.id);
+  if (!entry.id.startsWith("idea-")) assert.equal(entry.title, all.find(r => r.id === entry.id).name, entry.id);
   const checked = card.validateRecipeCardContent(entry.card);
   assert.ok(checked.ok, `${entry.id}: ${checked.reason}`);
   assert.equal(entry.card.baseServings, 2, entry.id);
   assert.ok(entry.card.steps.length >= 3, entry.id);
  }
- assert.equal(catalogRecipeIndex(file).size, new Set(all.map(r => card.recipeTitleKey(r.name))).size);
+ assert.equal(catalogRecipeIndex(file).size, new Set(file.recipes.map(r => card.recipeTitleKey(r.title))).size);
  const lentils = await loadCatalogRecipe(" lentejas  ESTOFADAS ");
  assert.ok(lentils.recipe.ingredients.some(i => /lenteja/.test(i.name)));
  assert.equal(lentils.base, null);
@@ -469,7 +473,7 @@ test("catalogue recipes: every recipe of the catalogue has a valid recipe for tw
  assert.equal(withSide.base, "Salmón a la plancha");
  assert.equal((await loadCatalogRecipe("Salmón a la plancha con guarnición de verduras al horno")).base, "Salmón a la plancha");
  assert.equal(await loadCatalogRecipe("Lentejas estofadasss"), null, "only a whole title followed by «y», «con» or a comma");
- assert.equal(await loadCatalogRecipe("Pollo a la plancha"), null, "no recipe for a title outside the catalogue");
+ assert.equal(await loadCatalogRecipe("Pollo frito con patatas"), null, "no recipe for a title outside the catalogue");
 });
 
 test("dish card view: a catalogue title without a linked card shows its recipe, without AI", async () => {
