@@ -2,6 +2,7 @@
 
 import { ArrowLeft, Check, ShoppingBasket, Sparkles, UsersRound } from "lucide-react";
 import Link from "next/link";
+import { motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -63,12 +64,15 @@ function StepProgress({ step }: { step: ActiveOnboardingStep }) {
       </p>
       <div className="mt-2 grid grid-cols-3 gap-1.5" aria-hidden="true">
         {activeOnboardingSteps.map((item, itemIndex) => (
-          <span
-            key={item}
-            className={`h-1.5 rounded-full ${
-              itemIndex <= index ? "bg-[color:var(--color-accent)]" : "bg-[color:var(--color-border)]"
-            }`}
-          />
+          <span key={item} className="h-1.5 overflow-hidden rounded-full bg-[color:var(--color-border)]">
+            {/* Motion Primitives: each finished step fills its segment. */}
+            <motion.span
+              className="block h-full origin-left rounded-full bg-gradient-to-r from-[color:var(--color-accent)] to-[color:var(--color-accent-strong)]"
+              initial={false}
+              animate={{ scaleX: itemIndex <= index ? 1 : 0 }}
+              transition={{ type: "spring", stiffness: 140, damping: 22 }}
+            />
+          </span>
         ))}
       </div>
     </div>
@@ -391,6 +395,15 @@ export default function OnboardingPage() {
     <>
       <StepProgress step={step} />
 
+      {/* Motion Primitives: each step slides in when it opens (no fixed bars inside). */}
+      <motion.div
+        key={step}
+        className="flex flex-col gap-4"
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+      >
+
       {step === "about" ? (
         <Card className="space-y-5 p-4 sm:p-6">
           <h1 className="t-h1 text-[color:var(--color-foreground)]">Bienvenido a beCook</h1>
@@ -498,6 +511,7 @@ export default function OnboardingPage() {
           </div>
         </Card>
       ) : null}
+      </motion.div>
     </>,
   );
 }

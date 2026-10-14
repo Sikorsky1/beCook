@@ -15,6 +15,8 @@ import { useIdentity } from "@/components/session/IdentityProvider";
 import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
 import { SyncStatus } from "@/components/session/SyncStatus";
 import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
+import { AnimatedGroup } from "@/components/motion-primitives/animated-group";
+import { CountUp, ProgressMeter } from "@/components/motion/ProgressMeter";
 import { ShoppingTabs } from "@/components/layout/ShoppingTabs";
 import { Card } from "@/components/ui/Card";
 import { StateMessage } from "@/components/ui/StateMessage";
@@ -82,8 +84,15 @@ function ShoppingProgress({
   totalItemsCount,
 }: ShoppingProgressProps) {
   return (
-    <StatusPill>
-      {checkedItemsCount}/{totalItemsCount} comprados
+    <StatusPill className="flex-col items-stretch gap-1 py-1.5 sm:py-1.5">
+      <span className="sr-only">
+        {checkedItemsCount}/{totalItemsCount} comprados
+      </span>
+      {/* Motion Primitives: the count rolls and the bar fills as items are checked. */}
+      <span aria-hidden="true" className="whitespace-nowrap">
+        <CountUp value={checkedItemsCount} className="text-[color:var(--color-foreground)]" />/{totalItemsCount} comprados
+      </span>
+      <ProgressMeter done={checkedItemsCount} total={totalItemsCount} className="h-1" />
     </StatusPill>
   );
 }
@@ -699,7 +708,7 @@ export default function ShoppingListPage() {
                     key={section.category}
                     href={`#${shoppingSectionId(section.category)}`}
                     aria-label={`${capitalize(section.category)}: ${section.done} de ${section.total} comprados`}
-                    className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-sm font-semibold ${
+                    className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-sm font-semibold transition-colors hover:border-[color:var(--color-border-strong)] ${
                       section.total > 0 && section.done === section.total
                         ? "border-[color:var(--color-success)] bg-[color:var(--color-success-soft)] text-[color:var(--color-success-hover)]"
                         : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)]"
@@ -837,18 +846,25 @@ export default function ShoppingListPage() {
                   <p className="t-meta text-[color:var(--color-success-hover)]">Has comprado todo lo que falta de esta semana.</p>
                 </StateMessage>
               ) : null}
-              {sections.map((section) => (
-                <ShoppingSection
-                  key={section.category}
-                  category={section.category}
-                  rows={section.rows}
-                  done={section.done}
-                  total={section.total}
-                  actions={rowActions}
-                />
-              ))}
+              {/* Motion Primitives: the sections come in one after another. */}
+              <AnimatedGroup
+                preset="slide"
+                className="space-y-5"
+                variants={{ container: { visible: { transition: { staggerChildren: 0.06 } } } }}
+              >
+                {sections.map((section) => (
+                  <ShoppingSection
+                    key={section.category}
+                    category={section.category}
+                    rows={section.rows}
+                    done={section.done}
+                    total={section.total}
+                    actions={rowActions}
+                  />
+                ))}
+              </AnimatedGroup>
               {atHome.length > 0 ? (
-                <details id={shoppingSectionId("en-casa")} className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+                <details id={shoppingSectionId("en-casa")} className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] shadow-[var(--shadow-card)]">
                   <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-4 py-3">
                     <span className="t-body-strong text-[color:var(--color-foreground)]">
                       Ya lo tienes habitualmente ({atHome.length})

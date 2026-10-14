@@ -275,10 +275,15 @@ export function WeekDayCard({
     return (
       <article
         aria-labelledby={headingId}
-        className="rounded-[var(--radius-card)] border-2 border-[color:var(--color-accent)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-card)] sm:p-5"
+        className="relative overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--color-accent)]/45 bg-gradient-to-br from-[color:var(--color-surface)] via-[color:var(--color-surface)] to-[color:var(--color-accent-soft)] p-4 shadow-[var(--shadow-float)] sm:p-6"
       >
-        <div className="flex items-baseline gap-2">
-          <span className="t-meta rounded-full bg-[color:var(--color-accent-strong)] px-2.5 py-1 font-semibold leading-none text-white">
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-[color:var(--color-glow)] blur-2xl"
+        />
+        <div className="relative flex items-baseline gap-2.5">
+          <span className="t-meta inline-flex items-center gap-1.5 rounded-full bg-[color:var(--color-ink)] px-3 py-1.5 font-semibold leading-none text-[color:var(--color-ink-foreground)]">
+            <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-full bg-[color:var(--color-accent)] motion-reduce:animate-none" />
             Hoy
           </span>
           <h2 id={headingId} className="t-h2 text-[color:var(--color-foreground)]">
@@ -287,7 +292,7 @@ export function WeekDayCard({
           </h2>
         </div>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="relative mt-4 grid gap-3 sm:grid-cols-2">
           {mealLabels.map((meal) => {
             const value = day[meal.key];
             const isFree = value === "LIBRE";
@@ -327,11 +332,11 @@ export function WeekDayCard({
   return (
     <article
       aria-labelledby={headingId}
-      className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5 shadow-[0_6px_18px_rgba(46,42,38,0.04)]"
+      className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]/90 px-3 py-3 shadow-[var(--shadow-card)] backdrop-blur transition-[border-color,box-shadow] duration-200 hover:border-[color:var(--color-border-strong)]"
     >
       <div className="flex gap-3">
-        <h2 id={headingId} className="w-11 shrink-0 pt-1.5 leading-tight">
-          <span aria-hidden="true" className="block text-sm font-semibold text-[color:var(--color-foreground)]">
+        <h2 id={headingId} className="flex w-12 shrink-0 flex-col items-center self-start rounded-[var(--radius-input)] bg-[color:var(--color-surface-muted)] px-1 py-2 text-center leading-tight">
+          <span aria-hidden="true" className="block font-[family-name:var(--font-fraunces)] text-base font-semibold text-[color:var(--color-foreground)]">
             {shortDayName(day.day)}
           </span>
           <span aria-hidden="true" className="t-meta block">

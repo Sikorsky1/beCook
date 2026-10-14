@@ -64,8 +64,9 @@ function baseEnv(api) {
     __NEXT_PROCESSED_ENV: "true",
     NEXT_PUBLIC_SUPABASE_URL: api.url,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: api.key,
-    // «Continuar con Google» is shown; the journey intercepts the redirection to Auth.
+    // «Continuar con Google» is shown; the journeys replace Google's script and Auth's id_token grant.
     NEXT_PUBLIC_AUTH_PROVIDERS: "google",
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID: "e2e-local.apps.googleusercontent.com",
   });
 }
 

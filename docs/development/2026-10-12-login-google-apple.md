@@ -11,6 +11,42 @@ Se puede hacer con lo que ya tienes (Supabase Auth en plan Free, Vercel, becook.
 
 Los usuarios que ya tienen cuenta con email y contraseña **no pierden nada**: si entran con Google usando el mismo email, Supabase une las dos formas de entrar en la misma cuenta y conservan sus menús, compra y perfil. La excepción es Apple con «Ocultar mi email» (más abajo).
 
+## Actualización (2026-10-12, tarde): Google sin pasar por supabase.co
+
+Para que Google apruebe la marca («beCook» en su pantalla), todos los dominios autorizados tienen que
+ser nuestros y `supabase.co` no lo es. Por eso Google ya **no** usa la redirección de Supabase
+(`signInWithOAuth`):
+
+- En `/login` y `/signup` se carga el botón oficial de Google (Google Identity Services,
+  `https://accounts.google.com/gsi/client`, ventana emergente). Google devuelve un *ID token* a la
+  página y `supabase.auth.signInWithIdToken({ provider: "google", token, nonce })` abre la sesión.
+  Cada intento lleva un nonce nuevo: a Google se le da su SHA-256 y a Supabase el valor en claro.
+- El botón solo aparece con `NEXT_PUBLIC_AUTH_PROVIDERS` que incluya `google` **y**
+  `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (el ID de cliente web, público:
+  `159899872726-f97ksbdk4qoh63ev05pvmstaggcl3qlb.apps.googleusercontent.com`).
+- Tras entrar: `next` o `/week` (OnboardingGate manda a una cuenta nueva al onboarding).
+- La unión con cuentas de email existentes es la misma: Supabase une por email verificado tanto en la
+  redirección como con ID token.
+- Apple sigue preparado con la redirección (oculto), porque no afecta a la pantalla de Google.
+- Página pública `/sobre` («Qué es beCook»), enlazada desde `/login`, `/signup`, `/privacidad` y
+  `/condiciones`: es la **página principal** que se pone en Google (`https://www.becook.xyz/sobre`).
+- La app no tiene CSP. Si se añade, hay que permitir `https://accounts.google.com/gsi/client`
+  (script), `https://accounts.google.com/gsi/` (frame, connect y style).
+
+Lo que cambia en Google Cloud (cliente web «beCook web (Supabase)»):
+
+- **Orígenes de JavaScript autorizados**: `https://www.becook.xyz`, `https://becook.xyz`,
+  `https://be-cook-git-audit-opt-sikorsky1991.vercel.app` (Preview) y, para probar en local,
+  `http://localhost` y `http://localhost:3000`.
+- **Desarrollo de marca**: página principal `https://www.becook.xyz/sobre`; dominios autorizados,
+  solo `becook.xyz` cuando esto esté en producción.
+- **URIs de redireccionamiento** de `supabase.co`: se pueden quitar cuando esto esté en producción
+  (el botón con ID token no las usa).
+- En Supabase (Google), el «Client ID» sigue siendo el mismo; el secreto deja de usarse pero no
+  estorba. «Skip nonce checks» sigue desactivado.
+
+Los pasos G4, G5 y «Pantalla de Google» de más abajo describen el montaje anterior con redirección.
+
 ## Cómo funciona hoy (lo que he revisado)
 
 - `src/lib/auth/account.ts`: alta e inicio de sesión con email y contraseña (`signUp`, `signInWithPassword`), mensajes de error en español por código.

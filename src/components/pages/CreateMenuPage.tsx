@@ -13,6 +13,8 @@ import { ProfileReadinessNotice } from "@/components/features/ProfileReadinessNo
 import { ProposalActionBar } from "@/components/features/ProposalActionBar";
 import { ProposalDayCard, type RequestProposalIdea } from "@/components/features/ProposalDayCard";
 import { ReplaceMenuDialog } from "@/components/features/ReplaceMenuDialog";
+import { AnimatedGroup } from "@/components/motion-primitives/animated-group";
+import { TextEffect } from "@/components/motion-primitives/text-effect";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -1327,7 +1329,9 @@ function CreateMenuPageContent() {
           </Link>
           <p className="t-eyebrow">Crear menú</p>
           <h1 className="t-h1 mt-2 text-[color:var(--color-foreground)]">
-            Prepara tu menú semanal
+            <TextEffect as="span" per="word" preset="fade-in-blur" speedReveal={1.4}>
+              Prepara tu menú semanal
+            </TextEffect>
           </h1>
           {targetIsoWeek ? (
             <p className="t-meta mt-2">
@@ -1384,8 +1388,16 @@ function CreateMenuPageContent() {
           </div>
         </div>
 
-        <Card aria-labelledby="create-menu-generate-title" className="space-y-4 p-3.5 sm:p-5">
-          <h2 id="create-menu-generate-title" className="t-h3 text-[color:var(--color-foreground)]">
+        <Card
+          aria-labelledby="create-menu-generate-title"
+          className="relative space-y-4 overflow-hidden border-[color:var(--color-accent)]/40 bg-gradient-to-br from-[color:var(--color-surface)] via-[color:var(--color-surface)] to-[color:var(--color-accent-soft)] p-4 shadow-[var(--shadow-float)] sm:p-6"
+        >
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-[color:var(--color-glow)] blur-3xl"
+          />
+          <h2 id="create-menu-generate-title" className="t-h2 relative flex items-center gap-2 text-[color:var(--color-foreground)]">
+            <Sparkles aria-hidden="true" className="h-5 w-5 shrink-0 text-[color:var(--color-accent-strong)]" />
             Crea un menú con beCook
           </h2>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
@@ -1683,7 +1695,13 @@ function CreateMenuPageContent() {
               ¿Algún plato no encaja? Pulsa «Otra idea» para cambiar solo ese; el resto de la semana no cambia.
             </p>
 
-            <div key={proposalKey} className="flex flex-col gap-2.5">
+            {/* Motion Primitives: the proposed days come in one after another. */}
+            <AnimatedGroup
+              key={proposalKey}
+              preset="blur-slide"
+              className="flex flex-col gap-2.5"
+              variants={{ container: { visible: { transition: { staggerChildren: 0.06 } } } }}
+            >
               {importedWeekDays.map((day) => (
                 <ProposalDayCard
                   key={day.day}
@@ -1700,7 +1718,7 @@ function CreateMenuPageContent() {
                   }
                 />
               ))}
-            </div>
+            </AnimatedGroup>
 
             {/* Room for the fixed bar, so the last day is never hidden behind it. */}
             <div aria-hidden="true" className={contextConfirm ? "h-52" : "h-28"} />
