@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 
+import { AnimatedGroup } from "@/components/motion-primitives/animated-group";
+import { TextEffect } from "@/components/motion-primitives/text-effect";
 import { Card } from "@/components/ui/Card";
 import { readAuthLinkError } from "@/lib/auth/account";
 import { safeNextPath } from "@/lib/navigation";
@@ -38,11 +40,17 @@ type AuthPageShellProps = {
 export function AuthPageShell({ title, lede, children, guestHref }: AuthPageShellProps) {
   return (
     <main className={pageShellClass}>
-      <div className="mx-auto flex w-full max-w-md flex-col gap-5 sm:gap-6">
+      {/* Motion Primitives: header, form and guest link come in one after another. */}
+      <AnimatedGroup preset="blur-slide" className="mx-auto flex w-full max-w-md flex-col gap-5 sm:gap-6">
         <section>
-          <p className="t-eyebrow">Tu cuenta beCook</p>
-          <h1 className="mt-2 text-2xl font-semibold text-[color:var(--color-foreground)] sm:text-3xl">
-            {title}
+          <p className="t-eyebrow flex items-center gap-2">
+            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[color:var(--color-accent)] shadow-[0_0_0_4px_var(--glow)]" />
+            Tu cuenta beCook
+          </p>
+          <h1 className="ui-title mt-3 text-[2rem] text-balance sm:text-[2.5rem]">
+            <TextEffect as="span" per="word" preset="fade-in-blur">
+              {title}
+            </TextEffect>
           </h1>
           {lede ? (
             <div className="mt-2 space-y-2 text-sm font-medium leading-6 text-[color:var(--color-muted-foreground)]">
@@ -51,7 +59,7 @@ export function AuthPageShell({ title, lede, children, guestHref }: AuthPageShel
           ) : null}
         </section>
 
-        <Card className="space-y-4 p-4 sm:p-5">{children}</Card>
+        <Card className="space-y-4 p-5 sm:p-6">{children}</Card>
 
         {guestHref ? (
           <div className="space-y-1 text-center">
@@ -66,7 +74,7 @@ export function AuthPageShell({ title, lede, children, guestHref }: AuthPageShel
             </p>
           </div>
         ) : null}
-      </div>
+      </AnimatedGroup>
     </main>
   );
 }

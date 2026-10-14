@@ -15,6 +15,7 @@ import {
   goalOptions,
 } from "@/components/features/ProfileFields";
 import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
+import { AnimatedGroup } from "@/components/motion-primitives/animated-group";
 import { useIdentity, useIdentityActions } from "@/components/session/IdentityProvider";
 import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
 import { SyncStatus } from "@/components/session/SyncStatus";
@@ -409,7 +410,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-3">
               <span
                 aria-hidden="true"
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-soft)] text-lg font-semibold text-[color:var(--color-accent)]"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--color-accent)] to-[color:var(--color-accent-strong)] font-[family-name:var(--font-fraunces)] text-xl font-semibold text-white shadow-[var(--shadow-pop)]"
               >
                 {userEmail[0].toUpperCase()}
               </span>
@@ -449,6 +450,12 @@ export default function ProfilePage() {
         </Card>
 
         <form onSubmit={handleCreate} className="space-y-3 sm:space-y-4" noValidate>
+          {/* Motion Primitives: the profile sections come in one after another. */}
+          <AnimatedGroup
+            preset="slide"
+            className="space-y-3 sm:space-y-4"
+            variants={{ container: { visible: { transition: { staggerChildren: 0.06 } } } }}
+          >
           <SectionCard section="household" status={statuses.household} footer={sectionFooter("household")}>
             <HouseholdField draft={draft} onChange={(updates) => updateDraft("household", updates)} />
           </SectionCard>
@@ -643,6 +650,7 @@ export default function ProfilePage() {
             ) : null}
             <Link href="/profile/data" className="inline-flex min-h-11 items-center text-sm font-semibold text-[color:var(--color-foreground)] underline underline-offset-4 hover:text-[color:var(--color-accent-hover)]">Tus datos: descargar o eliminar la cuenta</Link>
           </Card>
+          </AnimatedGroup>
 
           {!savedProfile && hasLoadedProfile ? (
             <div data-profile-save-bar className={`sticky bottom-[calc(6rem+env(safe-area-inset-bottom))] z-20 border-t border-[color:var(--color-border)] bg-[color:var(--color-background)]/95 py-3 backdrop-blur ${pageBleedClass}`}>

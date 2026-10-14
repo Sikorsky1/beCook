@@ -3,6 +3,7 @@
 import { useId } from "react";
 
 import { QuantityEditor } from "@/components/features/QuantityEditor";
+import { ProgressMeter } from "@/components/motion/ProgressMeter";
 import { Card } from "@/components/ui/Card";
 import { shoppingLineLabels, type ShoppingLineStatus } from "@/lib/shopping/build";
 import { formatShoppingAmount } from "@/lib/shopping/units";
@@ -160,7 +161,8 @@ export function ShoppingSection({ category, rows, done, total, actions }: Shoppi
         </h2>
         <p className="t-meta">{done} de {total} comprados</p>
       </div>
-      <Card className="mt-2 overflow-visible">
+      <ProgressMeter done={done} total={total} className="mx-1 mt-2" />
+      <Card className="mt-2.5 overflow-visible">
         <ul className="divide-y divide-[color:var(--color-border)]">
           {rows.map((row) => (
             <ShoppingRow key={row.item.id} row={row} actions={actions} />

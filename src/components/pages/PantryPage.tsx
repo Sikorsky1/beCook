@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import { PantryBasicsPicker } from "@/components/features/PantryBasicsPicker";
 import { PantryStockToggle } from "@/components/features/PantryStockToggle";
 import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
+import { TransitionPanel } from "@/components/motion-primitives/transition-panel";
+import { CountUp, ProgressMeter } from "@/components/motion/ProgressMeter";
 import { ShoppingTabs } from "@/components/layout/ShoppingTabs";
 import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -76,8 +78,14 @@ function PantryProgress({
   totalItemsCount,
 }: PantryProgressProps) {
   return (
-    <StatusPill>
-      {activeItemsCount}/{totalItemsCount} en casa
+    <StatusPill className="flex-col items-stretch gap-1 py-1.5 sm:py-1.5">
+      <span className="sr-only">
+        {activeItemsCount}/{totalItemsCount} en casa
+      </span>
+      <span aria-hidden="true" className="whitespace-nowrap">
+        <CountUp value={activeItemsCount} className="text-[color:var(--color-foreground)]" />/{totalItemsCount} en casa
+      </span>
+      <ProgressMeter done={activeItemsCount} total={totalItemsCount} className="h-1" />
     </StatusPill>
   );
 }
@@ -606,7 +614,19 @@ export default function PantryPage() {
               </h2>
             </Card>
           ) : selectedGroup ? (
+            // Motion Primitives: changing category slides the new list in.
+            <TransitionPanel
+              activeIndex={Math.max(0, pantryGroups.indexOf(selectedGroup))}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              variants={{
+                enter: { opacity: 0, y: 12 },
+                center: { opacity: 1, y: 0 },
+                exit: { opacity: 0, y: -8 },
+              }}
+            >
+              {pantryGroups.map((group) => group === selectedGroup ? (
             <PantryItemsForCategory
+              key={group.category}
               draftItemName={
                 addingCategory === selectedGroup.category ? draftItemName : ""
               }
@@ -619,6 +639,8 @@ export default function PantryPage() {
               onSubmitAddItem={(event) => addItem(selectedGroup.category, event)}
               onSetItemActive={setItemActive}
             />
+              ) : null)}
+            </TransitionPanel>
           ) : (
             <Card className="t-meta p-6">
               No hay ingredientes de despensa disponibles.

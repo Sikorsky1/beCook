@@ -3,6 +3,8 @@
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { BorderTrail } from "@/components/motion-primitives/border-trail";
+import { TextShimmer } from "@/components/motion-primitives/text-shimmer";
 import { TertiaryButton } from "@/components/ui/Button";
 
 // D3, step 27: the server does not report stages, so the wait is shown as what it is: an
@@ -27,8 +29,13 @@ export function GenerationProgress({ mode, startedAt, maxSeconds, onCancel }: Ge
   return (
     <article
       aria-busy="true"
-      className="rounded-[var(--radius-control)] border border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] px-4 py-3 text-sm leading-6 text-[color:var(--color-warning-foreground)]"
+      className="relative overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--color-warning)] bg-[color:var(--color-warning-soft)] px-4 py-4 text-sm leading-6 text-[color:var(--color-warning-foreground)] shadow-[var(--shadow-card)]"
     >
+      {/* Motion Primitives: a light runs around the card while the AI works. */}
+      <BorderTrail
+        size={72}
+        className="bg-gradient-to-l from-[color:var(--color-accent)] via-[color:var(--color-accent-strong)] to-transparent"
+      />
       <div className="flex items-start gap-3">
         <LoaderCircle
           aria-hidden="true"
@@ -36,7 +43,9 @@ export function GenerationProgress({ mode, startedAt, maxSeconds, onCancel }: Ge
         />
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-[color:var(--color-foreground)]" role="status">
-            {mode === "generate" ? "Creando tu propuesta…" : "Ordenando tu menú…"}
+            <TextShimmer as="span" duration={1.6} spread={2.5}>
+              {mode === "generate" ? "Creando tu propuesta…" : "Ordenando tu menú…"}
+            </TextShimmer>
           </p>
           <p>
             Llevamos {elapsed} s. Puede tardar hasta {maxSeconds} s; si no hay respuesta antes, paramos y te lo

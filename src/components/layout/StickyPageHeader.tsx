@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { ScrollProgress } from "@/components/motion-primitives/scroll-progress";
+import { TextEffect } from "@/components/motion-primitives/text-effect";
 import { pageBleedClass } from "@/lib/ui";
 
 type StickyPageHeaderProps = {
@@ -28,7 +30,7 @@ export function StickyPageHeader({
   action,
   pinned,
 }: StickyPageHeaderProps) {
-  const surface = "bg-[color:var(--color-background)]/95 backdrop-blur";
+  const surface = "bg-[color:var(--color-background)]/80 backdrop-blur-xl backdrop-saturate-150";
 
   return (
     <>
@@ -39,9 +41,17 @@ export function StickyPageHeader({
         }`}
       >
         <div className="flex h-14 items-center justify-between gap-3">
-          <p className="t-eyebrow line-clamp-2 min-w-0">{title}</p>
+          <p className="t-eyebrow flex min-w-0 items-center gap-2">
+            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-[color:var(--color-accent)] shadow-[0_0_0_4px_var(--glow)]" />
+            <span className="line-clamp-2">{title}</span>
+          </p>
           {action}
         </div>
+        {/* Motion Primitives: reading progress along the bar's lower edge (decorative). */}
+        <ScrollProgress
+          className="absolute top-auto bottom-0 h-0.5 bg-gradient-to-r from-[color:var(--color-accent)] to-[color:var(--color-accent-strong)]"
+          springOptions={{ stiffness: 280, damping: 40 }}
+        />
       </div>
 
       {heading || children ? (
@@ -51,7 +61,14 @@ export function StickyPageHeader({
               aria-label={headingLabel}
               className="t-h1 text-balance text-[color:var(--color-foreground)]"
             >
-              {heading}
+              {typeof heading === "string" ? (
+                // Motion Primitives: the title appears word by word; screen readers get it whole.
+                <TextEffect as="span" per="word" preset="fade-in-blur" speedReveal={1.4}>
+                  {heading}
+                </TextEffect>
+              ) : (
+                heading
+              )}
             </h1>
           ) : null}
           {children ? <div className={heading ? "mt-2.5" : ""}>{children}</div> : null}
