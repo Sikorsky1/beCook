@@ -9,6 +9,7 @@ import { PrimaryButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
 import { TextArea } from "@/components/ui/TextArea";
+import { isNutritionPlanText } from "@/lib/nutritionPlan";
 
 // C6 (roadmap step 22; Crear menú part of step 32): the menu the user already has, pasted as text.
 // It is a secondary path under «Generar»: shown when the disclosure opens or with ?mode=import.
@@ -21,7 +22,9 @@ type ImportMenuPanelProps = {
   hasMounted: boolean;
   value: string;
   onChange: (value: string) => void;
-  onProcess: () => void;
+  // text: process this text instead of the box's (a nutritionist's plan read from a file is
+  // processed at once, before the box shows it).
+  onProcess: (text?: string) => void;
   // The AI is ordering this menu (local parsing is instant).
   processing: boolean;
   // Another generation or import is running.
@@ -71,7 +74,12 @@ export function ImportMenuPanel({
         disabled={disabled}
         loginReturnPath={loginReturnPath}
         onBeforeLogin={onBeforeLogin}
-        onText={onChange}
+        onText={(text) => {
+          onChange(text);
+          if (!isNutritionPlanText(text)) return "filled";
+          onProcess(text);
+          return "processed";
+        }}
         onBusyChange={setFileBusy}
       />
 
@@ -110,7 +118,7 @@ export function ImportMenuPanel({
         </div>
       ) : null}
 
-      <PrimaryButton onClick={onProcess} disabled={locked} size="lg" className="w-full disabled:cursor-wait">
+      <PrimaryButton onClick={() => onProcess()} disabled={locked} size="lg" className="w-full disabled:cursor-wait">
         {processing ? (
           "Estamos organizando tu menú…"
         ) : (

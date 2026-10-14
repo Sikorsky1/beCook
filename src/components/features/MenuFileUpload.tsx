@@ -7,7 +7,7 @@ import { AiLoginNotice } from "@/components/features/AiLoginNotice";
 import { TertiaryButton } from "@/components/ui/Button";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { isAiLoginRequiredError, postAi } from "@/lib/ai-client";
-import { menuFileAccept, menuFileErrorMessage } from "@/lib/menuFile";
+import { menuFileAccept, menuFileErrorMessage, menuFileLimits } from "@/lib/menuFile";
 import { readMenuFile } from "@/lib/menuFileReader";
 import { getAccessToken } from "@/lib/supabase/auth";
 
@@ -18,14 +18,15 @@ type MenuFileUploadProps = {
   disabled: boolean;
   loginReturnPath: string;
   onBeforeLogin: () => void;
-  onText: (text: string) => void;
+  // «processed»: the text was a nutritionist's plan and its week is already on screen.
+  onText: (text: string) => "filled" | "processed";
   onBusyChange: (busy: boolean) => void;
 };
 
 type UploadState =
   | { status: "idle" }
   | { status: "reading"; fileName: string; withAi: boolean }
-  | { status: "done"; fileName: string; withAi: boolean }
+  | { status: "done"; fileName: string; withAi: boolean; plan: boolean }
   | { status: "error"; message: string }
   | { status: "login" };
 
@@ -65,8 +66,8 @@ export function MenuFileUpload({
     }
 
     if (read.kind === "text") {
-      onText(read.text);
-      setBusy({ status: "done", fileName: file.name, withAi: false });
+      const plan = onText(read.text) === "processed";
+      setBusy({ status: "done", fileName: file.name, withAi: false, plan });
       return;
     }
 
@@ -88,8 +89,8 @@ export function MenuFileUpload({
         return;
       }
 
-      onText(data.text);
-      setBusy({ status: "done", fileName: file.name, withAi: true });
+      const plan = onText(data.text) === "processed";
+      setBusy({ status: "done", fileName: file.name, withAi: true, plan });
     } catch (error: unknown) {
       if (controller.signal.aborted) return;
       if (isAiLoginRequiredError(error)) {
@@ -113,8 +114,9 @@ export function MenuFileUpload({
           {state.status === "reading" ? (state.withAi ? "Leyendo con IA…" : "Leyendo el archivo…") : "Subir PDF o foto"}
         </TertiaryButton>
         <p id={helpId} className="t-meta">
-          PDF de hasta 4 páginas o una foto. Un PDF con texto se lee aquí, sin IA; una foto o un escaneo los lee la
-          IA (necesita sesión). No guardamos el archivo.
+          PDF (con texto, hasta {menuFileLimits.maxTextPdfPages} páginas; escaneado, hasta {menuFileLimits.maxPages}) o
+          una foto. Un PDF con texto se lee aquí, sin IA, también el plan de tu nutricionista; una foto o un escaneo
+          los lee la IA (necesita sesión). No guardamos el archivo.
         </p>
         <input
           ref={inputRef}
@@ -133,11 +135,21 @@ export function MenuFileUpload({
 
       <div role="status" aria-live="polite">
         {state.status === "done" ? (
-          <StateMessage variant="success" title={`Hemos pasado «${state.fileName}» a texto`}>
-            <p>
-              {state.withAi ? "Lo ha leído la IA: revisa" : "Revisa"} el texto de abajo, corrige lo que haga falta y pulsa
-              «Procesar menú».
-            </p>
+          <StateMessage
+            variant="success"
+            title={state.plan ? `«${state.fileName}» es un plan nutricional` : `Hemos pasado «${state.fileName}» a texto`}
+          >
+            {state.plan ? (
+              <p>
+                Hemos preparado una semana con sus reglas y sus desayunos, medias mañanas y meriendas. Revísala abajo y
+                pulsa «Usar este menú».
+              </p>
+            ) : (
+              <p>
+                {state.withAi ? "Lo ha leído la IA: revisa" : "Revisa"} el texto de abajo, corrige lo que haga falta y
+                pulsa «Procesar menú».
+              </p>
+            )}
           </StateMessage>
         ) : state.status === "error" ? (
           <StateMessage variant="error" title="No hemos podido usar el archivo">

@@ -1,6 +1,7 @@
 import type { WeekDay } from "@/data/mockWeek";
 import type { IsoWeek } from "@/lib/isoWeek";
 import type { VerifiedFoodContext } from "@/lib/menu-generation/food-context";
+import type { PlanExtras } from "@/lib/nutritionPlan";
 import { withWeekDates } from "@/lib/weekStorage";
 
 export type ImportedMealSlot = {
@@ -20,6 +21,9 @@ export type ImportedMenuResponse = {
   // C6: who ordered the pasted text (the device's parser or the AI) and what the parser filled in.
   parsedBy?: "local" | "ai";
   warnings?: string[];
+  // A nutritionist's plan (see @/lib/nutritionPlan): its daily meals apart from lunch and dinner,
+  // and what they need for the week's shopping list.
+  planExtras?: PlanExtras;
 };
 
 export type OpenAIMenuGenerationTelemetry = {
