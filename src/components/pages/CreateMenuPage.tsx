@@ -89,6 +89,8 @@ import { loadPantry, readCachedPantry } from "@/lib/data/pantry";
 import { pantryItemsOrDefault } from "@/lib/pantryStorage";
 import { readStoredProfile } from "@/lib/profileForm";
 import { ensureShoppingList } from "@/lib/data/shopping";
+import { applyPendingPlanExtras, writePendingPlanExtras } from "@/lib/data/planExtras";
+import { generatePlanWeek, parseNutritionPlan, planDailyMealLabels, planExtras, planWarnings } from "@/lib/nutritionPlan";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
 import type { UserProfile } from "@/lib/supabase/profiles";
@@ -152,6 +154,8 @@ const elaborationOptions = [
 const useWeekSuccessDelayMs = 900;
 // Longest wait of each AI route (its maxDuration): shown as the honest upper bound (step 27).
 const maxWaitSeconds = { generate: 45, import: 60 } as const;
+// A nutritionist's plan is read on the device, so it may be longer than a pasted menu.
+const nutritionPlanMaxLength = 20000;
 // After this many failures in a row the page stops offering «Reintentar» (step 27).
 const maxConsecutiveFailures = 3;
 
@@ -676,7 +680,8 @@ function CreateMenuPageContent() {
     revealImportOutcome("error");
   };
 
-  const handleProcessMenu = async () => {
+  // text: a nutritionist's plan read from a file, processed before the box shows it.
+  const handleProcessMenu = async (text?: string) => {
     // C6 review: never while the proposal is being saved or can still be undone (a new proposal
     // would replace the one being applied and break its state).
     if (isLoading || proposalBusy()) {
@@ -692,7 +697,29 @@ function CreateMenuPageContent() {
     setCancelledNotice(false);
     setInterruptedNotice(false);
 
-    const checked = validateImportText(menuText, importTextLimits);
+    const source = text ?? menuText;
+
+    // A nutritionist's plan (see @/lib/nutritionPlan): read and turned into a week here, without the
+    // AI. It is longer than a pasted menu, so it is recognised before the paste limits.
+    const plan = source.length <= nutritionPlanMaxLength ? parseNutritionPlan(source) : null;
+
+    if (plan) {
+      const days = generatePlanWeek(plan, Math.floor(Math.random() * 2 ** 31));
+      setUseWeekStatus("idle");
+      setUseWeekMessage("");
+      setUseWeekMenu(null);
+      setGenerationRequestId(null);
+      showNewProposal(
+        { ...localMenuResponse(days, planWarnings(plan, days)), week: "Plan nutricional", planExtras: planExtras(plan) },
+        null,
+        targetIsoWeek ?? getCurrentIsoWeek(),
+        "import",
+      );
+      revealImportOutcome("proposal");
+      return;
+    }
+
+    const checked = validateImportText(source, importTextLimits);
 
     if (!checked.ok) {
       showImportProblem(checked.reason);
@@ -1153,7 +1180,13 @@ function CreateMenuPageContent() {
         attempt,
         generationRequestId,
         confirmReplace: confirmReplaceInDialog,
-        prepareShopping: ensureShoppingList,
+        // A plan's breakfasts, mid-mornings and snacks join the list once it is ready.
+        prepareShopping: async (shoppingIdentity, isoWeek, weekDays) => {
+          writePendingPlanExtras(shoppingIdentity, isoWeek, importedMenu.planExtras?.items);
+          const loaded = await ensureShoppingList(shoppingIdentity, isoWeek, weekDays);
+          if (loaded.status === "ready") await applyPendingPlanExtras(shoppingIdentity, isoWeek, weekDays).catch(() => null);
+          return loaded;
+        },
         holdShopping,
       });
 
@@ -1175,6 +1208,7 @@ function CreateMenuPageContent() {
       // The menu is saved. The list is prepared apart (B6 keeps it if the dishes did not change)
       // and the Compra page shows its own state.
       clearMenuProposal(dataIdentity, weekForUse);
+      writePendingPlanExtras(dataIdentity, weekForUse, importedMenu.planExtras?.items);
       // C6: the form of this week is done with once its menu is saved.
       clearMenuFormDraft(dataIdentity, weekForUse);
       formTouchedRef.current = false;
@@ -1250,6 +1284,8 @@ function CreateMenuPageContent() {
     }
 
     setUndo(null);
+    // The plan's items are no longer for this week's menu.
+    writePendingPlanExtras({ scope: identity.scope, userId: identity.userId }, weekForUse, null);
 
     if (result.status === "conflict") {
       // The week changed elsewhere: nothing was undone and the list follows the account's week.
@@ -1378,7 +1414,7 @@ function CreateMenuPageContent() {
                 setMenuText(value);
                 setImportNeedsLogin(false);
               }}
-              onProcess={() => void handleProcessMenu()}
+              onProcess={(text) => void handleProcessMenu(text)}
               processing={isLoading && loadingMode === "import"}
               disabled={isLoading || proposalLocked}
               needsLogin={importNeedsLogin}
@@ -1628,7 +1664,7 @@ function CreateMenuPageContent() {
                   </p>
                   {(errorSource === "generate" ? needsLogin : importNeedsLogin) || isLoading ? null : (
                     <TertiaryButton
-                      onClick={errorSource === "generate" ? handleGenerateMenu : handleProcessMenu}
+                      onClick={() => void (errorSource === "generate" ? handleGenerateMenu() : handleProcessMenu())}
                       className="mt-2 w-full sm:w-auto"
                     >
                       Reintentar
@@ -1689,6 +1725,34 @@ function CreateMenuPageContent() {
                   </ul>
                 ) : null}
               </div>
+            ) : null}
+
+            {importedMenu.planExtras ? (
+              <details className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
+                <summary className="min-h-11 cursor-pointer content-center t-body-strong text-[color:var(--color-foreground)]">
+                  Desayunos, medias mañanas y meriendas
+                </summary>
+                <p className="t-meta mt-1">
+                  Cada día una opción del plan, por turnos. Al usar este menú añadimos a la lista de la compra lo que
+                  necesitan para una persona ({importedMenu.planExtras.items.length} productos); podrás cambiarlos o
+                  quitarlos allí.
+                </p>
+                <ul className="mt-2 space-y-2">
+                  {importedMenu.planExtras.days.map((day) => (
+                    <li key={day.dayName}>
+                      <p className="t-body-strong text-[color:var(--color-foreground)]">{day.dayName}</p>
+                      <ul className="t-meta space-y-0.5">
+                        {day.meals.map((meal) => (
+                          <li key={meal.meal}>
+                            {planDailyMealLabels[meal.meal]}
+                            {meal.options > 1 ? ` (opción ${meal.option})` : ""}: {meal.text}
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              </details>
             ) : null}
 
             <p className="t-meta">

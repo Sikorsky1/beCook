@@ -49,6 +49,7 @@ import {
   type ShoppingLoad,
   type ShoppingView,
 } from "@/lib/data/shopping";
+import { applyPendingPlanExtras, readPendingPlanExtras } from "@/lib/data/planExtras";
 import { formatIsoWeekTitle, getCurrentIsoWeek, type IsoWeek } from "@/lib/isoWeek";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { pageShellStickyClass, pageStickyColumnClass } from "@/lib/ui";
@@ -373,6 +374,17 @@ export default function ShoppingListPage() {
       setErrorMessage("");
       setNeedsLogin(false);
       setAccountUnreachable(false);
+      // A nutritionist's plan used for this week: its breakfasts, mid-mornings and snacks join the
+      // list once (when «Usar este menú» could not add them).
+      if (readPendingPlanExtras(dataIdentity, currentIsoWeek).length) {
+        void applyPendingPlanExtras(dataIdentity, currentIsoWeek, currentWeekDays)
+          .then((view) => {
+            if (!view || isCancelled) return;
+            setGeneratedItems(view.items);
+            setCheckedItems(view.checkedItemIds);
+          })
+          .catch(() => undefined);
+      }
       return true;
     };
 

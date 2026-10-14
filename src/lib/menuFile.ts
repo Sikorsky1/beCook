@@ -9,6 +9,9 @@ export const menuFileLimits = {
   maxFileBytes: 15 * 1024 * 1024,
   // One week of menu: a page or two. Also the most images sent to the AI at once.
   maxPages: 4,
+  // A PDF with text is read here, without the AI: a nutritionist's plan (cover, options, rules and
+  // notes) runs to five or six pages.
+  maxTextPdfPages: 8,
   // Long side of each image sent to the AI, and its JPEG quality.
   maxImageSide: 1600,
   imageQuality: 0.82,
@@ -58,7 +61,7 @@ export function menuFileErrorMessage(reason: unknown) {
     case "too_large":
       return `El archivo es demasiado grande (máximo ${menuFileLimits.maxFileBytes / 1024 / 1024} MB).`;
     case "too_many_pages":
-      return `El PDF tiene demasiadas páginas (máximo ${menuFileLimits.maxPages}). Sube solo la semana.`;
+      return `El PDF tiene demasiadas páginas (máximo ${menuFileLimits.maxTextPdfPages} con texto o ${menuFileLimits.maxPages} escaneadas). Sube solo la semana.`;
     case "heic_unsupported":
       return "Este navegador no puede abrir fotos HEIC. Haz una captura de la foto o guárdala como JPG y súbela de nuevo.";
     case "no_text_found":
