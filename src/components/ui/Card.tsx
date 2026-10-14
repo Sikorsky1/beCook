@@ -11,7 +11,7 @@ export function Card({ children, className = "", ...props }: CardProps) {
     <article
       data-slot="card"
       className={cn(
-        "rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] shadow-[0_18px_45px_rgba(32,28,23,0.07)]",
+        "rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] shadow-[var(--shadow-card)]",
         className,
       )}
       {...props}

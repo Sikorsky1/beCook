@@ -8,6 +8,9 @@ import { DishCard } from "@/components/features/DishCard";
 import { dishCardRestrictions } from "@/lib/recipes/dishCardFlow";
 import { type RequestDishIdea, WeekDayCard } from "@/components/features/WeekDayCard";
 import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
+import { AnimatedGroup } from "@/components/motion-primitives/animated-group";
+import { TextEffect } from "@/components/motion-primitives/text-effect";
+import { TextShimmer } from "@/components/motion-primitives/text-shimmer";
 import { useIdentity } from "@/components/session/IdentityProvider";
 import { OnboardingGate } from "@/components/session/OnboardingGate";
 import { SyncNotice, type SyncState } from "@/components/session/SyncNotice";
@@ -641,10 +644,17 @@ function WeekPageContent() {
               ) : null}
 
               {layout.otherDays.length ? (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2.5">
                   {layout.todayPosition !== null ? (
-                    <h2 className="t-micro px-1">Resto de la semana</h2>
+                    <h2 className="t-micro mt-2 px-1">Resto de la semana</h2>
                   ) : null}
+                  {/* Motion Primitives: the days slide in one after another when the week loads. */}
+                  <AnimatedGroup
+                    key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}`}
+                    preset="slide"
+                    className="flex flex-col gap-2.5"
+                    variants={{ container: { visible: { transition: { staggerChildren: 0.05 } } } }}
+                  >
                   {layout.otherDays.map((day) => (
                     <div
                       key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}-${day.day}`}
@@ -662,6 +672,7 @@ function WeekPageContent() {
                       />
                     </div>
                   ))}
+                  </AnimatedGroup>
                 </div>
               ) : null}
             </div>
@@ -702,15 +713,27 @@ function EmptyWeekState({
     "inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] px-5 text-sm font-semibold text-[color:var(--color-foreground)] transition-colors hover:bg-[color:var(--color-surface-muted)] sm:w-auto";
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-dashed border-[color:var(--color-border-strong)] bg-[color:var(--color-surface)] p-6 text-center">
-      <p className="text-base font-semibold text-[color:var(--color-foreground)]">
-        {isLoading ? "Cargando esta semana..." : "No hay menú para esta semana"}
+    <div className="relative overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-gradient-to-b from-[color:var(--color-surface)] to-[color:var(--color-accent-soft)] px-6 py-8 text-center shadow-[var(--shadow-card)]">
+      <span
+        aria-hidden="true"
+        className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-2xl shadow-[var(--shadow-card)]"
+      >
+        🍽️
+      </span>
+      <p className="ui-title text-[1.5rem] text-[color:var(--color-foreground)]">
+        {isLoading ? (
+          <TextShimmerLine>Cargando esta semana...</TextShimmerLine>
+        ) : (
+          <TextEffect as="span" per="word" preset="fade-in-blur">
+            No hay menú para esta semana
+          </TextEffect>
+        )}
       </p>
       {!isLoading && isoWeek ? (
-        <div className="mt-4 flex flex-col items-center gap-3">
+        <AnimatedGroup preset="blur-slide" className="mt-5 flex flex-col items-center gap-3">
           <Link
             href={buildWeekHref("/create-menu", isoWeek)}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--color-accent-strong-hover)] sm:w-auto"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-[color:var(--color-accent-strong)] px-6 text-sm font-semibold text-white shadow-[var(--shadow-pop)] transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[color:var(--color-accent-strong-hover)] motion-reduce:hover:translate-y-0 sm:w-auto"
           >
             Crear menú
           </Link>
@@ -738,9 +761,17 @@ function EmptyWeekState({
           <Link href={createMenuImportHref(getIsoWeekStorageId(isoWeek))} className={secondaryClass}>
             Ya tengo un menú
           </Link>
-        </div>
+        </AnimatedGroup>
       ) : null}
     </div>
+  );
+}
+
+function TextShimmerLine({ children }: { children: string }) {
+  return (
+    <TextShimmer as="span" duration={1.6}>
+      {children}
+    </TextShimmer>
   );
 }
 
