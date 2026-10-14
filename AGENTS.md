@@ -77,6 +77,12 @@ visibles en las pruebas hasta una corrección autorizada.
 ### Reglas durante el rediseño
 - Cambios visuales solo con clases de Tailwind (tokens de `@theme` en
   `src/app/globals.css`): sin CSS nuevo, estilos inline ni librerías de estilos.
+- Animaciones: `motion` (única dependencia de animación) y los componentes de
+  [motion-primitives](https://github.com/ibelick/motion-primitives) copiados en
+  `src/components/motion-primitives/` (adaptados: colores con tokens, sin `motion.create`
+  durante el render). Aprobado por Sergio el 2026-10-14
+  (`design-plans/2026-10-14-motion-primitives.md`). Toda animación respeta
+  `MotionConfig reducedMotion="user"`; nunca transform ni filter en un ancestro de una barra fija.
 - Componentes compartidos de alto riesgo (`src/components/ui/*`,
   `src/components/shadcn/ui/*`, navegación inferior y layouts, `globals.css`):
   no se tocan sin un plan aprobado por Sergio en `design-plans/`.
