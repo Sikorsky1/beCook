@@ -901,3 +901,4 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | D6 | Sin backups automáticos: avisar y hacer backup antes de cada cambio en producción | 2026-10-05 |
 | D6b | Reconciliación 2026-10-06 sin backup externo (datos irrelevantes, decisión de Sergio); se mantiene copia interna `backup_20261005` | 2026-10-06 |
 | D7 | «Otra idea» con IA cuenta en el flujo `menu` (1 de los 4/día y 20/mes), sin migración de cuota propia | 2026-10-09 |
+| D8 | Menú sin petición en texto libre: se compone del catálogo (`src/data/nutritionist-recipes.json`, 541 recetas por tipo de menú, elaboración y comida/cena), sin OpenAI ni cuota; con petición en texto o si el catálogo no llega, IA | 2026-10-14 |

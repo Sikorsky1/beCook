@@ -99,7 +99,9 @@ export async function completeOnboarding(page: Page, { pantryItem }: { pantryIte
   await expect(page).toHaveURL(/\/create-menu/);
 }
 
-export async function generateProposal(page: Page) {
+// A weekly request in words sends the menu to the (simulated) AI; without one, the catalogue answers.
+export async function generateProposal(page: Page, weeklyRequest = "Algo de cuchara") {
+  if (weeklyRequest) await page.getByRole("textbox", { name: "¿Qué te apetece esta semana?" }).fill(weeklyRequest);
   await page.getByRole("button", { name: "Crear menú semanal" }).click();
   await expect(page.getByRole("heading", { level: 2, name: "Revisa tu semana" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Usar la propuesta" })).toContainText("14 platos · 7 días");

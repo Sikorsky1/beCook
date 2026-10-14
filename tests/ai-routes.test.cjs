@@ -12,12 +12,20 @@ const importedMenu = {week: "Semana importada", days: [{dayName: "Lunes", lunch:
 let menuFileText = {found: true, text: "Lunes\nComida: Lentejas\nCena: LIBRE"};
 const shoppingList = {items: [{name: "lentejas", quantity: 500, unit: "g", category: "despensa"}]};
 
+// A saved profile the catalogue barely serves: its compatible recipes fill the week and the discarded
+// ideas of «Otra idea», so the AI is reached (vegan, gluten, nuts, soy, sesame and legumes out).
+const narrowProfile = {dietaryRestrictions: ["vegan"], allergies: ["gluten", "nuts"], otherAllergies: "soja, sésamo", dislikedFoods: ["garbanzos", "lentejas", "alubias", "judías", "patatas"]};
+const {catalogRecipeFits} = require("../src/lib/menu-generation/catalog-menu.ts");
+const {readMenuProfile} = require("../src/lib/menu-generation/prompt.ts");
+const narrowCatalog = [...new Set(require("../src/data/nutritionist-recipes.json").recipes.map(r => r.name).filter(name => catalogRecipeFits(name, readMenuProfile(narrowProfile))))];
+
 const routes = {
- "generate-menu": {valid: {peopleCount: 2}, invalidShape: {peopleCount: 9}, maxBytes: 64 * 1024},
+ // A weekly request in words: the AI (without one, the catalogue answers; see menu-generation tests).
+ "generate-menu": {valid: {peopleCount: 2, freeTextPrompt: "algo de cuchara"}, invalidShape: {peopleCount: 9}, maxBytes: 64 * 1024},
  // C6: prose with a day name (an unambiguous paste is parsed without OpenAI).
  "import-menu": {valid: {text: "El lunes comemos lentejas"}, invalidShape: {text: 42}, maxBytes: 32 * 1024},
- // Vegan saved profile (C1: read on the server) whose compatible catalogue recipes are already in the week: needs the AI.
- "substitute-dish": {profile: {dietaryRestrictions: ["vegan"]}, valid: {day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: ["Lentejas estofadas", "Espaguetis con brócoli", "Escalibada", "Espárragos, berenjena, calabacín y zanahoria plancha"]}, invalidShape: {day: "Lunes", meal: "brunch"}, maxBytes: 16 * 1024},
+ // Narrow saved profile (C1: read on the server) whose compatible catalogue recipes are already in the week or discarded: needs the AI.
+ "substitute-dish": {profile: narrowProfile, valid: {day: "Lunes", meal: "lunch", currentDish: "Crema de calabaza", otherDishes: narrowCatalog.slice(0, 13), rejected: narrowCatalog.slice(13)}, invalidShape: {day: "Lunes", meal: "brunch"}, maxBytes: 16 * 1024},
  "generate-shopping-list": {valid: {week: [{day: "Lunes", date: "5 oct", lunch: "Lentejas", dinner: "LIBRE"}]}, invalidShape: {week: [{day: "Lunes", date: "5 oct", lunch: {dish: "x"}, dinner: "LIBRE"}]}, maxBytes: 16 * 1024},
  // C2: one dish of the caller's week (the synthetic week has «Lentejas estofadas» on Monday lunch, version 3).
  // «Ya tengo un menú» from a photo or a scanned PDF: page images, read by the AI.
@@ -37,7 +45,7 @@ function openAIResponder(url, init) {
   return Response.json({id: "resp_test", object: "response", status: "completed", model: "gpt-5.6-sol", output: [{type: "message", id: "msg_test", role: "assistant", status: "completed", content: [{type: "output_text", text: JSON.stringify(content), annotations: []}]}], usage: {input_tokens: 10, output_tokens: 10, total_tokens: 20}});
  }
  const schema = JSON.parse(init.body).response_format?.json_schema?.name;
- const content = schema === "menu_file_text" ? menuFileText : schema === "imported_menu" ? importedMenu : schema === "dish_substitution" ? {dish: "Garbanzos con espinacas y comino"} : selection;
+ const content = schema === "menu_file_text" ? menuFileText : schema === "imported_menu" ? importedMenu : schema === "dish_substitution" ? {dish: "Pisto de calabacín y berenjena"} : selection;
  return Response.json({choices: [{finish_reason: "stop", message: {content: JSON.stringify(content)}}], usage: {prompt_tokens: 10, completion_tokens: 10, total_tokens: 20}});
 }
 

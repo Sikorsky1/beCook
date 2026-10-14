@@ -704,7 +704,8 @@ function CreateMenuPageContent() {
     const plan = source.length <= nutritionPlanMaxLength ? parseNutritionPlan(source) : null;
 
     if (plan) {
-      const days = generatePlanWeek(plan, Math.floor(Math.random() * 2 ** 31));
+      // Allergies, diets and disliked foods of the profile leave out the dishes that show them.
+      const days = generatePlanWeek(plan, Math.floor(Math.random() * 2 ** 31), profileReady ? importWarningProfile(profile) : null);
       setUseWeekStatus("idle");
       setUseWeekMessage("");
       setUseWeekMenu(null);

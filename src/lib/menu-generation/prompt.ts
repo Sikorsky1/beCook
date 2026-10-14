@@ -1,6 +1,6 @@
-import catalog from "@/data/nutritionist-recipes.json";
+import { catalogExamples, elaborationForLevel, readCatalogMenuStyles } from "./catalog-menu";
 import type { SubstitutionRequest } from "./substitution";
-import { type MenuProfile, visibleFoodConflict } from "./validation";
+import type { MenuProfile } from "./validation";
 
 export const menuSystemPrompt = `Eres beCook. Selecciona 14 recetas domésticas reconocibles, en español: lunches y dinners de lunes a domingo. Devuelve solo el JSON del esquema.
 
@@ -57,18 +57,20 @@ export function buildMenuInput(body: Record<string, unknown>, profile: MenuProfi
   const difficulty = Number.isInteger(level) ? Math.max(1, Math.min(7, level)) : 4;
   const selectedStyles = stringList(Array.isArray(body.menuStyle) ? body.menuStyle : [body.menuStyle], 6)
     .map(style => styles[style] ?? (Object.values(styles).includes(style) ? style : "")).filter(Boolean);
-  const examples = catalog.recipes.filter(recipe => !visibleFoodConflict(recipe.name, profile));
-  return {profile, peopleCount, userPrompt: JSON.stringify({
+  const weeklyRequest = shortText(body.freeTextPrompt);
+  // A sample of the catalogue (chosen types and level, compatible with the profile), not all of it.
+  const examples = catalogExamples({profile, styles: readCatalogMenuStyles(body.menuStyle), elaboration: elaborationForLevel(level), seed: now.getTime()});
+  return {profile, peopleCount, weeklyRequest, userPrompt: JSON.stringify({
     peopleCount,
     mandatory: {dietaryRestrictions: profile.dietaryRestrictions, allergies: profile.allergies, otherAllergies: profile.otherAllergies},
-    weeklyRequest: shortText(body.freeTextPrompt),
+    weeklyRequest,
     preferences: {dislikedFoods: profile.dislikedFoods, goals: profile.goals, otherGoal: profile.otherGoal, weeklyTrainingDays: profile.weeklyTrainingDays, trainingTypes: profile.trainingTypes},
     menuStyles: selectedStyles.length ? selectedStyles : [styles.healthy_balanced],
     difficulty: difficulty <= 2 ? "Fácil: menos de 20 min; conservas cocidas permitidas; sin guisos largos" : difficulty <= 5 ? "Media: 20–45 min, pasos domésticos sencillos" : "Elaborada: puede superar 45 min; cocina doméstica",
     monthInSpain: new Intl.DateTimeFormat("es-ES", {month: "long", timeZone: "Europe/Madrid"}).format(now),
     pantry: stringList(body.pantryItems, 80, 80),
     recentDishes: stringList(body.recentDishes),
-    nutritionistExamples: examples.map(recipe => recipe.name),
+    nutritionistExamples: examples,
   })};
 }
 

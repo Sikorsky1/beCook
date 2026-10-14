@@ -1,5 +1,6 @@
 import catalog from "@/data/nutritionist-recipes.json";
 import type { ImportedMenuDay } from "@/lib/importMenu";
+import { blocksAutomaticProposal, checkDish, mentionsDislikedFood, type RestrictionProfile } from "@/lib/recipes/restriction-check";
 import type { SupermarketCategory } from "@/lib/shoppingList";
 
 // A nutritionist's plan (the Vitalitty PDF and plans written the same way) instead of a weekly
@@ -299,7 +300,8 @@ const vegetableWords =
   /\b(verduras?|ensaladas?|judias verdes|calabacin|zanahorias?|brocoli|coliflor|setas|champinon(es)?|esparragos|trigueros|pimientos?|pisto|espinacas|acelgas|berenjenas?|tomates?|pepino|alcachofas?|escalibada|parrillada|lechuga|canonigos|cebolla|puerro|calabaza|judias)\b/;
 
 // Fried, battered or processed dishes are out (Evitar: alimentos fritos o rebozados, procesados).
-const avoidedWords = /\b(frit[oa]s?|rebozad[oa]s?|empanad[oa]s?|tosta|tostas|jamon|pizza|croquetas?)\b/;
+const avoidedWords =
+  /\b(frit\w*|rebozad[oa]s?|empanad[oa]s?|tosta|tostas|jamon|pizza|croquetas?|hamburguesas?|salchichas?|longanizas?|chorizo|bacon|fiambre|nuggets?|surimi|palitos de cangrejo)\b/;
 
 export function dishProtein(title: string): PlanProtein | null {
   const text = normalizePlanText(title);
@@ -352,7 +354,15 @@ const ideas: { title: string; meals: ("lunch" | "dinner")[] }[] = [
 
 type Candidate = { title: string; protein: PlanProtein | null; carb: PlanCarb | null; source: "plan" | "catalog" | "idea" };
 
-function candidates(meal: "lunch" | "dinner", plan: NutritionPlan): Candidate[] {
+// The user's diets, allergies and disliked foods, as far as a title shows them (titles are not
+// ingredient lists: a dish that passes still gets the usual per-dish warnings).
+function fitsProfile(title: string, profile: RestrictionProfile | null) {
+  if (!profile) return true;
+  const check = checkDish({ title, card: null }, profile, { automatic: true });
+  return !blocksAutomaticProposal(check) && !mentionsDislikedFood(check);
+}
+
+function candidates(meal: "lunch" | "dinner", plan: NutritionPlan, profile: RestrictionProfile | null): Candidate[] {
   const titles: [string, Candidate["source"]][] = [
     ...plan[meal].examples.map((title): [string, Candidate["source"]] => [title, "plan"]),
     ...catalog.recipes.filter((recipe) => recipe.slot === meal).map((recipe): [string, Candidate["source"]] => [recipe.name, "catalog"]),
@@ -361,7 +371,7 @@ function candidates(meal: "lunch" | "dinner", plan: NutritionPlan): Candidate[] 
   const seen = new Set<string>();
   return titles.flatMap(([title, source]) => {
     const key = normalizePlanText(title);
-    if (seen.has(key) || /^libre\.?$/.test(key) || avoidedWords.test(key)) return [];
+    if (seen.has(key) || /^libre\.?$/.test(key) || avoidedWords.test(key) || !fitsProfile(title, profile)) return [];
     seen.add(key);
     return [{ title, protein: dishProtein(title), carb: dishCarb(title), source }];
   });
@@ -463,8 +473,8 @@ function withSide(title: string, side: string) {
 }
 
 // used: titles already in the week (a dish fits lunch and dinner; it is never eaten twice).
-function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random, used: Set<string>) {
-  const pool = candidates(meal, plan).filter(
+function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random, used: Set<string>, profile: RestrictionProfile | null) {
+  const pool = candidates(meal, plan, profile).filter(
     (dish) =>
       !(meal === "dinner" && plan.noRedMeatAtDinner && dish.protein === "red_meat") &&
       // Dinners carry no carbohydrate unless a rule asks for one.
@@ -501,18 +511,21 @@ function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Ran
     }
     const rule = plan[meal].rules.find((candidate) => candidate.protein === slot.protein && !candidate.carb);
     let composed = composeDish(slot, plan, rule, side, random);
-    for (let retry = 0; retry < 5 && used.has(composed); retry++) composed = composeDish(slot, plan, rule, pick(sides, random), random);
+    // Another example or side when it repeats or shows a conflict; a slot only one food fills (a
+    // fish day for a fish allergy) keeps its dish and the per-dish warning.
+    for (let retry = 0; retry < 8 && (used.has(composed) || !fitsProfile(composed, profile)); retry++) composed = composeDish(slot, plan, rule, pick(sides, random), random);
     used.add(composed);
     return composed;
   });
 }
 
-// Seven lunches and dinners (Monday to Sunday) that keep the plan's rules.
-export function generatePlanWeek(plan: NutritionPlan, seed: number): ImportedMenuDay[] {
+// Seven lunches and dinners (Monday to Sunday) that keep the plan's rules. With a profile, the
+// examples, catalogue recipes and ideas whose title conflicts with it are left out.
+export function generatePlanWeek(plan: NutritionPlan, seed: number, profile: RestrictionProfile | null = null): ImportedMenuDay[] {
   const random = seededRandom(seed);
   const used = new Set<string>();
-  const lunches = chooseDishes("lunch", plan, random, used);
-  const dinners = chooseDishes("dinner", plan, random, used);
+  const lunches = chooseDishes("lunch", plan, random, used, profile);
+  const dinners = chooseDishes("dinner", plan, random, used, profile);
   const slot = (title: string | null) => (title ? { status: "planned" as const, dishName: title } : { status: "free" as const, dishName: "" });
   return dayNames.map((dayName, index) => ({ dayName, lunch: slot(lunches[index]), dinner: slot(dinners[index]) }));
 }

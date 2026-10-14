@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import type { GeneratedMenuApiResponse, OpenAIMenuGenerationTelemetry } from "@/lib/importMenu";
 import { estimateOpenAICostUsd } from "@/lib/openai/cost";
 import { menuProfileFromContext, verifiedFoodContext, type VerifiedFoodContext } from "@/lib/menu-generation/food-context";
-import { buildMenuInput } from "@/lib/menu-generation/prompt";
+import { catalogMenu, elaborationForLevel, readCatalogMenuStyles } from "@/lib/menu-generation/catalog-menu";
+import { buildMenuInput, stringList } from "@/lib/menu-generation/prompt";
 import { selectionToMenu } from "@/lib/menu-generation/validation";
 import { createMenuCompletion, menuReasoningEffort, menuTimeoutMs, type MenuAttempt } from "@/lib/menu-generation/runtime";
 import { aiRequestLimits } from "@/lib/server/ai-limits";
@@ -32,6 +33,27 @@ export async function POST(request: Request) {
     return NextResponse.json({error: "Revisa el número de personas (1–6)."}, {status: 400});
   }
   const foodContext: VerifiedFoodContext = verifiedFoodContext(context.value, input.peopleCount);
+  // Without a weekly request, the week comes from the recipe catalogue: no AI, no cost, no quota.
+  // A weekly request in words, or a profile the catalogue cannot serve, goes to the AI.
+  if (!input.weeklyRequest) {
+    const fromCatalog = catalogMenu({
+      profile: input.profile,
+      styles: readCatalogMenuStyles(guard.body.menuStyle),
+      elaboration: elaborationForLevel(guard.body.elaborationLevel),
+      recentDishes: stringList(guard.body.recentDishes),
+      seed: Math.floor(Math.random() * 2 ** 31),
+    });
+    if (fromCatalog) {
+      const totalMs = Math.round(performance.now() - startedAt);
+      const catalogTelemetry: OpenAIMenuGenerationTelemetry = {
+        modelUsed: "catalog", promptTokens: null, completionTokens: null, totalTokens: null,
+        estimatedCostUsd: 0, responseTimeMs: 0, attempts: 0, fallbackUsed: false, totalMs,
+      };
+      console.info("menu_generation", {outcome: "success", source: "catalog", totalMs});
+      const response: GeneratedMenuApiResponse & {foodContext: VerifiedFoodContext} = {...fromCatalog, openaiTelemetry: catalogTelemetry, foodContext};
+      return NextResponse.json(response, {headers: {"Server-Timing": `catalog;dur=${totalMs}, total;dur=${totalMs}`}});
+    }
+  }
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({error: "Falta configurar OpenAI en el servidor."}, {status: 500});
   const blockedEndpoint = blockedOpenAIEndpointResponse("generate-menu");

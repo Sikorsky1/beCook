@@ -71,8 +71,13 @@ export function catalogAlternative(
   profile: MenuProfile,
   reviewedCard: ReviewedCardLookup = () => null,
 ): { dish: string; recipeId: string } | null {
+  // Titles of the week and the discarded ones first (cheap), then the full check of the rest.
+  // Those already left out need no second comparison in checkReplacement.
+  const taken = new Set([request.currentDish, ...request.otherDishes, ...request.rejected].map(normalizeFood));
+  const rest = { ...request, otherDishes: [], rejected: [] };
   const candidates = catalog.recipes
-    .filter((recipe) => checkReplacement(recipe.name, request, profile, reviewedCard(recipe.name)) === null)
+    .filter((recipe) => !taken.has(normalizeFood(recipe.name)))
+    .filter((recipe) => checkReplacement(recipe.name, rest, profile, reviewedCard(recipe.name)) === null)
     .sort((a, b) => Number(b.slot === request.meal) - Number(a.slot === request.meal) || slotRank(request, a.id) - slotRank(request, b.id));
   const recipe = candidates[0];
   return recipe ? { dish: recipe.name, recipeId: recipe.id } : null;

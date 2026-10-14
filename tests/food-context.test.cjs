@@ -39,7 +39,7 @@ test("generate-menu: restrictions come from the saved profile, never from the re
  fakes.foodContext = foodContextFor({householdSize: 3, dietaryRestrictions: ["vegetarian"], allergies: ["nuts"], otherAllergies: "sésamo", dislikedFoods: ["Coliflor"]});
  menuReply = veggieSelection;
  // The browser sends an empty (or stale) profile: it must not remove the account's allergies.
- const response = await POST(aiRequest("generate-menu", {peopleCount: 3, profile: {allergies: [], dietaryRestrictions: []}}));
+ const response = await POST(aiRequest("generate-menu", {peopleCount: 3, freeTextPrompt: "algo de cuchara", profile: {allergies: [], dietaryRestrictions: []}}));
  assert.equal(response.status, 200);
  const prompt = menuPrompt();
  assert.deepEqual(prompt.mandatory.allergies, ["nuts"]);
@@ -54,7 +54,7 @@ test("generate-menu: restrictions come from the saved profile, never from the re
 
 test("generate-menu: a forged vegan profile in the body does not change the prompt", async () => {
  const {POST} = require("../src/app/api/generate-menu/route.ts");
- const response = await POST(aiRequest("generate-menu", {peopleCount: 2, profile: {dietaryRestrictions: ["vegan"], allergies: ["gluten"]}}));
+ const response = await POST(aiRequest("generate-menu", {peopleCount: 2, freeTextPrompt: "algo de cuchara", profile: {dietaryRestrictions: ["vegan"], allergies: ["gluten"]}}));
  assert.equal(response.status, 200);
  assert.deepEqual(menuPrompt().mandatory.dietaryRestrictions, []);
  assert.deepEqual(menuPrompt().mandatory.allergies, []);
@@ -63,7 +63,7 @@ test("generate-menu: a forged vegan profile in the body does not change the prom
 test("generate-menu: the verified context is added to the response (same menu shape)", async () => {
  const {POST} = require("../src/app/api/generate-menu/route.ts");
  fakes.foodContext = foodContextFor({householdSize: 2, allergies: ["nuts"]});
- const response = await POST(aiRequest("generate-menu", {peopleCount: 4}));
+ const response = await POST(aiRequest("generate-menu", {peopleCount: 4, freeTextPrompt: "algo de cuchara"}));
  const data = await response.json();
  assert.equal(response.status, 200);
  assert.ok(Array.isArray(data.days) && data.days.length === 7, "menu shape unchanged");
@@ -72,6 +72,21 @@ test("generate-menu: the verified context is added to the response (same menu sh
   servings: 4, dietaryRestrictions: [], allergies: ["nuts"], otherAllergies: "", dislikedFoods: [],
   version: fakes.foodContext.version,
  });
+});
+
+test("generate-menu: the catalogue week also follows the saved profile, never the body", async () => {
+ const {POST} = require("../src/app/api/generate-menu/route.ts");
+ const {visibleFoodConflict} = require("../src/lib/menu-generation/validation.ts");
+ const {readMenuProfile} = require("../src/lib/menu-generation/prompt.ts");
+ fakes.foodContext = foodContextFor({householdSize: 2, dietaryRestrictions: ["vegetarian"], allergies: ["gluten"]});
+ const response = await POST(aiRequest("generate-menu", {peopleCount: 2, profile: {dietaryRestrictions: [], allergies: []}}));
+ const data = await response.json();
+ assert.equal(response.status, 200);
+ assert.equal(fakes.openAICalls, 0, "no AI without a weekly request");
+ assert.equal(data.openaiTelemetry.modelUsed, "catalog");
+ const saved = readMenuProfile({dietaryRestrictions: ["vegetarian"], allergies: ["gluten"]});
+ for (const day of data.days) for (const meal of [day.lunch, day.dinner]) assert.equal(visibleFoodConflict(meal.dishName, saved), false, meal.dishName);
+ assert.deepEqual(data.foodContext.allergies, ["gluten"]);
 });
 
 test("generate-menu: no saved profile -> 409 before quota or OpenAI; profile unreadable -> 503", async () => {

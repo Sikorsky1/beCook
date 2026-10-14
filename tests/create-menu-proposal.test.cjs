@@ -316,8 +316,12 @@ test("catalogue exhausted: signed in → offer AI; guest → login, and the AI i
   {day: "Martes", date: "", lunch: "Escalibada", dinner: "Espárragos, berenjena, calabacín y zanahoria plancha"},
  ];
  const slot = {day: "Lunes", meal: "lunch"};
- assert.deepEqual(requestProposalIdea(veganWeek, slot, [], vegan, "catalog", true), {status: "catalog_exhausted"});
- assert.deepEqual(requestProposalIdea(veganWeek, slot, [], vegan, "catalog", false), {status: "login_required"});
+ // Every vegan catalogue recipe already discarded: nothing left.
+ const {visibleFoodConflict} = require("../src/lib/menu-generation/validation.ts");
+ const {readMenuProfile} = require("../src/lib/menu-generation/prompt.ts");
+ const discarded = require("../src/data/nutritionist-recipes.json").recipes.map(r => r.name).filter(name => !visibleFoodConflict(name, readMenuProfile(vegan)));
+ assert.deepEqual(requestProposalIdea(veganWeek, slot, discarded, vegan, "catalog", true), {status: "catalog_exhausted"});
+ assert.deepEqual(requestProposalIdea(veganWeek, slot, discarded, vegan, "catalog", false), {status: "login_required"});
 
  const originalFetch = global.fetch;
  let fetched = false;

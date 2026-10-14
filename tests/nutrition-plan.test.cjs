@@ -84,6 +84,18 @@ test("every generated week keeps the plan's rules: lunch proteins and carbohydra
  assert.notDeepEqual(np.generatePlanWeek(plan, 7), np.generatePlanWeek(plan, 8));
 });
 
+test("with the profile, the week leaves out dishes that show its allergies, diets and disliked foods", () => {
+ const {checkDish, blocksAutomaticProposal, mentionsDislikedFood} = require("../src/lib/recipes/restriction-check.ts");
+ const profile = {dietaryRestrictions: [], allergies: ["shellfish", "nuts"], otherAllergies: "", dislikedFoods: ["salmón", "garbanzos"]};
+ for (let seed = 1; seed <= 30; seed++) {
+  const titles = np.generatePlanWeek(plan, seed, profile).flatMap((day) => [day.lunch, day.dinner]).filter((slot) => slot.status === "planned").map((slot) => slot.dishName);
+  for (const title of titles) {
+   const check = checkDish({title, card: null}, profile, {automatic: true});
+   assert.ok(!blocksAutomaticProposal(check) && !mentionsDislikedFood(check), `seed ${seed}: ${title}`);
+  }
+ }
+});
+
 test("breakfast, mid-morning and snack rotate option 1, 2, 3, 1… from Monday; the sandwich filling changes", () => {
  const extras = np.planExtras(plan);
  const options = (meal) => extras.days.map((day) => day.meals.find((entry) => entry.meal === meal).option);
