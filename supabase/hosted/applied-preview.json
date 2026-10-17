@@ -122,6 +122,14 @@
       "sha256": "df18c99ba303949d082c8c1bc7ccaaa8e3d9663e2e7abda9e58a8607ccafbe8a",
       "appliedAt": "2026-10-12",
       "notes": "Conector, una parte, sin BEGIN/COMMIT (SET LOCAL mantenidos). prosrc de add_pantry_items idéntico a local (md5 4f027ba0…); SECURITY INVOKER y EXECUTE solo authenticated. 0 filas con 'aceites y vinagres' antes y después (4 en básicos)."
+    },
+    {
+      "version": "20261017105717",
+      "name": "profiles_allergens_habit_goals",
+      "source": "supabase/migrations/20261017090000_profiles_allergens_habit_goals.sql",
+      "sha256": "835aafb21c838d407801017d5c8b3c8522de7e32efea1ddb0191d9b650aa9f30",
+      "appliedAt": "2026-10-17",
+      "notes": "Conector, sin comentarios. Definiciones de profiles_allergies_check y profiles_goals_allowed_chk idénticas a la BD local (pg_get_constraintdef), validadas."
     }
   ]
 }
