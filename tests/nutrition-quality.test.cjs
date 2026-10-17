@@ -230,3 +230,20 @@ test("N10: the week summary is positive, cites its source and suggests what is m
  assert.doesNotMatch(text, /malo|prohibid|culpa|engorda|caloria/);
  assert.equal(weekSummary(["Lentejas estofadas"], profile), null, "too few dishes to say anything");
 });
+
+test("N09: optional breakfasts and snacks: fruit at least twice a day, nuts 3+ days, scaled and safe", () => {
+ const {dailyExtras} = require("../src/lib/menu-generation/daily-extras.ts");
+ const {checkDish, blocksAutomaticProposal} = require("../src/lib/recipes/restriction-check.ts");
+ const two = dailyExtras(readMenuProfile({}), 2);
+ assert.equal(two.days.length, 7);
+ for (const day of two.days) assert.ok(day.meals.map(m => m.text).join(" + ").split("pieza de fruta").length - 1 >= 2, day.dayName);
+ assert.ok(two.days.filter(day => /nueces|almendras/.test(day.meals.map(m => m.text).join(" "))).length >= 3);
+ const one = dailyExtras(readMenuProfile({}), 1);
+ assert.equal(two.items.find(i => i.name === "fruta").quantity, one.items.find(i => i.name === "fruta").quantity * 2);
+ for (const allergies of [["milk"], ["nuts"], ["gluten", "milk", "nuts"], ["egg", "gluten"]]) {
+  const profile = readMenuProfile({allergies});
+  const extras = dailyExtras(profile, 1);
+  assert.ok(extras, allergies.join());
+  for (const day of extras.days) for (const meal of day.meals) assert.equal(blocksAutomaticProposal(checkDish({title: meal.text, card: null}, profile, {automatic: true})), false, `${allergies}: ${meal.text}`);
+ }
+});
