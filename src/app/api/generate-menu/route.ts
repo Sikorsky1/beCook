@@ -43,6 +43,7 @@ export async function POST(request: Request) {
       elaboration: elaborationForLevel(guard.body.elaborationLevel),
       recentDishes: stringList(guard.body.recentDishes),
       seed: Math.floor(Math.random() * 2 ** 31),
+      month: Number(new Intl.DateTimeFormat("en-GB", {month: "numeric", timeZone: "Europe/Madrid"}).format(new Date())),
     });
     if (fromCatalog) {
       const totalMs = Math.round(performance.now() - startedAt);

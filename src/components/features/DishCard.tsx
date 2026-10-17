@@ -90,11 +90,14 @@ function RecipeBody({
   // N12: how to complete the plate, for a catalogue recipe (its tags).
   const tags = catalogTags(base ?? title);
   const suggestions = tags ? plateSuggestions(tags) : [];
+  // N16: a discreet «De temporada» when its main vegetable is in season this month.
+  const month = new Date().getMonth() + 1;
   const meta = [
     `Para ${recipe.baseServings} ${recipe.baseServings === 1 ? "persona" : "personas"}`,
     recipe.totalMinutes ? `${recipe.totalMinutes} min` : null,
     review === "estimated" ? "Estimada por IA · sin revisar" : review === "draft" ? "Receta sin revisar por un profesional" : null,
     base ? `Receta de «${base}»` : null,
+    tags?.season.includes(month) ? "De temporada" : null,
   ].filter(Boolean);
   const allergens = recipe.possibleAllergens.map((allergen) => recipeAllergenLabels[allergen].toLowerCase());
   // N15: the AESAN advice on mercury, on the recipes with those species.

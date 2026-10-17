@@ -247,3 +247,56 @@ test("N09: optional breakfasts and snacks: fruit at least twice a day, nuts 3+ d
   for (const day of extras.days) for (const meal of day.meals) assert.equal(blocksAutomaticProposal(checkDish({title: meal.text, card: null}, profile, {automatic: true})), false, `${allergies}: ${meal.text}`);
  }
 });
+
+// --- Phase 3 ---------------------------------------------------------------------------------
+
+test("N16: in any month, most dishes with a seasonal vegetable are in season", () => {
+ const {catalogTags: tagsOf} = require("../src/lib/recipes/catalogTags.ts");
+ const profile = readMenuProfile({});
+ for (const month of [1, 4, 7, 10]) {
+  let seasonal = 0, inSeason = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+   for (const dish of weekOf(catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed, month}))) {
+    const season = tagsOf(dish)?.season ?? [];
+    if (!season.length) continue;
+    seasonal++;
+    if (season.includes(month)) inSeason++;
+   }
+  }
+  assert.ok(inSeason / seasonal >= 0.6, `month ${month}: ${inSeason}/${seasonal}`);
+ }
+});
+
+test("N19: «Ahorrar tiempo» keeps weekdays within 30 minutes; «Gastar menos» lowers the cost", () => {
+ const {catalogTags: tagsOf} = require("../src/lib/recipes/catalogTags.ts");
+ const quick = readMenuProfile({goals: ["save_time"]});
+ for (let seed = 1; seed <= 40; seed++) {
+  const menu = week(quick, seed);
+  for (const day of menu.days.slice(0, 5)) for (const dish of [day.lunch.dishName, day.dinner.dishName]) assert.ok((tagsOf(dish)?.minutes ?? 99) <= 30, dish);
+ }
+ const cost = profile => {
+  let total = 0, n = 0;
+  for (let seed = 1; seed <= 40; seed++) for (const dish of weekOf(week(profile, seed))) { total += tagsOf(dish)?.cost ?? 2; n++; }
+  return total / n;
+ };
+ assert.ok(cost(readMenuProfile({goals: ["save_money"]})) < cost(readMenuProfile({})));
+});
+
+test("N20: the same species at most twice a week and never on consecutive days", () => {
+ const {catalogTags: tagsOf} = require("../src/lib/recipes/catalogTags.ts");
+ const profile = readMenuProfile({});
+ let weeks = 0, clean = 0;
+ for (let seed = 1; seed <= 100; seed++) {
+  const menu = week(profile, seed);
+  const days = new Map();
+  menu.days.forEach((day, index) => {
+   for (const dish of [day.lunch.dishName, day.dinner.dishName]) {
+    const species = tagsOf(dish)?.species;
+    if (species) days.set(species, [...(days.get(species) ?? []), index]);
+   }
+  });
+  weeks++;
+  if ([...days.values()].every(list => list.length <= 2 && list.every((d, i) => i === 0 || d - list[i - 1] > 1))) clean++;
+ }
+ assert.ok(clean / weeks >= 0.9, `${clean}/${weeks}`);
+});
