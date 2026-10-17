@@ -33,6 +33,7 @@ import { loadCatalogRecipe } from "@/lib/recipes/catalogRecipeCards";
 import {
   aiItemsFromList,
   buildDesiredList,
+  leftoversCoveredBy,
   pendingDishesOf,
   plannedDishes,
   slotKey,
@@ -788,8 +789,16 @@ async function computeList(
   }
   const aiItems = reuse ? aiItemsFromList(reuse, dishes) : new Map<string, DishIngredient[]>();
   const memoKey = (dish: PlannedDish) => `${contextKey}|${slotKey(dish.day, dish.meal)}|${dish.dish}`;
+  const coveredLeftovers = leftoversCoveredBy(
+    dishes,
+    (dish) => Boolean(dish.versionId && cards.has(dish.versionId)) || catalogCards.has(slotKey(dish.day, dish.meal)),
+  );
   const missing = dishes.filter(
-    (dish) => !(dish.versionId && cards.has(dish.versionId)) && !catalogCards.has(slotKey(dish.day, dish.meal)) && !aiItems.has(slotKey(dish.day, dish.meal)),
+    (dish) =>
+      !(dish.versionId && cards.has(dish.versionId)) &&
+      !catalogCards.has(slotKey(dish.day, dish.meal)) &&
+      !coveredLeftovers.has(slotKey(dish.day, dish.meal)) &&
+      !aiItems.has(slotKey(dish.day, dish.meal)),
   );
   for (const dish of missing) {
     const known = memo.items.get(memoKey(dish));

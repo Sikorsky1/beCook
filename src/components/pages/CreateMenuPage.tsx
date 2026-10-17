@@ -1559,7 +1559,7 @@ function CreateMenuPageContent() {
                 touchForm();
                 setWithDailyExtras(event.target.checked);
               }}
-              className="mt-0.5 h-6 w-6 shrink-0 cursor-pointer accent-[color:var(--color-accent-strong)]"
+              className="mt-0.5 h-6 w-6 shrink-0 cursor-pointer accent-[color:var(--color-accent-strong)] disabled:cursor-not-allowed"
             />
             <span>
               <span className="t-body-strong block text-[color:var(--color-foreground)]">
@@ -1579,7 +1579,7 @@ function CreateMenuPageContent() {
                 touchForm();
                 setBatchCooking(event.target.checked);
               }}
-              className="mt-0.5 h-6 w-6 shrink-0 cursor-pointer accent-[color:var(--color-accent-strong)]"
+              className="mt-0.5 h-6 w-6 shrink-0 cursor-pointer accent-[color:var(--color-accent-strong)] disabled:cursor-not-allowed"
             />
             <span>
               <span className="t-body-strong block text-[color:var(--color-foreground)]">Cocinar una vez para dos comidas</span>

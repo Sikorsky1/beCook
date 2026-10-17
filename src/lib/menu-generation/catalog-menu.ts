@@ -288,11 +288,21 @@ export function catalogMenu(request: CatalogMenuRequest): ImportedMenuResponse |
   const lunches = best.lunch.map((pick) => pick.name);
   const dinners = best.dinner.map((pick) => pick.name);
   if (request.batch) {
-    // Monday to Friday, at most two, not on consecutive days.
+    // Monday to Friday, at most two, not on consecutive days. A dinner is replaced only when the
+    // week keeps its frequencies without it and the next day's lunch has another main protein.
+    const dinnerGroups = best.dinner.map((pick) => pick.groups);
+    const lunchGroups = best.lunch.map((pick) => pick.groups);
+    const fullBefore = missingMinimums(best.counts, quotas, available);
     let batches = 0;
     for (let day = 0; day < 5 && batches < 2; day++) {
-      if (!batchFriendly(lunches[day], best.lunch[day].groups)) continue;
+      if (!batchFriendly(lunches[day], lunchGroups[day])) continue;
+      if (mainProtein(lunchGroups[day]) === mainProtein(lunchGroups[day + 1])) continue;
+      const swapped = dinnerGroups.map((groups, index) => (index === day + 1 ? lunchGroups[day] : groups));
+      const counts = countGroups([...lunchGroups, ...swapped]);
+      const after = missingMinimums(counts, quotas, available);
+      if (!withinMaximums(counts, quotas) || after.legume > fullBefore.legume || after.fish > fullBefore.fish || after.blueFish > fullBefore.blueFish) continue;
       dinners[day + 1] = leftoverTitle(lunches[day], dayNames[day]);
+      dinnerGroups[day + 1] = lunchGroups[day];
       batches++;
       day++;
     }

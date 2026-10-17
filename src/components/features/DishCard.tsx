@@ -13,7 +13,7 @@ import { highMercury } from "@/lib/menu-generation/food-groups";
 import { leftoverAdvice, parseLeftover } from "@/lib/menu-generation/leftovers";
 import { plateSuggestions } from "@/lib/menu-generation/recipe-tags";
 import { formatIngredientAmount, recipeAllergenLabels, type RecipeCard, type RecipeCardContent } from "@/lib/recipes/card";
-import { catalogTags } from "@/lib/recipes/catalogTags";
+import { loadCatalogTags, type TagsLookup } from "@/lib/recipes/loadCatalogTags";
 import { normalizeFood } from "@/lib/recipes/food-lexicon";
 import {
   cardToShow,
@@ -89,7 +89,19 @@ function RecipeBody({
   const allergensId = `${id}-dish-card-allergens`;
   const plateId = `${id}-dish-card-plate`;
   // N12: how to complete the plate, for a catalogue recipe (its tags).
-  const tags = catalogTags(base ?? title);
+  const [tagsOf, setTagsOf] = useState<{ lookup: TagsLookup } | null>(null);
+  useEffect(() => {
+    let active = true;
+    loadCatalogTags()
+      .then((lookup) => {
+        if (active) setTagsOf({ lookup });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+  const tags = tagsOf?.lookup(base ?? parseLeftover(title)?.base ?? title) ?? null;
   const suggestions = tags ? plateSuggestions(tags) : [];
   // N16: a discreet «De temporada» when its main vegetable is in season this month.
   const month = new Date().getMonth() + 1;

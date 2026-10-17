@@ -218,7 +218,9 @@ test("N14: at most one dish with ultra-processed ingredients a week, also «Ráp
 });
 
 test("N10: the week summary is positive, cites its source and suggests what is missing", () => {
- const {weekSummary} = require("../src/lib/menu-generation/week-summary.ts");
+ const {weekSummary: summaryOf} = require("../src/lib/menu-generation/week-summary.ts");
+ const {catalogTags: tagsLookup} = require("../src/lib/recipes/catalogTags.ts");
+ const weekSummary = (dishes, profile) => summaryOf(dishes, profile, tagsLookup);
  const profile = readMenuProfile({});
  const good = weekSummary(weekOf(week(profile, 3)), profile);
  assert.ok(good.highlights.some(text => /legumbre/.test(text)));
@@ -333,8 +335,25 @@ test("N17: «Cocinar una vez para dos comidas»: stews eaten again the next day;
   {day: "Martes", date: "", lunch: "Pisto manchego", dinner: "Lentejas estofadas (sobras del lunes)"},
  ];
  const dishes = build.plannedDishes(days);
- assert.deepEqual(dishes.map(d => [d.title, d.portions ?? 1]), [["Lentejas estofadas", 2], ["Tortilla de patata", 1], ["Pisto manchego", 1]]);
+ assert.deepEqual(dishes.map(d => [d.title, d.portions ?? 1, d.leftoverOf ?? null]), [["Lentejas estofadas", 2, null], ["Tortilla de patata", 1, null], ["Pisto manchego", 1, null], ["Lentejas estofadas (sobras del lunes)", 1, "lentejas estofadas"]]);
  const card = {baseServings: 2, totalMinutes: 30, steps: ["a", "b", "c"], possibleAllergens: [], ingredients: [{name: "lentejas", quantity: 200, unit: "g", category: "despensa", optional: false}]};
  const result = build.buildDesiredList({dishes, servings: 2, cards: new Map(), aiItems: new Map(), catalogCards: new Map([[build.slotKey(0, "lunch"), card]])});
  assert.equal(result.items.find(i => i.name === "lentejas").quantity, 400);
+ assert.ok(!result.pending.some(d => /sobras/.test(d.title)), "the leftover is covered by its recipe");
+ // Without a recipe for the dish, the leftover is a dish of its own (asked like any other).
+ const noRecipe = build.buildDesiredList({dishes, servings: 2, cards: new Map(), aiItems: new Map(), catalogCards: new Map()});
+ assert.ok(noRecipe.pending.some(d => /sobras/.test(d.title)));
+ // The week keeps its frequencies and the protein rule with leftovers.
+ const {mainProtein: proteinOf} = require("../src/lib/menu-generation/food-groups.ts");
+ let ok = 0;
+ for (let seed = 1; seed <= 100; seed++) {
+  const menu = catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed, batch: true});
+  const titles = weekOf(menu).map(t => parseLeftover(t)?.base ?? t);
+  if (meetsQuotas(countGroups(titles.map(groupsOf)), weekQuotas(profile))) ok++;
+  menu.days.forEach(day => {
+   const leftover = parseLeftover(day.dinner.dishName);
+   if (leftover) assert.notEqual(proteinOf(groupsOf(leftover.base)), proteinOf(groupsOf(day.lunch.dishName)), day.dayName);
+  });
+ }
+ assert.ok(ok >= 95, `${ok}/100`);
 });

@@ -1,6 +1,7 @@
 import { catalogCardForCheck } from "@/lib/recipes/catalogChecks";
-import { catalogTags } from "@/lib/recipes/catalogTags";
+import type { TagsLookup } from "@/lib/recipes/loadCatalogTags";
 import { dishGroups } from "./food-groups";
+import { parseLeftover } from "./leftovers";
 import { countGroups, weekQuotas, type QuotaProfile } from "./quotas";
 
 // What a week has, said in positive (N10): legumes, fish, vegetables… and, when something is
@@ -16,12 +17,14 @@ export type WeekSummary = {
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
-export function weekSummary(dishes: string[], profile: QuotaProfile): WeekSummary | null {
-  const planned = dishes.filter((dish) => dish.trim() && dish !== "LIBRE");
+// tagsOf: the catalogue tags (loadCatalogTags on the browser, catalogTags on the server). A leftover
+// («… (sobras del lunes)») counts as its dish.
+export function weekSummary(dishes: string[], profile: QuotaProfile, tagsOf: TagsLookup): WeekSummary | null {
+  const planned = dishes.filter((dish) => dish.trim() && dish !== "LIBRE").map((dish) => parseLeftover(dish)?.base ?? dish);
   if (planned.length < 4) return null;
   const quotas = weekQuotas(profile);
   const counts = countGroups(planned.map((dish) => dishGroups(dish, catalogCardForCheck(dish)?.ingredients ?? null)));
-  const tags = planned.map((dish) => catalogTags(dish));
+  const tags = planned.map((dish) => tagsOf(dish));
   const known = tags.filter((tag) => tag !== null);
   const highlights: string[] = [];
   const suggestions: string[] = [];

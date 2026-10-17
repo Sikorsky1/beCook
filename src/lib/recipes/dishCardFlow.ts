@@ -29,7 +29,7 @@ import {
   type DishFinding,
   type RestrictionProfile,
 } from "@/lib/recipes/restriction-check";
-import { readMenuProfile } from "@/lib/menu-generation/prompt";
+import { readMenuProfile } from "@/lib/menu-generation/profile-input";
 import type { WeekFoodContextStatus } from "@/lib/menu-generation/food-context";
 import { mealRecipeLink, withMealRecipe } from "@/lib/weekStorage";
 
@@ -74,13 +74,14 @@ export async function loadDishCardView(day: WeekDay, meal: MealKey): Promise<Dis
       return { kind: "error", message: dishCardMessages.unreachable };
     }
   }
-  const identity = findCatalogRecipeIdentity(title);
-  const reviewed = identity ? (await loadCatalogRecipeIndex()).get(recipeTitleKey(title)) ?? null : null;
+  // A leftover («… (sobras del lunes)», N17) shows the recipe of its dish.
+  const leftover = parseLeftover(title);
+  const recipeTitle = leftover?.base ?? title;
+  const identity = findCatalogRecipeIdentity(recipeTitle);
+  const reviewed = identity ? (await loadCatalogRecipeIndex()).get(recipeTitleKey(recipeTitle)) ?? null : null;
   // A reviewed catalogue card (database) wins; otherwise the catalogue recipe of the repository.
   if (!reviewed) {
-    // A leftover («… (sobras del lunes)», N17) shows the recipe of its dish.
-    const leftover = parseLeftover(title);
-    const match = await loadCatalogRecipe(leftover?.base ?? title);
+    const match = await loadCatalogRecipe(recipeTitle);
     if (match) return { kind: "catalog_recipe", recipe: match.recipe, base: leftover ? (match.base ?? leftover.base) : match.base };
   }
   return {

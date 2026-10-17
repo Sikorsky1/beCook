@@ -2,7 +2,7 @@
 // nothing is ever changed or blocked: the preview only says what the restriction check (C3) finds in
 // the dish name and whether the name leaves a sauce or garnish open (culinary rules, C5).
 import { culinaryIssue } from "@/lib/menu-generation/culinary-rules";
-import { readMenuProfile } from "@/lib/menu-generation/prompt";
+import { readMenuProfile } from "@/lib/menu-generation/profile-input";
 import { dishCompatibilityView } from "@/lib/recipes/dishCardFlow";
 import type { RestrictionProfile } from "@/lib/recipes/restriction-check";
 
