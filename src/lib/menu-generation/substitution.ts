@@ -1,7 +1,10 @@
 import catalog from "@/data/nutritionist-recipes.json";
 import type { MealKey, WeekDay } from "@/data/mockWeek";
+import { catalogCardForCheck } from "@/lib/recipes/catalogChecks";
 import { checkDish, mentionsDislikedFood, blocksAutomaticProposal, type DishCardForCheck } from "@/lib/recipes/restriction-check";
 import { culinaryIssue } from "./culinary-rules";
+import { dishGroups, mainProtein, type DishGroup } from "./food-groups";
+import { addGroups, countGroups, weekQuotas, withinMaximums } from "./quotas";
 import { dayNames, isGenericDish, type MenuProfile, normalizeFood } from "./validation";
 
 // Single-slot substitution (step 21): change one meal, keep the other thirteen.
@@ -34,7 +37,8 @@ export const substitutionLimits = { maxDishLength: 110, maxOtherDishes: 13, maxR
 const isPlanned = (dish: string) => dish.trim() !== "" && dish !== "LIBRE";
 
 // A reviewed card of the dish, when the catalogue has one (C3): its ingredients are checked too.
-// Estimated cards never decide an automatic idea; the title check still applies.
+// Without it, the catalogue recipe of the title (N01), which can only add conflicts. Cards
+// estimated by the AI never decide an automatic idea; the title check still applies.
 export type ReviewedCardLookup = (title: string) => DishCardForCheck | null;
 
 export function checkReplacement(
@@ -49,7 +53,8 @@ export function checkReplacement(
   if (key === normalizeFood(request.currentDish)) return "same_dish";
   if (request.otherDishes.some((other) => normalizeFood(other) === key)) return "duplicate_dish";
   if (request.rejected.some((other) => normalizeFood(other) === key)) return "already_rejected";
-  const check = checkDish({ title: dish, card: card?.reviewStatus === "reviewed" ? card : null }, profile, { automatic: true });
+  const recipe = card?.reviewStatus === "reviewed" ? card : catalogCardForCheck(dish);
+  const check = checkDish({ title: dish, card: recipe }, profile, { automatic: true });
   if (blocksAutomaticProposal(check)) return "restriction_conflict";
   if (mentionsDislikedFood(check)) return "disliked_food";
   if (isGenericDish(dish)) return "generic_dish";
@@ -64,8 +69,11 @@ function slotRank(slot: SubstitutionSlot, recipeId: string) {
   return hash >>> 0;
 }
 
-// Next reviewed catalogue recipe compatible with the profile and the rest of the week.
-// Recipes for the same meal come first. Null when the catalogue has nothing left.
+const groupsOf = (title: string): DishGroup[] => dishGroups(title, catalogCardForCheck(title)?.ingredients ?? null);
+
+// Next catalogue recipe compatible with the profile and the rest of the week. Recipes for the same
+// meal come first, then those of the same food group as the current dish (N05: a legume for a
+// legume); none that takes the week past a maximum of meat, fish or eggs (quotas.ts). Null when the catalogue has nothing left.
 export function catalogAlternative(
   request: SubstitutionRequest,
   profile: MenuProfile,
@@ -75,10 +83,31 @@ export function catalogAlternative(
   // Those already left out need no second comparison in checkReplacement.
   const taken = new Set([request.currentDish, ...request.otherDishes, ...request.rejected].map(normalizeFood));
   const rest = { ...request, otherDishes: [], rejected: [] };
+  const quotas = weekQuotas(profile);
+  const others = countGroups(request.otherDishes.map(groupsOf));
+  const current = mainProtein(groupsOf(request.currentDish));
+  // Never past a maximum the week keeps, never worse than the week already is (an imported menu).
+  const now = addGroups(others, groupsOf(request.currentDish));
+  const limits = {
+    ...quotas,
+    meatMax: Math.max(quotas.meatMax, now.meat),
+    redMeatMax: Math.max(quotas.redMeatMax, now.redMeat),
+    processedMeatMax: Math.max(quotas.processedMeatMax, now.processedMeat),
+    fishMax: Math.max(quotas.fishMax, now.fish),
+    eggMax: Math.max(quotas.eggMax, now.egg),
+  };
+  const fitsWeek = (title: string) => withinMaximums(addGroups(others, groupsOf(title)), limits);
+  const sameGroup = (title: string) => Number(current !== null && mainProtein(groupsOf(title)) === current);
   const candidates = catalog.recipes
     .filter((recipe) => !taken.has(normalizeFood(recipe.name)))
     .filter((recipe) => checkReplacement(recipe.name, rest, profile, reviewedCard(recipe.name)) === null)
-    .sort((a, b) => Number(b.slot === request.meal) - Number(a.slot === request.meal) || slotRank(request, a.id) - slotRank(request, b.id));
+    .filter((recipe) => fitsWeek(recipe.name))
+    .sort(
+      (a, b) =>
+        Number(b.slot === request.meal) - Number(a.slot === request.meal) ||
+        sameGroup(b.name) - sameGroup(a.name) ||
+        slotRank(request, a.id) - slotRank(request, b.id),
+    );
   const recipe = candidates[0];
   return recipe ? { dish: recipe.name, recipeId: recipe.id } : null;
 }

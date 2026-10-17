@@ -1,5 +1,6 @@
 import type { ImportedMenuResponse } from "@/lib/importMenu";
 import { normalizeFood } from "@/lib/recipes/food-lexicon";
+import { catalogCardForCheck } from "@/lib/recipes/catalogChecks";
 import { blocksAutomaticProposal, checkDish } from "@/lib/recipes/restriction-check";
 import { culinaryIssue } from "./culinary-rules";
 
@@ -19,11 +20,11 @@ export type MenuProfile = {
   trainingTypes: string[];
 };
 
-// Conflicts visible in a dish title (C3 lexicon: diets, allergies and «otras alergias»). Blocks automatic
-// proposals: a certain conflict, or a possible one of an allergy. Titles are NOT ingredient lists:
-// passing never certifies absence of allergens or cross-contamination.
+// Conflicts visible in a dish title (C3 lexicon: diets, allergies and «otras alergias») or, for a
+// catalogue dish, in its recipe (N01). Blocks automatic proposals: a certain conflict, or a possible
+// one of an allergy. Passing never certifies absence of allergens or cross-contamination.
 export function visibleFoodConflict(name: string, profile: MenuProfile): boolean {
-  return blocksAutomaticProposal(checkDish({ title: name, card: null }, profile, { automatic: true }));
+  return blocksAutomaticProposal(checkDish({ title: name, card: catalogCardForCheck(name) }, profile, { automatic: true }));
 }
 
 export function isGenericDish(dish: string) {

@@ -5,6 +5,7 @@ import { estimateOpenAICostUsd } from "@/lib/openai/cost";
 import { menuProfileFromContext, verifiedFoodContext, type VerifiedFoodContext } from "@/lib/menu-generation/food-context";
 import { catalogMenu, elaborationForLevel, readCatalogMenuStyles } from "@/lib/menu-generation/catalog-menu";
 import { buildMenuInput, stringList } from "@/lib/menu-generation/prompt";
+import { weekFrequencies } from "@/lib/menu-generation/quotas";
 import { selectionToMenu } from "@/lib/menu-generation/validation";
 import { createMenuCompletion, menuReasoningEffort, menuTimeoutMs, type MenuAttempt } from "@/lib/menu-generation/runtime";
 import { aiRequestLimits } from "@/lib/server/ai-limits";
@@ -49,7 +50,8 @@ export async function POST(request: Request) {
         modelUsed: "catalog", promptTokens: null, completionTokens: null, totalTokens: null,
         estimatedCostUsd: 0, responseTimeMs: 0, attempts: 0, fallbackUsed: false, totalMs,
       };
-      console.info("menu_generation", {outcome: "success", source: "catalog", totalMs});
+      const frequencies = weekFrequencies(fromCatalog.days.flatMap(day => [day.lunch.dishName, day.dinner.dishName]), input.profile);
+      console.info("menu_generation", {outcome: "success", source: "catalog", totalMs, frequencies});
       const response: GeneratedMenuApiResponse & {foodContext: VerifiedFoodContext} = {...fromCatalog, openaiTelemetry: catalogTelemetry, foodContext};
       return NextResponse.json(response, {headers: {"Server-Timing": `catalog;dur=${totalMs}, total;dur=${totalMs}`}});
     }
@@ -91,6 +93,8 @@ export async function POST(request: Request) {
     }
     parseMs = Math.round(performance.now() - parseStartedAt);
     outcome = "success";
+    const frequencies = weekFrequencies(menu.days.flatMap(day => [day.lunch.dishName, day.dinner.dishName]), input.profile);
+    console.info("menu_frequencies", {source: "ai", frequencies});
     const totalMs = Math.round(performance.now() - startedAt);
     // foodContext (added in C1): servings and restrictions this menu was planned with.
     const response: GeneratedMenuApiResponse & {foodContext: VerifiedFoodContext} = {...menu, openaiTelemetry: {...telemetry, preparationMs, parseMs, totalMs}, foodContext};

@@ -1,0 +1,27 @@
+{
+  "migration": "20261017090000_profiles_allergens_habit_goals",
+  "replaces": {
+    "constraints": [
+      {
+        "conname": "profiles_allergies_check",
+        "table_name": "profiles"
+      },
+      {
+        "conname": "profiles_goals_allowed_chk",
+        "table_name": "profiles"
+      }
+    ]
+  },
+  "constraints": [
+    {
+      "conname": "profiles_allergies_check",
+      "table_name": "profiles",
+      "definition": "CHECK ((allergies <@ ARRAY['gluten'::text, 'crustaceans'::text, 'egg'::text, 'fish'::text, 'peanuts'::text, 'soy'::text, 'milk'::text, 'lactose'::text, 'nuts'::text, 'celery'::text, 'mustard'::text, 'sesame'::text, 'sulphites'::text, 'lupin'::text, 'molluscs'::text, 'shellfish'::text, 'other'::text]))"
+    },
+    {
+      "conname": "profiles_goals_allowed_chk",
+      "table_name": "profiles",
+      "definition": "CHECK ((goals <@ ARRAY['fat_loss'::text, 'muscle_gain'::text, 'sports_performance'::text, 'healthy_eating'::text, 'other'::text, 'varied'::text, 'more_plants'::text, 'cook_home'::text, 'save_time'::text, 'save_money'::text, 'with_kids'::text]))"
+    }
+  ]
+}

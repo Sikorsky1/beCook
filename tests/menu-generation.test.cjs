@@ -98,7 +98,7 @@ test("HTTP route rejects invalid input before billing and invalid output without
 
 const {catalogMenu, catalogRecipes, elaborationForLevel, readCatalogMenuStyles} = require("../src/lib/menu-generation/catalog-menu.ts");
 const {normalizeFood} = require("../src/lib/menu-generation/validation.ts");
-const {dishProtein} = require("../src/lib/nutritionPlan.ts");
+const {dishGroups, mainProtein} = require("../src/lib/menu-generation/food-groups.ts");
 const weekOf = menu => menu.days.flatMap(d => [d.lunch.dishName, d.dinner.dishName]);
 // A title may be in the catalogue twice (once per meal), with its own types.
 const hasStyle = (name, style) => catalogRecipes.some(r => r.name === name && r.menuStyles.includes(style));
@@ -113,15 +113,19 @@ test("catalogue week: 14 different catalogue recipes in their meal, of the chose
    assert.ok(catalogRecipes.some(r => r.name === d.lunch.dishName && r.slot === "lunch"));
    assert.ok(catalogRecipes.some(r => r.name === d.dinner.dishName && r.slot === "dinner"));
   });
-  assert.ok(dishes.every(n => hasStyle(n, "mediterranean")), "every dish of the chosen type");
+  // N05: the AESAN frequencies come before the type, so a legume or a fish of another type may fill a gap.
+  assert.ok(dishes.filter(n => hasStyle(n, "mediterranean")).length >= 12, "nearly every dish of the chosen type");
   assert.ok(dishes.filter(n => catalogRecipes.some(r => r.name === n && r.elaboration === "simple")).length >= 12, "nearly all of the chosen level");
-  assert.ok(menu.days.filter(d => dishProtein(d.lunch.dishName) && dishProtein(d.lunch.dishName) === dishProtein(d.dinner.dishName)).length <= 1, "lunch and dinner proteins differ");
+  const protein = n => mainProtein(dishGroups(n));
+  assert.ok(menu.days.filter(d => protein(d.lunch.dishName) && protein(d.lunch.dishName) === protein(d.dinner.dishName)).length <= 1, "lunch and dinner proteins differ");
  }
- assert.notDeepEqual(weekOf(catalogMenu({profile, styles: ["fat_loss"], elaboration: "balanced", seed: 1})), weekOf(catalogMenu({profile, styles: ["fat_loss"], elaboration: "balanced", seed: 2})), "another seed, another week");
+ assert.notDeepEqual(weekOf(catalogMenu({profile, styles: ["quick_simple"], elaboration: "balanced", seed: 1})), weekOf(catalogMenu({profile, styles: ["quick_simple"], elaboration: "balanced", seed: 2})), "another seed, another week");
  assert.equal(elaborationForLevel(2), "simple");
  assert.equal(elaborationForLevel(4), "balanced");
  assert.equal(elaborationForLevel(6), "elaborate");
- assert.deepEqual(readCatalogMenuStyles(["high_protein", "nope"]), ["high_protein"]);
+ assert.deepEqual(readCatalogMenuStyles(["quick_simple", "nope"]), ["quick_simple"]);
+ // N06: the body-composition types are no longer offered; a request with them reads as the default.
+ assert.deepEqual(readCatalogMenuStyles(["high_protein", "fat_loss", "muscle_gain"]), ["healthy_balanced"]);
  assert.deepEqual(readCatalogMenuStyles(undefined), ["healthy_balanced"]);
 });
 
@@ -152,11 +156,11 @@ test("HTTP route: without a weekly request the catalogue answers, without OpenAI
  const fakes = installFakeBackends(() => { throw new Error("OpenAI must not be called"); });
  try {
   const {POST} = require("../src/app/api/generate-menu/route.ts");
-  const response = await POST(aiRequest("generate-menu", {peopleCount: 2, menuStyle: ["high_protein"], elaborationLevel: 6}));
+  const response = await POST(aiRequest("generate-menu", {peopleCount: 2, menuStyle: ["quick_simple"], elaborationLevel: 6}));
   assert.equal(response.status, 200);
   const data = await response.json();
   assert.equal(data.days.length, 7);
-  assert.ok(weekOf(data).every(n => hasStyle(n, "high_protein")));
+  assert.ok(weekOf(data).filter(n => hasStyle(n, "quick_simple")).length >= 12);
   assert.deepEqual({model: data.openaiTelemetry.modelUsed, cost: data.openaiTelemetry.estimatedCostUsd}, {model: "catalog", cost: 0});
   assert.equal(fakes.openAICalls, 0);
   assert.equal(fakes.begin.length, 0, "no usage record: the catalogue is free and outside the AI quota");

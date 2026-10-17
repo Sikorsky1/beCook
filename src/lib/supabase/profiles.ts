@@ -15,11 +15,19 @@ export type TrainingType =
   | "yoga_pilates"
   | "other";
 
+// Habit goals (N06). fat_loss, muscle_gain and sports_performance are values of the previous form:
+// still valid in the database, no longer offered; the form reads them as healthy_eating.
 export type Goal =
   | "fat_loss"
   | "muscle_gain"
   | "sports_performance"
   | "healthy_eating"
+  | "varied"
+  | "more_plants"
+  | "cook_home"
+  | "save_time"
+  | "save_money"
+  | "with_kids"
   | "other";
 
 export type LegacyGoal = Goal | "maintenance";
@@ -32,12 +40,27 @@ export type DietaryRestriction =
   | "no_pork"
   | "no_alcohol";
 
+// The 14 EU allergens (Regulation 1169/2011, annex II) plus lactose intolerance (N02). «milk» is
+// the allergy to milk protein: lactose-free products still break it; «lactose» is the intolerance.
+// «shellfish» (crustaceans and molluscs together) is the value of the previous form: still valid,
+// the form now saves crustaceans and molluscs apart.
 export type Allergy =
   | "gluten"
+  | "crustaceans"
+  | "egg"
+  | "fish"
+  | "peanuts"
+  | "soy"
+  | "milk"
   | "lactose"
   | "nuts"
+  | "celery"
+  | "mustard"
+  | "sesame"
+  | "sulphites"
+  | "lupin"
+  | "molluscs"
   | "shellfish"
-  | "egg"
   | "other";
 
 export type WeeklyTrainingDays = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -146,6 +169,12 @@ const goalValues = new Set<Goal>([
   "muscle_gain",
   "sports_performance",
   "healthy_eating",
+  "varied",
+  "more_plants",
+  "cook_home",
+  "save_time",
+  "save_money",
+  "with_kids",
   "other",
 ]);
 export const profileConfirmationValues: ProfileConfirmation[] = [
@@ -166,14 +195,27 @@ const dietaryRestrictionValues = new Set<DietaryRestriction>([
   "no_pork",
   "no_alcohol",
 ]);
-const allergyValues = new Set<Allergy>([
+// Same list as the CHECK profiles_allergies_check (20261017090000_profiles_allergens_habit_goals).
+export const allergyValueList: Allergy[] = [
   "gluten",
+  "crustaceans",
+  "egg",
+  "fish",
+  "peanuts",
+  "soy",
+  "milk",
   "lactose",
   "nuts",
+  "celery",
+  "mustard",
+  "sesame",
+  "sulphites",
+  "lupin",
+  "molluscs",
   "shellfish",
-  "egg",
   "other",
-]);
+];
+const allergyValues = new Set<Allergy>(allergyValueList);
 
 function optionalText(value: string | undefined) {
   const trimmedValue = value?.trim();

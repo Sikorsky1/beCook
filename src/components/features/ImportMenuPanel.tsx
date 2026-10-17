@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
 import { TextArea } from "@/components/ui/TextArea";
 import { isNutritionPlanText } from "@/lib/nutritionPlan";
+import { professionalAdvice } from "@/lib/professionalAdvice";
 
 // C6 (roadmap step 22; Crear menú part of step 32): the menu the user already has, pasted as text.
 // It is a secondary path under «Generar»: shown when the disclosure opens or with ?mode=import.
@@ -128,6 +129,8 @@ export function ImportMenuPanel({
           </>
         )}
       </PrimaryButton>
+
+      <p className="t-meta">{professionalAdvice}</p>
     </Card>
   );
 }

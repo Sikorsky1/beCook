@@ -46,6 +46,22 @@ async function runProfileContractTests({ check, sql, id, api, createClient, supa
       });
     }
 
+    // N02 and N06 (20261017090000_profiles_allergens_habit_goals): the 14 EU allergens, lactose
+    // intolerance apart and habit goals pass the widened CHECKs.
+    const eu14 = ["gluten", "crustaceans", "egg", "fish", "peanuts", "soy", "milk", "lactose", "nuts", "celery", "mustard", "sesame", "sulphites", "lupin", "molluscs"];
+    const habits = await saveThenReadElsewhere({ ...base, allergies: eu14, goals: ["more_plants", "with_kids", "save_money"], goal: "healthy_eating" });
+    check("N02/N06: the 14 allergens and the habit goals save and read back on another device", () => {
+      assert.equal(habits.saveError, null);
+      assert.deepEqual(habits.row?.allergies, eu14);
+      assert.deepEqual(habits.read?.goals, ["more_plants", "with_kids", "save_money"]);
+      assert.equal(habits.row?.goal, "healthy_eating");
+    });
+    check("N02/N06: the CHECKs still refuse an unknown allergy or goal", () => {
+      for (const update of ["allergies = ARRAY['dust']", "goals = ARRAY['fat_burn']"]) {
+        assert.throws(() => sql("BEGIN; UPDATE public.profiles SET " + update + " WHERE id='" + profileId + "'; ROLLBACK;"));
+      }
+    });
+
     const otherFirst = await saveThenReadElsewhere({
       ...base, goals: ["other", "muscle_gain"], goal: "other", otherGoal: "  Preparar un triatlón  ",
     });

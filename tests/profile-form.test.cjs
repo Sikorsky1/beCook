@@ -146,7 +146,8 @@ test("a saved profile loads as it is, without filling gaps", () => {
   assert.equal(draft.heightCm, "165");
   assert.equal(draft.dislikedFoodsText, "brócoli");
   assert.equal(draft.noAllergies, false);
-  assert.ok(profileSections.every(section => sectionStatus(draft, profile, section) === "saved"));
+  // N06: body data is no longer asked for: «optional», never «saved» or «assumed».
+  assert.ok(profileSections.every(section => sectionStatus(draft, profile, section) === (section === "body" ? "optional" : "saved")));
   // Restrictions saved empty by an older form are shown as pending, not as «Ninguna».
   const oldProfile = legacy({dietaryRestrictions: [], allergies: []});
   const oldDraft = draftFromProfile(oldProfile);
@@ -212,7 +213,7 @@ test("conflict: the remote copy replaces the saved section and keeps edits elsew
 
 test("every section explains how it affects the menu; body data says it is not used", () => {
   for (const section of profileSections) assert.ok(profileSectionInfo[section].usage.length > 10);
-  assert.match(profileSectionInfo.body.usage, /No se usan/);
+  assert.match(profileSectionInfo.body.usage, /no se usan/);
   assert.match(profileSectionInfo.restrictions.usage, /obligatorias/);
 });
 
@@ -220,7 +221,7 @@ test("profiles of the previous form are «assumed» until each section is confir
   const profile = legacy({dietaryRestrictions: ["none"], allergies: []});
   const draft = draftFromProfile(profile);
   assert.deepEqual(profileSections.map(section => sectionStatus(draft, profile, section)),
-    ["assumed", "assumed", "assumed", "assumed", "assumed"]);
+    ["assumed", "assumed", "assumed", "assumed", "optional"], "body data is not asked for (N06): nothing to confirm");
   assert.deepEqual(assumedMenuSections(profile), ["household", "goals", "restrictions"]);
   assert.ok(canSaveSection("assumed"));
   assert.ok(!canSaveSection("saved"));

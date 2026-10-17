@@ -336,7 +336,9 @@ export function dishConflictLabels(
     if (finding.certainty !== "certain") continue;
     const { kind, label } = finding.restriction;
     const text =
-      kind === "allergy" || kind === "other_allergy"
+      kind === "allergy" && finding.restriction.value === "lactose"
+        ? "Intolerancia a la lactosa"
+        : kind === "allergy" || kind === "other_allergy"
         ? `Alergia: ${label.charAt(0).toUpperCase()}${label.slice(1)}`
         : kind === "disliked"
           ? `No te gusta: ${label}`
