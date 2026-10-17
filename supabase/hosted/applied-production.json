@@ -161,6 +161,14 @@
       "sha256": "df18c99ba303949d082c8c1bc7ccaaa8e3d9663e2e7abda9e58a8607ccafbe8a",
       "appliedAt": "2026-10-12",
       "notes": "Conector, una parte, sin BEGIN/COMMIT (SET LOCAL mantenidos). Antes: backup completo ~/Backups/becook/2026-10-12-ola9 y copia interna backup_20261012.pantry_items_aceites (5 filas, RLS activa, sin permisos para anon/authenticated). prosrc de add_pantry_items idéntico a local (md5 4f027ba0…); SECURITY INVOKER y EXECUTE solo authenticated. Filas: 'aceites y vinagres' 5 → 0, 'básicos' 10 → 15; total 35 sin cambios."
+    },
+    {
+      "version": "20261017112439",
+      "name": "profiles_allergens_habit_goals",
+      "source": "supabase/migrations/20261017090000_profiles_allergens_habit_goals.sql",
+      "sha256": "835aafb21c838d407801017d5c8b3c8522de7e32efea1ddb0191d9b650aa9f30",
+      "appliedAt": "2026-10-17",
+      "notes": "Tras backup completo en ~/Backups/becook/2026-10-17-nutricion-fase1. Conector, sin comentarios. Solo amplía dos CHECK (sin filas modificadas: no hace falta copia interna). Definiciones idénticas a local y preview, validadas; 4 perfiles antes y después, todos dentro de los CHECK nuevos."
     }
   ]
 }
