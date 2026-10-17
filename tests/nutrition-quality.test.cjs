@@ -181,3 +181,38 @@ test("N06: habit goals only, and each one changes the week", () => {
  for (let seed = 1; seed <= 60; seed++) if (countGroups(weekOf(week(plants, seed)).map(groupsOf)).legume >= 5) ok++;
  assert.ok(ok / 60 >= 0.95, `more_plants ${ok}/60`);
 });
+
+// --- Phase 2 ---------------------------------------------------------------------------------
+
+test("N07: catalog-tags.json is up to date and every recipe has its main tags", () => {
+ const {catalogTags} = require("../scripts/build-catalog-tags.cjs");
+ const file = JSON.parse(fs.readFileSync(path.join(root, "src/data/recipe-cards/catalog-recipes.json"), "utf8"));
+ const stored = JSON.parse(fs.readFileSync(path.join(root, "src/data/recipe-cards/catalog-tags.json"), "utf8"));
+ assert.deepEqual(stored, catalogTags(file), "run node scripts/build-catalog-tags.cjs");
+ assert.equal(stored.status, "pending_review");
+ for (const [title, tags] of Object.entries(stored.recipes)) {
+  assert.ok(Array.isArray(tags.groups) && Number.isFinite(tags.vegGrams) && [1, 2, 3].includes(tags.cost), title);
+ }
+ const {catalogTags: tagsOf} = require("../src/lib/recipes/catalogTags.ts");
+ assert.equal(tagsOf("Lentejas estofadas").groups.includes("legume"), true);
+ assert.equal(tagsOf("Emperador a la siciliana con tomate cherry, aceitunas y alcaparras").mercury, true);
+ assert.equal(tagsOf("Plato que no existe"), null);
+});
+
+test("N12: plate suggestions only for what the recipe lacks", () => {
+ const {plateSuggestions} = require("../src/lib/menu-generation/recipe-tags.ts");
+ const full = {groups: ["legume"], vegGrams: 200, starch: "wholegrain", fruit: true};
+ assert.deepEqual(plateSuggestions(full), []);
+ const bare = {groups: ["white_fish"], vegGrams: 40, starch: null, fruit: false};
+ assert.equal(plateSuggestions(bare).length, 3);
+ assert.match(plateSuggestions({...full, starch: "refined"})[0], /integral/);
+});
+
+test("N14: at most one dish with ultra-processed ingredients a week, also «Rápido y sencillo»", () => {
+ const {catalogTags: tagsOf} = require("../src/lib/recipes/catalogTags.ts");
+ const profile = readMenuProfile({});
+ for (let seed = 1; seed <= 60; seed++) {
+  const upf = weekOf(week(profile, seed, ["quick_simple"], "simple")).filter(dish => tagsOf(dish)?.upf).length;
+  assert.ok(upf <= 1, `seed ${seed}: ${upf}`);
+ }
+});

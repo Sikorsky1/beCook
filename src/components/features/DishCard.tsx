@@ -10,7 +10,9 @@ import { newRequestKey } from "@/lib/data/repositories";
 import type { IsoWeek } from "@/lib/isoWeek";
 import { loginHrefFor } from "@/lib/navigation";
 import { highMercury } from "@/lib/menu-generation/food-groups";
+import { plateSuggestions } from "@/lib/menu-generation/recipe-tags";
 import { formatIngredientAmount, recipeAllergenLabels, type RecipeCard, type RecipeCardContent } from "@/lib/recipes/card";
+import { catalogTags } from "@/lib/recipes/catalogTags";
 import { normalizeFood } from "@/lib/recipes/food-lexicon";
 import {
   cardToShow,
@@ -84,6 +86,10 @@ function RecipeBody({
   const ingredientsId = `${id}-dish-card-ingredients`;
   const stepsId = `${id}-dish-card-steps`;
   const allergensId = `${id}-dish-card-allergens`;
+  const plateId = `${id}-dish-card-plate`;
+  // N12: how to complete the plate, for a catalogue recipe (its tags).
+  const tags = catalogTags(base ?? title);
+  const suggestions = tags ? plateSuggestions(tags) : [];
   const meta = [
     `Para ${recipe.baseServings} ${recipe.baseServings === 1 ? "persona" : "personas"}`,
     recipe.totalMinutes ? `${recipe.totalMinutes} min` : null,
@@ -127,6 +133,19 @@ function RecipeBody({
           ))}
         </ol>
       </section>
+
+      {suggestions.length ? (
+        <section aria-labelledby={plateId}>
+          <h3 id={plateId} className="t-body-strong">
+            Para completar el plato
+          </h3>
+          <ul className="t-body mt-2 list-disc space-y-1 pl-5">
+            {suggestions.map((suggestion) => (
+              <li key={suggestion}>{suggestion}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section aria-labelledby={allergensId} className="space-y-1">
         <h3 id={allergensId} className="t-body-strong">

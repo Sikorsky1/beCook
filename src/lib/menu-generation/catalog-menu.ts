@@ -2,6 +2,7 @@ import catalog from "@/data/nutritionist-recipes.json";
 import type { ImportedMenuResponse } from "@/lib/importMenu";
 import { seededRandom } from "@/lib/nutritionPlan";
 import { catalogCardForCheck } from "@/lib/recipes/catalogChecks";
+import { catalogTags } from "@/lib/recipes/catalogTags";
 import { checkDish, blocksAutomaticProposal, mentionsDislikedFood, type RestrictionProfile } from "@/lib/recipes/restriction-check";
 import { culinaryIssue } from "./culinary-rules";
 import { dishGroups, highMercury, isFish, mainProtein, type DishGroup } from "./food-groups";
@@ -93,6 +94,8 @@ type Candidate = CatalogRecipe & {
   kind: string;
   groups: DishGroup[];
   protein: ReturnType<typeof mainProtein>;
+  // Probably ultra-processed ingredients (N07 tags): at most one such dish a week (N14).
+  upf: boolean;
   score: number;
 };
 
@@ -125,7 +128,7 @@ function candidatesFor(meal: "lunch" | "dinner", request: CatalogMenuRequest, re
     const groups = dishGroups(recipe.name, card?.ingredients ?? null);
     // «kind»: the first word of the title («ensalada», «tortilla», «lentejas»), so a week is not
     // seven salads.
-    return [{ ...recipe, key, kind: key.split(" ")[0], groups, protein: mainProtein(groups), score }];
+    return [{ ...recipe, key, kind: key.split(" ")[0], groups, protein: mainProtein(groups), upf: catalogTags(recipe.name)?.upf ?? false, score }];
   });
 }
 
@@ -148,14 +151,18 @@ function pickWeek(pools: Pools, request: CatalogMenuRequest, quotas: WeekQuotas,
   const proteinCount = new Map<string, number>();
   const kindCount = new Map<string, number>();
   const week: Week = { lunch: [], dinner: [], counts: countGroups([]) };
+  let upfCount = 0;
   const floors = { lunch: minimumScore(pools.lunch), dinner: minimumScore(pools.dinner) };
 
   for (let day = 0; day < 7; day++) {
     let lunchProtein: string | null = null;
     for (const meal of ["lunch", "dinner"] as const) {
       const slotsLeft = 14 - (day * 2 + (meal === "dinner" ? 1 : 0));
-      const capped = pools[meal].filter((candidate) => !used.has(candidate.key) && withinMaximums(addGroups(week.counts, candidate.groups), quotas));
-      if (!capped.length) return null;
+      const withinMax = pools[meal].filter((candidate) => !used.has(candidate.key) && withinMaximums(addGroups(week.counts, candidate.groups), quotas));
+      if (!withinMax.length) return null;
+      // N14: one dish with ultra-processed ingredients a week at most, unless nothing else is left.
+      const lowUpf = withinMax.filter((candidate) => !candidate.upf || upfCount < 1);
+      const capped = lowUpf.length ? lowUpf : withinMax;
       const missing = missingMinimums(week.counts, quotas, available);
       const need = missing.legume + Math.max(missing.fish, missing.blueFish);
       const helps = (candidate: Candidate) =>
@@ -186,6 +193,7 @@ function pickWeek(pools: Pools, request: CatalogMenuRequest, quotas: WeekQuotas,
       used.add(pick.key);
       week[meal].push(pick);
       week.counts = addGroups(week.counts, pick.groups);
+      if (pick.upf) upfCount++;
       kindCount.set(`${meal}:${pick.kind}`, (kindCount.get(`${meal}:${pick.kind}`) ?? 0) + 1);
       if (pick.protein) proteinCount.set(`${meal}:${pick.protein}`, (proteinCount.get(`${meal}:${pick.protein}`) ?? 0) + 1);
       if (meal === "lunch") lunchProtein = pick.protein;
