@@ -11,6 +11,7 @@ import {
 } from "@/lib/data/repositories";
 import type { IsoWeek } from "@/lib/isoWeek";
 import { getIsoWeekStorageId } from "@/lib/isoWeek";
+import { parseLeftover } from "@/lib/menu-generation/leftovers";
 import { loadCatalogRecipe } from "@/lib/recipes/catalogRecipeCards";
 import {
   findCatalogRecipeIdentity,
@@ -77,8 +78,10 @@ export async function loadDishCardView(day: WeekDay, meal: MealKey): Promise<Dis
   const reviewed = identity ? (await loadCatalogRecipeIndex()).get(recipeTitleKey(title)) ?? null : null;
   // A reviewed catalogue card (database) wins; otherwise the catalogue recipe of the repository.
   if (!reviewed) {
-    const match = await loadCatalogRecipe(title);
-    if (match) return { kind: "catalog_recipe", recipe: match.recipe, base: match.base };
+    // A leftover («… (sobras del lunes)», N17) shows the recipe of its dish.
+    const leftover = parseLeftover(title);
+    const match = await loadCatalogRecipe(leftover?.base ?? title);
+    if (match) return { kind: "catalog_recipe", recipe: match.recipe, base: leftover ? (match.base ?? leftover.base) : match.base };
   }
   return {
     kind: "title_only",

@@ -214,6 +214,7 @@ function CreateMenuPageContent() {
   const [menuStyles, setMenuStyles] =
     useState<MenuStyle[]>(defaultMenuStyles);
   const [withDailyExtras, setWithDailyExtras] = useState(false);
+  const [batchCooking, setBatchCooking] = useState(false);
   const [elaborationLevel, setElaborationLevel] = useState(
     defaultElaborationLevel,
   );
@@ -926,6 +927,7 @@ function CreateMenuPageContent() {
         elaborationLevel,
         recentDishes,
         freeTextPrompt: trimmedFreeTextPrompt,
+        batchCooking,
       }, run.controller.signal);
 
       const data = (await response.json()) as
@@ -1564,6 +1566,24 @@ function CreateMenuPageContent() {
                 Planificar también desayunos, fruta y tentempiés
               </span>
               <span className="t-meta block">Fruta cada día y frutos secos varios días; van a la lista de la compra.</span>
+            </span>
+          </label>
+
+          {/* N17: a stew cooked once for lunch and its second half the next day at dinner. */}
+          <label className="flex min-h-11 cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={batchCooking}
+              disabled={isLoading}
+              onChange={(event) => {
+                touchForm();
+                setBatchCooking(event.target.checked);
+              }}
+              className="mt-0.5 h-6 w-6 shrink-0 cursor-pointer accent-[color:var(--color-accent-strong)]"
+            />
+            <span>
+              <span className="t-body-strong block text-[color:var(--color-foreground)]">Cocinar una vez para dos comidas</span>
+              <span className="t-meta block">Hasta dos guisos de legumbre o verdura, con la mitad para la cena del día siguiente.</span>
             </span>
           </label>
 

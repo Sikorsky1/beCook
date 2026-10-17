@@ -8,6 +8,7 @@
 // - A dish with neither is pending: the rest of the list is still built.
 // - The pantry (B7) has no amounts: nothing is subtracted; it only changes how a line is shown.
 import { getDayPosition } from "@/lib/isoWeek";
+import { parseLeftover } from "@/lib/menu-generation/leftovers";
 import { recipeTitleKey, type RecipeCard, type RecipeCardContent } from "@/lib/recipes/card";
 import {
   dishOriginsOf,
@@ -37,6 +38,8 @@ export type PlannedDish = {
   // recipeTitleKey of the title.
   dish: string;
   versionId: string | null;
+  // Times it is eaten: 2 when a leftover of it is planned later in the week (N17).
+  portions?: number;
 };
 
 // An ingredient of one dish before it is added up (from a card or from the AI).
@@ -57,9 +60,10 @@ export const slotKey = (day: number, meal: MealKey) => `${day}|${meal}`;
 
 const meals: MealKey[] = ["lunch", "dinner"];
 
-// Planned meals of a week (free meals and unknown days left out), in day order.
+// Planned meals of a week (free meals and unknown days left out), in day order. A leftover
+// («… (sobras del lunes)», N17) is not bought again: it doubles the portions of its dish.
 export function plannedDishes(days: WeekDay[]): PlannedDish[] {
-  return days
+  const all = days
     .flatMap((day) => {
       const position = getDayPosition(day.day);
       if (position === -1) return [];
@@ -71,6 +75,12 @@ export function plannedDishes(days: WeekDay[]): PlannedDish[] {
       });
     })
     .sort((first, second) => first.day - second.day || meals.indexOf(first.meal) - meals.indexOf(second.meal));
+  const leftovers = all.map((dish) => parseLeftover(dish.title));
+  const bases = new Map<string, number>();
+  for (const leftover of leftovers) if (leftover) bases.set(recipeTitleKey(leftover.base), (bases.get(recipeTitleKey(leftover.base)) ?? 0) + 1);
+  return all
+    .filter((_, index) => !leftovers[index] || !all.some((other) => other.dish === recipeTitleKey(leftovers[index]!.base)))
+    .map((dish) => (bases.has(dish.dish) ? { ...dish, portions: 1 + (bases.get(dish.dish) ?? 0) } : dish));
 }
 
 type Contribution = {
@@ -135,7 +145,7 @@ export function buildDesiredList({ dishes, servings, cards, aiItems, catalogCard
     const versioned = dish.versionId ? cards.get(dish.versionId) : undefined;
     const card = versioned ?? catalogCards.get(slotKey(dish.day, dish.meal));
     if (card) {
-      const factor = servings / card.baseServings;
+      const factor = (servings * (dish.portions ?? 1)) / card.baseServings;
       const kind = versioned?.reviewStatus === "reviewed" ? "card_reviewed" : "card_inferred";
       for (const ingredient of card.ingredients) {
         if (ingredient.optional) {
@@ -153,6 +163,8 @@ export function buildDesiredList({ dishes, servings, cards, aiItems, catalogCard
       pending.push(dish);
       continue;
     }
+    // AI ingredients are kept as answered (they are reused from the list's origins, so scaling
+    // them here would scale them again on every update).
     for (const ingredient of ai) {
       const entry = contribution(dish, ingredient, "ai_title");
       if (entry) contributions.push(entry);

@@ -7,7 +7,8 @@ import { checkDish, blocksAutomaticProposal, mentionsDislikedFood, type Restrict
 import { culinaryIssue } from "./culinary-rules";
 import { dishGroups, highMercury, isFish, mainProtein, type DishGroup } from "./food-groups";
 import { addGroups, countGroups, missingMinimums, weekQuotas, withinMaximums, type WeekCounts, type WeekQuotas } from "./quotas";
-import { isGenericDish, normalizeFood, selectionToMenu, type MenuProfile } from "./validation";
+import { batchFriendly, leftoverTitle } from "./leftovers";
+import { dayNames, isGenericDish, normalizeFood, selectionToMenu, type MenuProfile } from "./validation";
 
 // Weekly menu from the recipe catalogue (src/data/nutritionist-recipes.json), without the AI.
 // Each recipe says its meal (lunch or dinner), the menu types it fits (Saludable, Mediterráneo…)
@@ -91,6 +92,9 @@ export type CatalogMenuRequest = {
   month?: number;
   // Products marked in Despensa: recipes that use them score a little more (N18, «usa lo que tienes»).
   pantry?: string[];
+  // «Cocinar una vez para dos comidas» (N17): up to two lunches cooked double, eaten again the
+  // next day at dinner.
+  batch?: boolean;
 };
 
 type Candidate = CatalogRecipe & {
@@ -281,9 +285,22 @@ export function catalogMenu(request: CatalogMenuRequest): ImportedMenuResponse |
   }
   if (!best) return null;
 
+  const lunches = best.lunch.map((pick) => pick.name);
+  const dinners = best.dinner.map((pick) => pick.name);
+  if (request.batch) {
+    // Monday to Friday, at most two, not on consecutive days.
+    let batches = 0;
+    for (let day = 0; day < 5 && batches < 2; day++) {
+      if (!batchFriendly(lunches[day], best.lunch[day].groups)) continue;
+      dinners[day + 1] = leftoverTitle(lunches[day], dayNames[day]);
+      batches++;
+      day++;
+    }
+  }
+
   // The same checks as an AI menu: format, duplicates, restrictions, generic and vague titles.
   try {
-    return selectionToMenu({ lunches: best.lunch.map((pick) => pick.name), dinners: best.dinner.map((pick) => pick.name) }, request.profile);
+    return selectionToMenu({ lunches, dinners }, request.profile);
   } catch {
     return null;
   }

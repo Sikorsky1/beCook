@@ -311,3 +311,30 @@ test("N18: recipes that use pantry products come first («usa lo que tienes»)",
  }
  assert.ok(withPantry > without, `${withPantry} vs ${without}`);
 });
+
+test("N17: «Cocinar una vez para dos comidas»: stews eaten again the next day; bought once, double", () => {
+ const {parseLeftover} = require("../src/lib/menu-generation/leftovers.ts");
+ const build = require("../src/lib/shopping/build.ts");
+ const profile = readMenuProfile({});
+ let total = 0;
+ for (let seed = 1; seed <= 30; seed++) {
+  const menu = catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed, batch: true});
+  menu.days.forEach((day, index) => {
+   const leftover = parseLeftover(day.dinner.dishName);
+   if (!leftover) return;
+   total++;
+   assert.equal(menu.days[index - 1].lunch.dishName, leftover.base);
+   assert.ok(!groupsOf(leftover.base).some(g => /meat|fish|seafood|poultry/.test(g)), leftover.base);
+  });
+ }
+ assert.ok(total >= 30, `${total} leftovers in 30 weeks`);
+ const days = [
+  {day: "Lunes", date: "", lunch: "Lentejas estofadas", dinner: "Tortilla de patata"},
+  {day: "Martes", date: "", lunch: "Pisto manchego", dinner: "Lentejas estofadas (sobras del lunes)"},
+ ];
+ const dishes = build.plannedDishes(days);
+ assert.deepEqual(dishes.map(d => [d.title, d.portions ?? 1]), [["Lentejas estofadas", 2], ["Tortilla de patata", 1], ["Pisto manchego", 1]]);
+ const card = {baseServings: 2, totalMinutes: 30, steps: ["a", "b", "c"], possibleAllergens: [], ingredients: [{name: "lentejas", quantity: 200, unit: "g", category: "despensa", optional: false}]};
+ const result = build.buildDesiredList({dishes, servings: 2, cards: new Map(), aiItems: new Map(), catalogCards: new Map([[build.slotKey(0, "lunch"), card]])});
+ assert.equal(result.items.find(i => i.name === "lentejas").quantity, 400);
+});

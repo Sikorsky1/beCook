@@ -10,6 +10,7 @@ import { newRequestKey } from "@/lib/data/repositories";
 import type { IsoWeek } from "@/lib/isoWeek";
 import { loginHrefFor } from "@/lib/navigation";
 import { highMercury } from "@/lib/menu-generation/food-groups";
+import { leftoverAdvice, parseLeftover } from "@/lib/menu-generation/leftovers";
 import { plateSuggestions } from "@/lib/menu-generation/recipe-tags";
 import { formatIngredientAmount, recipeAllergenLabels, type RecipeCard, type RecipeCardContent } from "@/lib/recipes/card";
 import { catalogTags } from "@/lib/recipes/catalogTags";
@@ -136,6 +137,12 @@ function RecipeBody({
           ))}
         </ol>
       </section>
+
+      {parseLeftover(title) ? (
+        <p className="t-body rounded-[var(--radius-control)] bg-[color:var(--color-surface-muted)] px-3 py-2">
+          Son las sobras de este plato, cocinado el día anterior para dos comidas. {leftoverAdvice}
+        </p>
+      ) : null}
 
       {suggestions.length ? (
         <section aria-labelledby={plateId}>
