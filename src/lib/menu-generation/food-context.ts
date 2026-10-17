@@ -2,7 +2,7 @@
 // and its shopping list depend on. Always read from the account (current_food_context /
 // week_food_context_status), never from the browser. Canonical form and version are computed in
 // the database (food_context_restrictions / food_context_version), so they are only compared here.
-import { readMenuProfile } from "./prompt";
+import { readMenuProfile } from "./profile-input";
 import type { MenuProfile } from "./validation";
 
 export type FoodRestrictions = {

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { AiLoginNotice } from "@/components/features/AiLoginNotice";
 import { GenerationContextSummary } from "@/components/features/GenerationContextSummary";
+import { WeekBalance } from "@/components/features/WeekBalance";
 import { GenerationProgress } from "@/components/features/GenerationProgress";
 import { ImportMenuPanel } from "@/components/features/ImportMenuPanel";
 import { ProfileReadinessNotice } from "@/components/features/ProfileReadinessNotice";
@@ -89,6 +90,7 @@ import { pantryItemsOrDefault } from "@/lib/pantryStorage";
 import { readStoredProfile } from "@/lib/profileForm";
 import { ensureShoppingList } from "@/lib/data/shopping";
 import { applyPendingPlanExtras, writePendingPlanExtras } from "@/lib/data/planExtras";
+import { dailyExtras } from "@/lib/menu-generation/daily-extras";
 import { generatePlanWeek, parseNutritionPlan, planDailyMealLabels, planExtras, planWarnings } from "@/lib/nutritionPlan";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
@@ -211,6 +213,8 @@ function CreateMenuPageContent() {
   const [peopleCount, setPeopleCount] = useState(2);
   const [menuStyles, setMenuStyles] =
     useState<MenuStyle[]>(defaultMenuStyles);
+  const [withDailyExtras, setWithDailyExtras] = useState(false);
+  const [batchCooking, setBatchCooking] = useState(false);
   const [elaborationLevel, setElaborationLevel] = useState(
     defaultElaborationLevel,
   );
@@ -923,6 +927,7 @@ function CreateMenuPageContent() {
         elaborationLevel,
         recentDishes,
         freeTextPrompt: trimmedFreeTextPrompt,
+        batchCooking,
       }, run.controller.signal);
 
       const data = (await response.json()) as
@@ -988,7 +993,9 @@ function CreateMenuPageContent() {
       }
 
       persistenceMs = Math.round(performance.now() - persistenceStartedAt);
-      showNewProposal(generatedMenu, currentGenerationRequestId, weekForGeneration, "generate");
+      // N09: the optional breakfasts and snacks travel with the proposal as its daily extras.
+      const extras = withDailyExtras && profileForGeneration ? dailyExtras({ ...profileForGeneration, otherAllergies: profileForGeneration.otherAllergies ?? "" }, peopleCount) : null;
+      showNewProposal(extras ? { ...generatedMenu, planExtras: extras } : generatedMenu, currentGenerationRequestId, weekForGeneration, "generate");
       setGenerationRequestId(currentGenerationRequestId);
       finish({ status: "proposal" });
     } catch (error: unknown) {
@@ -1542,6 +1549,44 @@ function CreateMenuPageContent() {
             </div>
           </fieldset>
 
+          {/* N09: breakfasts, fruit and snacks, rotating day by day, added to the shopping list. */}
+          <label className="flex min-h-11 cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={withDailyExtras}
+              disabled={isLoading}
+              onChange={(event) => {
+                touchForm();
+                setWithDailyExtras(event.target.checked);
+              }}
+              className="mt-0.5 h-6 w-6 shrink-0 cursor-pointer accent-[color:var(--color-accent-strong)] disabled:cursor-not-allowed"
+            />
+            <span>
+              <span className="t-body-strong block text-[color:var(--color-foreground)]">
+                Planificar también desayunos, fruta y tentempiés
+              </span>
+              <span className="t-meta block">Fruta cada día y frutos secos varios días; van a la lista de la compra.</span>
+            </span>
+          </label>
+
+          {/* N17: a stew cooked once for lunch and its second half the next day at dinner. */}
+          <label className="flex min-h-11 cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={batchCooking}
+              disabled={isLoading}
+              onChange={(event) => {
+                touchForm();
+                setBatchCooking(event.target.checked);
+              }}
+              className="mt-0.5 h-6 w-6 shrink-0 cursor-pointer accent-[color:var(--color-accent-strong)] disabled:cursor-not-allowed"
+            />
+            <span>
+              <span className="t-body-strong block text-[color:var(--color-foreground)]">Cocinar una vez para dos comidas</span>
+              <span className="t-meta block">Hasta dos guisos de legumbre o verdura, con la mitad para la cena del día siguiente.</span>
+            </span>
+          </label>
+
           <GenerationContextSummary
             profile={profile}
             peopleCount={peopleCount}
@@ -1713,9 +1758,9 @@ function CreateMenuPageContent() {
                   Desayunos, medias mañanas y meriendas
                 </summary>
                 <p className="t-meta mt-1">
-                  Cada día una opción del plan, por turnos. Al usar este menú añadimos a la lista de la compra lo que
-                  necesitan para una persona ({importedMenu.planExtras.items.length} productos); podrás cambiarlos o
-                  quitarlos allí.
+                  {importedMenu.week === "Plan nutricional"
+                    ? `Cada día una opción del plan, por turnos. Al usar este menú añadimos a la lista de la compra lo que necesitan para una persona (${importedMenu.planExtras.items.length} productos); podrás cambiarlos o quitarlos allí.`
+                    : `Cada día una opción, por turnos, con fruta todos los días. Al usar este menú añadimos a la lista de la compra lo que necesitan para ${peopleCount === 1 ? "una persona" : `${peopleCount} personas`} (${importedMenu.planExtras.items.length} productos); podrás cambiarlos o quitarlos allí.`}
                 </p>
                 <ul className="mt-2 space-y-2">
                   {importedMenu.planExtras.days.map((day) => (
@@ -1734,6 +1779,11 @@ function CreateMenuPageContent() {
                 </ul>
               </details>
             ) : null}
+
+            <WeekBalance
+              dishes={importedWeekDays.flatMap((day) => [day.lunch, day.dinner])}
+              profile={profile}
+            />
 
             <p className="t-meta">
               ¿Algún plato no encaja? Pulsa «Otra idea» para cambiar solo ese; el resto de la semana no cambia.

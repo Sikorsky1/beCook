@@ -2,7 +2,7 @@ import type { WeekDay } from "@/data/mockWeek";
 import { isAiLoginRequiredError, postAi } from "@/lib/ai-client";
 import type { ImportedMenuResponse } from "@/lib/importMenu";
 import { parseVerifiedFoodContext, type VerifiedFoodContext } from "@/lib/menu-generation/food-context";
-import { readMenuProfile } from "@/lib/menu-generation/prompt";
+import { readMenuProfile } from "@/lib/menu-generation/profile-input";
 import {
   catalogAlternative,
   checkReplacement,

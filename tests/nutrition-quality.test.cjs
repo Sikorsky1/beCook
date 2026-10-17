@@ -181,3 +181,179 @@ test("N06: habit goals only, and each one changes the week", () => {
  for (let seed = 1; seed <= 60; seed++) if (countGroups(weekOf(week(plants, seed)).map(groupsOf)).legume >= 5) ok++;
  assert.ok(ok / 60 >= 0.95, `more_plants ${ok}/60`);
 });
+
+// --- Phase 2 ---------------------------------------------------------------------------------
+
+test("N07: catalog-tags.json is up to date and every recipe has its main tags", () => {
+ const {catalogTags} = require("../scripts/build-catalog-tags.cjs");
+ const file = JSON.parse(fs.readFileSync(path.join(root, "src/data/recipe-cards/catalog-recipes.json"), "utf8"));
+ const stored = JSON.parse(fs.readFileSync(path.join(root, "src/data/recipe-cards/catalog-tags.json"), "utf8"));
+ assert.deepEqual(stored, catalogTags(file), "run node scripts/build-catalog-tags.cjs");
+ assert.equal(stored.status, "pending_review");
+ for (const [title, tags] of Object.entries(stored.recipes)) {
+  assert.ok(Array.isArray(tags.groups) && Number.isFinite(tags.vegGrams) && [1, 2, 3].includes(tags.cost), title);
+ }
+ const {catalogTags: tagsOf} = require("../src/lib/recipes/catalogTags.ts");
+ assert.equal(tagsOf("Lentejas estofadas").groups.includes("legume"), true);
+ assert.equal(tagsOf("Emperador a la siciliana con tomate cherry, aceitunas y alcaparras").mercury, true);
+ assert.equal(tagsOf("Plato que no existe"), null);
+});
+
+test("N12: plate suggestions only for what the recipe lacks", () => {
+ const {plateSuggestions} = require("../src/lib/menu-generation/recipe-tags.ts");
+ const full = {groups: ["legume"], vegGrams: 200, starch: "wholegrain", fruit: true};
+ assert.deepEqual(plateSuggestions(full), []);
+ const bare = {groups: ["white_fish"], vegGrams: 40, starch: null, fruit: false};
+ assert.equal(plateSuggestions(bare).length, 3);
+ assert.match(plateSuggestions({...full, starch: "refined"})[0], /integral/);
+});
+
+test("N14: at most one dish with ultra-processed ingredients a week, also «Rápido y sencillo»", () => {
+ const {catalogTags: tagsOf} = require("../src/lib/recipes/catalogTags.ts");
+ const profile = readMenuProfile({});
+ for (let seed = 1; seed <= 60; seed++) {
+  const upf = weekOf(week(profile, seed, ["quick_simple"], "simple")).filter(dish => tagsOf(dish)?.upf).length;
+  assert.ok(upf <= 1, `seed ${seed}: ${upf}`);
+ }
+});
+
+test("N10: the week summary is positive, cites its source and suggests what is missing", () => {
+ const {weekSummary: summaryOf} = require("../src/lib/menu-generation/week-summary.ts");
+ const {catalogTags: tagsLookup} = require("../src/lib/recipes/catalogTags.ts");
+ const weekSummary = (dishes, profile) => summaryOf(dishes, profile, tagsLookup);
+ const profile = readMenuProfile({});
+ const good = weekSummary(weekOf(week(profile, 3)), profile);
+ assert.ok(good.highlights.some(text => /legumbre/.test(text)));
+ assert.deepEqual(good.suggestions, []);
+ for (const reason of good.reasons) assert.ok(reason.source.length > 3, reason.topic);
+ const meaty = weekSummary(["Muslos de pavo al horno con patatas", "Hamburguesas de pollo caseras", "Bocadillo de lomo de ternera con vegetales", "Pollo al ras el hanout con cuscús, maíz y guisantes", "Alcachofas con jamón", "Tortilla de patata", "Crema de brócoli"], profile);
+ assert.ok(meaty.suggestions.some(text => /legumbre/.test(text)));
+ const text = normalizeFood(JSON.stringify([good, meaty]));
+ assert.doesNotMatch(text, /malo|prohibid|culpa|engorda|caloria/);
+ assert.equal(weekSummary(["Lentejas estofadas"], profile), null, "too few dishes to say anything");
+});
+
+test("N09: optional breakfasts and snacks: fruit at least twice a day, nuts 3+ days, scaled and safe", () => {
+ const {dailyExtras} = require("../src/lib/menu-generation/daily-extras.ts");
+ const {checkDish, blocksAutomaticProposal} = require("../src/lib/recipes/restriction-check.ts");
+ const two = dailyExtras(readMenuProfile({}), 2);
+ assert.equal(two.days.length, 7);
+ for (const day of two.days) assert.ok(day.meals.map(m => m.text).join(" + ").split("pieza de fruta").length - 1 >= 2, day.dayName);
+ assert.ok(two.days.filter(day => /nueces|almendras/.test(day.meals.map(m => m.text).join(" "))).length >= 3);
+ const one = dailyExtras(readMenuProfile({}), 1);
+ assert.equal(two.items.find(i => i.name === "fruta").quantity, one.items.find(i => i.name === "fruta").quantity * 2);
+ for (const allergies of [["milk"], ["nuts"], ["gluten", "milk", "nuts"], ["egg", "gluten"]]) {
+  const profile = readMenuProfile({allergies});
+  const extras = dailyExtras(profile, 1);
+  assert.ok(extras, allergies.join());
+  for (const day of extras.days) for (const meal of day.meals) assert.equal(blocksAutomaticProposal(checkDish({title: meal.text, card: null}, profile, {automatic: true})), false, `${allergies}: ${meal.text}`);
+ }
+});
+
+// --- Phase 3 ---------------------------------------------------------------------------------
+
+test("N16: in any month, most dishes with a seasonal vegetable are in season", () => {
+ const {catalogTags: tagsOf} = require("../src/lib/recipes/catalogTags.ts");
+ const profile = readMenuProfile({});
+ for (const month of [1, 4, 7, 10]) {
+  let seasonal = 0, inSeason = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+   for (const dish of weekOf(catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed, month}))) {
+    const season = tagsOf(dish)?.season ?? [];
+    if (!season.length) continue;
+    seasonal++;
+    if (season.includes(month)) inSeason++;
+   }
+  }
+  assert.ok(inSeason / seasonal >= 0.6, `month ${month}: ${inSeason}/${seasonal}`);
+ }
+});
+
+test("N19: «Ahorrar tiempo» keeps weekdays within 30 minutes; «Gastar menos» lowers the cost", () => {
+ const {catalogTags: tagsOf} = require("../src/lib/recipes/catalogTags.ts");
+ const quick = readMenuProfile({goals: ["save_time"]});
+ for (let seed = 1; seed <= 40; seed++) {
+  const menu = week(quick, seed);
+  for (const day of menu.days.slice(0, 5)) for (const dish of [day.lunch.dishName, day.dinner.dishName]) assert.ok((tagsOf(dish)?.minutes ?? 99) <= 30, dish);
+ }
+ const cost = profile => {
+  let total = 0, n = 0;
+  for (let seed = 1; seed <= 40; seed++) for (const dish of weekOf(week(profile, seed))) { total += tagsOf(dish)?.cost ?? 2; n++; }
+  return total / n;
+ };
+ assert.ok(cost(readMenuProfile({goals: ["save_money"]})) < cost(readMenuProfile({})));
+});
+
+test("N20: the same species at most twice a week and never on consecutive days", () => {
+ const {catalogTags: tagsOf} = require("../src/lib/recipes/catalogTags.ts");
+ const profile = readMenuProfile({});
+ let weeks = 0, clean = 0;
+ for (let seed = 1; seed <= 100; seed++) {
+  const menu = week(profile, seed);
+  const days = new Map();
+  menu.days.forEach((day, index) => {
+   for (const dish of [day.lunch.dishName, day.dinner.dishName]) {
+    const species = tagsOf(dish)?.species;
+    if (species) days.set(species, [...(days.get(species) ?? []), index]);
+   }
+  });
+  weeks++;
+  if ([...days.values()].every(list => list.length <= 2 && list.every((d, i) => i === 0 || d - list[i - 1] > 1))) clean++;
+ }
+ assert.ok(clean / weeks >= 0.9, `${clean}/${weeks}`);
+});
+
+test("N18: recipes that use pantry products come first («usa lo que tienes»)", () => {
+ const profile = readMenuProfile({});
+ const uses = dishes => dishes.filter(dish => (catalogCardForCheck(dish)?.ingredients ?? []).some(i => !i.optional && / garbanzos /.test(` ${normalizeFood(i.name)} `))).length;
+ let withPantry = 0, without = 0;
+ for (let seed = 1; seed <= 30; seed++) {
+  withPantry += uses(weekOf(catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed, pantry: ["garbanzos", "sal"]})));
+  without += uses(weekOf(catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed})));
+ }
+ assert.ok(withPantry > without, `${withPantry} vs ${without}`);
+});
+
+test("N17: «Cocinar una vez para dos comidas»: stews eaten again the next day; bought once, double", () => {
+ const {parseLeftover} = require("../src/lib/menu-generation/leftovers.ts");
+ const build = require("../src/lib/shopping/build.ts");
+ const profile = readMenuProfile({});
+ let total = 0;
+ for (let seed = 1; seed <= 30; seed++) {
+  const menu = catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed, batch: true});
+  menu.days.forEach((day, index) => {
+   const leftover = parseLeftover(day.dinner.dishName);
+   if (!leftover) return;
+   total++;
+   assert.equal(menu.days[index - 1].lunch.dishName, leftover.base);
+   assert.ok(!groupsOf(leftover.base).some(g => /meat|fish|seafood|poultry/.test(g)), leftover.base);
+  });
+ }
+ assert.ok(total >= 30, `${total} leftovers in 30 weeks`);
+ const days = [
+  {day: "Lunes", date: "", lunch: "Lentejas estofadas", dinner: "Tortilla de patata"},
+  {day: "Martes", date: "", lunch: "Pisto manchego", dinner: "Lentejas estofadas (sobras del lunes)"},
+ ];
+ const dishes = build.plannedDishes(days);
+ assert.deepEqual(dishes.map(d => [d.title, d.portions ?? 1, d.leftoverOf ?? null]), [["Lentejas estofadas", 2, null], ["Tortilla de patata", 1, null], ["Pisto manchego", 1, null], ["Lentejas estofadas (sobras del lunes)", 1, "lentejas estofadas"]]);
+ const card = {baseServings: 2, totalMinutes: 30, steps: ["a", "b", "c"], possibleAllergens: [], ingredients: [{name: "lentejas", quantity: 200, unit: "g", category: "despensa", optional: false}]};
+ const result = build.buildDesiredList({dishes, servings: 2, cards: new Map(), aiItems: new Map(), catalogCards: new Map([[build.slotKey(0, "lunch"), card]])});
+ assert.equal(result.items.find(i => i.name === "lentejas").quantity, 400);
+ assert.ok(!result.pending.some(d => /sobras/.test(d.title)), "the leftover is covered by its recipe");
+ // Without a recipe for the dish, the leftover is a dish of its own (asked like any other).
+ const noRecipe = build.buildDesiredList({dishes, servings: 2, cards: new Map(), aiItems: new Map(), catalogCards: new Map()});
+ assert.ok(noRecipe.pending.some(d => /sobras/.test(d.title)));
+ // The week keeps its frequencies and the protein rule with leftovers.
+ const {mainProtein: proteinOf} = require("../src/lib/menu-generation/food-groups.ts");
+ let ok = 0;
+ for (let seed = 1; seed <= 100; seed++) {
+  const menu = catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed, batch: true});
+  const titles = weekOf(menu).map(t => parseLeftover(t)?.base ?? t);
+  if (meetsQuotas(countGroups(titles.map(groupsOf)), weekQuotas(profile))) ok++;
+  menu.days.forEach(day => {
+   const leftover = parseLeftover(day.dinner.dishName);
+   if (leftover) assert.notEqual(proteinOf(groupsOf(leftover.base)), proteinOf(groupsOf(day.lunch.dishName)), day.dayName);
+  });
+ }
+ assert.ok(ok >= 95, `${ok}/100`);
+});

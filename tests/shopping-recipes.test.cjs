@@ -108,6 +108,15 @@ test("build: card ingredients scaled to the week's servings; optional ones left 
  assert.deepEqual(byName.lentejas.origins, [{day: 0, meal: "lunch", dish: "lentejas estofadas", kind: "card_inferred", versionId: LENTEJAS_V, quantity: 300}]);
 });
 
+test("build (N11): a catalogue recipe without a card is used scaled, as an unreviewed card without version", () => {
+ const days = [day("Lunes", "Lentejas estofadas", "Pisto")];
+ const result = build.buildDesiredList({dishes: build.plannedDishes(days), servings: 3, cards: new Map(), aiItems: new Map(), catalogCards: new Map([[build.slotKey(0, "lunch"), lentejasCard]])});
+ const lentejas = result.items.find((item) => item.name === "lentejas");
+ assert.equal(lentejas.quantity, 300);
+ assert.deepEqual(lentejas.origins, [{day: 0, meal: "lunch", dish: "lentejas estofadas", kind: "card_inferred", quantity: 300}]);
+ assert.deepEqual(result.pending.map((dish) => dish.title), ["Pisto"]);
+});
+
 test("build: the same ingredient of several dishes is one line (cards and AI added up); a dish with neither is pending", () => {
  const days = [
   day("Lunes", "Lentejas estofadas", "Merluza", {lunchRecipe: {versionId: LENTEJAS_V}}),

@@ -10,7 +10,10 @@ import { newRequestKey } from "@/lib/data/repositories";
 import type { IsoWeek } from "@/lib/isoWeek";
 import { loginHrefFor } from "@/lib/navigation";
 import { highMercury } from "@/lib/menu-generation/food-groups";
+import { leftoverAdvice, parseLeftover } from "@/lib/menu-generation/leftovers";
+import { plateSuggestions } from "@/lib/menu-generation/recipe-tags";
 import { formatIngredientAmount, recipeAllergenLabels, type RecipeCard, type RecipeCardContent } from "@/lib/recipes/card";
+import { loadCatalogTags, type TagsLookup } from "@/lib/recipes/loadCatalogTags";
 import { normalizeFood } from "@/lib/recipes/food-lexicon";
 import {
   cardToShow,
@@ -84,11 +87,30 @@ function RecipeBody({
   const ingredientsId = `${id}-dish-card-ingredients`;
   const stepsId = `${id}-dish-card-steps`;
   const allergensId = `${id}-dish-card-allergens`;
+  const plateId = `${id}-dish-card-plate`;
+  // N12: how to complete the plate, for a catalogue recipe (its tags).
+  const [tagsOf, setTagsOf] = useState<{ lookup: TagsLookup } | null>(null);
+  useEffect(() => {
+    let active = true;
+    loadCatalogTags()
+      .then((lookup) => {
+        if (active) setTagsOf({ lookup });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+  const tags = tagsOf?.lookup(base ?? parseLeftover(title)?.base ?? title) ?? null;
+  const suggestions = tags ? plateSuggestions(tags) : [];
+  // N16: a discreet «De temporada» when its main vegetable is in season this month.
+  const month = new Date().getMonth() + 1;
   const meta = [
     `Para ${recipe.baseServings} ${recipe.baseServings === 1 ? "persona" : "personas"}`,
     recipe.totalMinutes ? `${recipe.totalMinutes} min` : null,
     review === "estimated" ? "Estimada por IA · sin revisar" : review === "draft" ? "Receta sin revisar por un profesional" : null,
     base ? `Receta de «${base}»` : null,
+    tags?.season.includes(month) ? "De temporada" : null,
   ].filter(Boolean);
   const allergens = recipe.possibleAllergens.map((allergen) => recipeAllergenLabels[allergen].toLowerCase());
   // N15: the AESAN advice on mercury, on the recipes with those species.
@@ -127,6 +149,25 @@ function RecipeBody({
           ))}
         </ol>
       </section>
+
+      {parseLeftover(title) ? (
+        <p className="t-body rounded-[var(--radius-control)] bg-[color:var(--color-surface-muted)] px-3 py-2">
+          Son las sobras de este plato, cocinado el día anterior para dos comidas. {leftoverAdvice}
+        </p>
+      ) : null}
+
+      {suggestions.length ? (
+        <section aria-labelledby={plateId}>
+          <h3 id={plateId} className="t-body-strong">
+            Para completar el plato
+          </h3>
+          <ul className="t-body mt-2 list-disc space-y-1 pl-5">
+            {suggestions.map((suggestion) => (
+              <li key={suggestion}>{suggestion}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section aria-labelledby={allergensId} className="space-y-1">
         <h3 id={allergensId} className="t-body-strong">
