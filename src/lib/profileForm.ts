@@ -381,6 +381,11 @@ export function sectionStatus(
     return "unsaved";
   }
 
+  // N06: body data is no longer asked for, so there is nothing to confirm; it can only be deleted.
+  if (section === "body") {
+    return "optional";
+  }
+
   if (isSectionConfirmed(saved, section)) {
     return isEmptyOptional ? "optional" : "saved";
   }

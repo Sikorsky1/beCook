@@ -137,8 +137,8 @@ function RecipeBody({
         <p className="t-meta">Revisa siempre el etiquetado de los productos que compres.</p>
         {mercury ? (
           <p className="t-meta">
-            La AESAN recomienda que embarazadas, lactantes y niños menores de 10 años eviten el pez espada, el atún rojo, el
-            tiburón y el lucio, por su contenido en mercurio.
+            La AESAN recomienda que embarazadas, lactantes y niños menores de 10 años eviten el pez espada (emperador), el atún
+            rojo, el tiburón (cazón, marrajo, tintorera) y el lucio, por su contenido en mercurio.
           </p>
         ) : null}
       </section>

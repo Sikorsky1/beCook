@@ -526,7 +526,8 @@ export default function ProfilePage() {
           </SectionCard>
 
           {/* N06: beCook no longer asks for body data. A profile that has some can delete it. */}
-          {hasBodyData ? (
+          {/* Kept after the deletion is saved, so its feedback stays where the person is. */}
+          {hasBodyData || (saveStates.body && saveStates.body.status !== "idle") ? (
             <SectionCard section="body" status={statuses.body} footer={sectionFooter("body")}>
               {draft.sex || draft.birthDate || draft.heightCm.trim() || draft.weightKg.trim() ? (
                 <Button
@@ -537,8 +538,10 @@ export default function ProfilePage() {
                 >
                   Borrar datos corporales
                 </Button>
-              ) : (
+              ) : hasBodyData ? (
                 <p className="t-meta">Guarda para borrarlos de tu cuenta.</p>
+              ) : (
+                <p className="t-meta">No hay datos corporales guardados.</p>
               )}
             </SectionCard>
           ) : null}

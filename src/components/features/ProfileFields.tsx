@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { toggleRestriction, type ProfileDraft } from "@/lib/profileForm";
 import {
@@ -188,6 +188,9 @@ function storedDislikedFoodsLength(value: string) {
 }
 
 export function RestrictionsFields({ draft, onChange }: FieldsProps) {
+  // «Marisco» stays visible once the profile has had it, so unticking it keeps the chip (and focus).
+  const [showShellfish, setShowShellfish] = useState(false);
+  if (!showShellfish && draft.allergies.includes("shellfish")) setShowShellfish(true);
   const dislikedFoodsCharacters = storedDislikedFoodsLength(draft.dislikedFoodsText);
   const dislikedFoodsTooLong = dislikedFoodsCharacters > dislikedFoodsMaxLength;
 
@@ -206,7 +209,7 @@ export function RestrictionsFields({ draft, onChange }: FieldsProps) {
       <ChoiceChips
         legend="Alergias"
         name="allergies"
-        options={allergyOptions.filter((option) => option.value !== "shellfish" || draft.allergies.includes("shellfish"))}
+        options={allergyOptions.filter((option) => option.value !== "shellfish" || showShellfish)}
         isSelected={(value) =>
           value === noAllergiesValue ? draft.noAllergies : draft.allergies.includes(value)
         }
