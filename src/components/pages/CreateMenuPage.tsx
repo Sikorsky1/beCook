@@ -126,11 +126,10 @@ type ProposalMeta = Pick<MenuProposal, "source" | "parsedBy" | "contextVersion" 
 
 type UseWeekStatus = "idle" | "applying" | "success" | "error";
 
+// Kinds of cooking (N06): the body-composition types are no longer offered; a saved draft with
+// them falls back to the default.
 const menuStyleOptions = [
   { id: "healthy_balanced", label: "Saludable y equilibrado" },
-  { id: "high_protein", label: "Alto en proteína" },
-  { id: "fat_loss", label: "Pérdida de grasa" },
-  { id: "muscle_gain", label: "Ganancia muscular" },
   { id: "mediterranean", label: "Mediterráneo" },
   { id: "quick_simple", label: "Rápido y sencillo" },
 ] as const;

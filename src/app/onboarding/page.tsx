@@ -38,6 +38,7 @@ import {
 } from "@/lib/profileForm";
 import { advanceOnboarding, getOnboardingAccount } from "@/lib/supabase/onboarding";
 import type { ProfileValidationIssue, UserProfile } from "@/lib/supabase/profiles";
+import { professionalAdvice } from "@/lib/professionalAdvice";
 import { pageShellClass } from "@/lib/ui";
 
 type LoadState =
@@ -108,8 +109,8 @@ function AboutContent() {
   return (
     <ul className="space-y-4">
       <Feature icon={<Sparkles className="h-5 w-5" />} title="Tu menú de la semana">
-        Te propone comidas y cenas para siete días según para cuántos cocinas, tu objetivo y lo que no
-        puedes o no quieres comer. Tú decides si lo usas.
+        Te propone comidas y cenas para siete días según para cuántos cocinas, lo que quieres mejorar y lo
+        que no puedes o no quieres comer. Tú decides si lo usas.
       </Feature>
       <Feature icon={<ShoppingBasket className="h-5 w-5" />} title="La compra, hecha">
         Con el menú sale la lista de la compra, sin lo que ya tienes en la despensa.
@@ -117,6 +118,7 @@ function AboutContent() {
       <Feature icon={<UsersRound className="h-5 w-5" />} title="En todos tus dispositivos">
         Todo se guarda en tu cuenta: puedes seguir en el móvil lo que empezaste en el ordenador.
       </Feature>
+      <li className="t-meta">{professionalAdvice}</li>
     </ul>
   );
 }

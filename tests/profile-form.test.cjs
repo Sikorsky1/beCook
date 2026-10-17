@@ -212,7 +212,7 @@ test("conflict: the remote copy replaces the saved section and keeps edits elsew
 
 test("every section explains how it affects the menu; body data says it is not used", () => {
   for (const section of profileSections) assert.ok(profileSectionInfo[section].usage.length > 10);
-  assert.match(profileSectionInfo.body.usage, /No se usan/);
+  assert.match(profileSectionInfo.body.usage, /no se usan/);
   assert.match(profileSectionInfo.restrictions.usage, /obligatorias/);
 });
 

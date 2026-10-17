@@ -35,7 +35,7 @@ export const profileSectionInfo: Record<
     required: true,
   },
   goals: {
-    title: "Objetivos",
+    title: "Qué quieres mejorar",
     usage: "Orientan qué platos se eligen para tu menú.",
     required: true,
   },
@@ -51,7 +51,7 @@ export const profileSectionInfo: Record<
   },
   body: {
     title: "Datos corporales",
-    usage: "Opcionales. No se usan para crear el menú.",
+    usage: "beCook ya no pide sexo, edad, altura ni peso: no se usan para crear el menú. Puedes borrar los que guardaste.",
     required: false,
   },
 };
@@ -144,14 +144,18 @@ export function emptyProfileDraft(): ProfileDraft {
   };
 }
 
-const goalValues: Goal[] = ["fat_loss", "muscle_gain", "sports_performance", "healthy_eating", "other"];
+// The goals the form offers (N06). Body-composition goals of the previous form read as
+// «Comer más saludable»; the stored value only changes when the person saves the section.
+export const habitGoals: Goal[] = ["healthy_eating", "varied", "more_plants", "cook_home", "save_time", "save_money", "with_kids", "other"];
+const goalValues: Goal[] = habitGoals;
+const previousGoals = new Set<unknown>(["maintenance", "fat_loss", "muscle_gain", "sports_performance"]);
 
 function storedGoals(profile: UserProfile): Goal[] {
   const rawGoals: unknown[] = Array.isArray(profile.goals) && profile.goals.length > 0
     ? profile.goals
     : profile.goal ? [profile.goal] : [];
   const goals = rawGoals
-    .map((goal) => (goal === "maintenance" ? "healthy_eating" : goal))
+    .map((goal) => (previousGoals.has(goal) ? "healthy_eating" : goal))
     .filter((goal): goal is Goal => goalValues.includes(goal as Goal));
 
   return Array.from(new Set(goals));

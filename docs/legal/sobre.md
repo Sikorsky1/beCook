@@ -5,9 +5,13 @@ beCook es una aplicación web gratuita, en fase beta, para planificar el menú d
 ## Qué puedes hacer
 
 - Planificar la comida y la cena de cada día de la semana, para las personas que coméis en casa.
-- Crear un menú con IA según tus dietas, alergias, alimentos que no te gustan y días de entrenamiento, o importar un menú desde un texto, una foto o un PDF.
+- Crear un menú según tus dietas, alergias, alimentos que no te gustan y lo que quieres mejorar, o importar un menú desde un texto, una foto o un PDF.
 - Obtener la lista de la compra de la semana, descontando lo que ya tienes en la despensa.
 - Usar beCook sin cuenta (tus datos se quedan en tu dispositivo) o con cuenta, para tenerlos en todos tus dispositivos.
+
+## Para quién es
+
+beCook te ayuda a planificar comidas variadas para la población general, siguiendo las frecuencias semanales de la AESAN (legumbre, pescado, carne y huevos). No da consejo nutricional ni médico, y las recetas del catálogo están pendientes de revisión por un profesional. Si tienes una enfermedad, estás embarazada o en lactancia, tienes una relación difícil con la comida o quieres cambiar tu peso, consulta a un dietista-nutricionista o a tu médico.
 
 ## Entrar con Google
 

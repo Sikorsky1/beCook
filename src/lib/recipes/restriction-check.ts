@@ -49,7 +49,10 @@ export type DishCheck = {
   uninterpretable: string[];
 };
 
-export type DishCardForCheck = Pick<RecipeCard, "ingredients" | "possibleAllergens" | "reviewStatus">;
+// Only what the check reads: a full card, or the compact copy of a catalogue recipe (catalogChecks.ts).
+export type DishCardForCheck = Pick<RecipeCard, "possibleAllergens" | "reviewStatus"> & {
+  ingredients: Pick<RecipeCard["ingredients"][number], "name" | "optional">[];
+};
 
 export const dietLabels: Record<string, string> = {
   vegetarian: "Vegetariano",
@@ -61,10 +64,21 @@ export const dietLabels: Record<string, string> = {
 
 export const allergyLabels: Record<string, string> = {
   gluten: "Gluten",
+  crustaceans: "Crustáceos",
+  egg: "Huevo",
+  fish: "Pescado",
+  peanuts: "Cacahuete",
+  soy: "Soja",
+  milk: "Leche",
   lactose: "Lactosa",
   nuts: "Frutos secos",
+  celery: "Apio",
+  mustard: "Mostaza",
+  sesame: "Sésamo",
+  sulphites: "Sulfitos",
+  lupin: "Altramuces",
+  molluscs: "Moluscos",
   shellfish: "Marisco",
-  egg: "Huevo",
 };
 
 type GroupRule = { group: FoodGroup; certainty: Certainty; negatedBy: FoodNegation[] };
@@ -88,11 +102,24 @@ const dietRules: Record<string, GroupRule[]> = {
 
 const allergyRules: Record<string, GroupRule[]> = {
   gluten: [rule("gluten")],
+  crustaceans: [rule("crustaceans")],
+  egg: [rule("egg")],
+  fish: [rule("fish")],
+  peanuts: [rule("peanuts")],
+  soy: [rule("soy")],
+  // An allergy to milk protein: «sin lactosa» does not cancel it (N02).
+  milk: [rule("dairy")],
+  // The intolerance: a lactose-free product is fine.
   lactose: [rule("dairy", "certain", ["dairy", "lactose"])],
   // Peanuts are a legume, but many people with a nut allergy avoid them: possible, never silent.
   nuts: [rule("nuts"), rule("peanuts", "possible")],
+  celery: [rule("celery")],
+  mustard: [rule("mustard")],
+  sesame: [rule("sesame")],
+  sulphites: [rule("sulphites")],
+  lupin: [rule("lupin")],
+  molluscs: [rule("molluscs")],
   shellfish: [rule("crustaceans"), rule("molluscs")],
-  egg: [rule("egg")],
 };
 
 // A group name in free text («marisco», «frutos secos», «sésamo») as rules.

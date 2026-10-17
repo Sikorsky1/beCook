@@ -22,11 +22,15 @@ export const householdOptions = [1, 2, 3, 4, 5, 6].map((value) => ({
   value,
 }));
 
+// Habits, not body composition (N06). Each one changes the menu (src/lib/menu-generation/quotas.ts).
 export const goalOptions: { label: string; value: Goal }[] = [
-  { label: "Perder grasa", value: "fat_loss" },
-  { label: "Ganar masa muscular", value: "muscle_gain" },
-  { label: "Mejorar rendimiento deportivo", value: "sports_performance" },
   { label: "Comer más saludable", value: "healthy_eating" },
+  { label: "Comer más variado", value: "varied" },
+  { label: "Más verdura y legumbre", value: "more_plants" },
+  { label: "Cocinar más en casa", value: "cook_home" },
+  { label: "Ahorrar tiempo", value: "save_time" },
+  { label: "Gastar menos", value: "save_money" },
+  { label: "Comer con niños", value: "with_kids" },
   { label: "Otro", value: "other" },
 ];
 
@@ -41,13 +45,27 @@ export const dietaryRestrictionOptions: { label: string; value: DietaryRestricti
 
 const noAllergiesValue = "none";
 
+// The 14 EU allergens (N02), with peanuts apart from nuts and crustaceans apart from molluscs, and
+// lactose intolerance apart from the allergy to milk. «Marisco» (shellfish) is only shown for a
+// profile that still has it.
 export const allergyOptions: { label: string; value: Allergy | typeof noAllergiesValue }[] = [
   { label: "Ninguna", value: noAllergiesValue },
   { label: "Gluten", value: "gluten" },
-  { label: "Lactosa", value: "lactose" },
-  { label: "Frutos secos", value: "nuts" },
-  { label: "Marisco", value: "shellfish" },
+  { label: "Leche", value: "milk" },
+  { label: "Intolerancia a la lactosa", value: "lactose" },
   { label: "Huevo", value: "egg" },
+  { label: "Pescado", value: "fish" },
+  { label: "Crustáceos", value: "crustaceans" },
+  { label: "Moluscos", value: "molluscs" },
+  { label: "Frutos secos", value: "nuts" },
+  { label: "Cacahuete", value: "peanuts" },
+  { label: "Soja", value: "soy" },
+  { label: "Sésamo", value: "sesame" },
+  { label: "Apio", value: "celery" },
+  { label: "Mostaza", value: "mustard" },
+  { label: "Sulfitos", value: "sulphites" },
+  { label: "Altramuces", value: "lupin" },
+  { label: "Marisco", value: "shellfish" },
   { label: "Otra", value: "other" },
 ];
 
@@ -188,7 +206,7 @@ export function RestrictionsFields({ draft, onChange }: FieldsProps) {
       <ChoiceChips
         legend="Alergias"
         name="allergies"
-        options={allergyOptions}
+        options={allergyOptions.filter((option) => option.value !== "shellfish" || draft.allergies.includes("shellfish"))}
         isSelected={(value) =>
           value === noAllergiesValue ? draft.noAllergies : draft.allergies.includes(value)
         }
@@ -208,6 +226,19 @@ export function RestrictionsFields({ draft, onChange }: FieldsProps) {
           });
         }}
       />
+
+      {draft.allergies.includes("lactose") && !draft.allergies.includes("milk") ? (
+        <p className="t-meta">
+          Con intolerancia a la lactosa se aceptan los productos sin lactosa. Si tienes alergia a la proteína de la leche,
+          marca «Leche».
+        </p>
+      ) : null}
+
+      {draft.allergies.includes("shellfish") ? (
+        <p className="t-meta">
+          «Marisco» incluye crustáceos y moluscos. Puedes marcarlos por separado y quitar «Marisco».
+        </p>
+      ) : null}
 
       {!draft.noAllergies && draft.allergies.includes("other") ? (
         <label className="block space-y-1.5">

@@ -94,7 +94,10 @@ test("weekly training days 0–7 (widened CHECK) and the other DB ranges are val
   assert.deepEqual(fieldsOf(profile({householdSize: 7})), ["householdSize"]);
   assert.deepEqual(fieldsOf(profile({birthDate: ""})), ["birthDate"]);
   assert.deepEqual(fieldsOf(profile({goals: ["maintenance"]})), ["goals"]);
-  assert.deepEqual(fieldsOf(profile({allergies: ["fish"]})), ["allergies"]);
+  assert.deepEqual(fieldsOf(profile({allergies: ["dust"]})), ["allergies"]);
+  // N02: the 14 EU allergens and lactose intolerance; N06: habit goals.
+  assert.deepEqual(fieldsOf(profile({allergies: ["fish", "milk", "lactose", "peanuts", "sesame", "crustaceans", "molluscs", "shellfish"]})), []);
+  assert.deepEqual(fieldsOf(profile({goals: ["more_plants", "with_kids", "save_money"]})), []);
   assert.deepEqual(fieldsOf(profile({goals: ["other"], otherGoal: "x".repeat(151)})), ["otherGoal"]);
   assert.deepEqual(fieldsOf(profile({goals: ["fat_loss"], otherGoal: "x".repeat(151)})), []);
 });

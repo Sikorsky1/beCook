@@ -1,5 +1,6 @@
 import catalog from "@/data/nutritionist-recipes.json";
 import type { ImportedMenuDay } from "@/lib/importMenu";
+import { catalogCardForCheck } from "@/lib/recipes/catalogChecks";
 import { blocksAutomaticProposal, checkDish, mentionsDislikedFood, type RestrictionProfile } from "@/lib/recipes/restriction-check";
 import type { SupermarketCategory } from "@/lib/shoppingList";
 
@@ -355,11 +356,11 @@ const ideas: { title: string; meals: ("lunch" | "dinner")[] }[] = [
 
 type Candidate = { title: string; protein: PlanProtein | null; carb: PlanCarb | null; source: "plan" | "catalog" | "idea" };
 
-// The user's diets, allergies and disliked foods, as far as a title shows them (titles are not
-// ingredient lists: a dish that passes still gets the usual per-dish warnings).
+// The user's diets, allergies and disliked foods, as far as the title and its catalogue recipe show
+// them (an unreviewed draft: a dish that passes still gets the usual per-dish warnings).
 function fitsProfile(title: string, profile: RestrictionProfile | null) {
   if (!profile) return true;
-  const check = checkDish({ title, card: null }, profile, { automatic: true });
+  const check = checkDish({ title, card: catalogCardForCheck(title) }, profile, { automatic: true });
   return !blocksAutomaticProposal(check) && !mentionsDislikedFood(check);
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, LogIn, LogOut, Save } from "lucide-react";
+import { Check, LogIn, LogOut, Save } from "lucide-react";
 import Link from "next/link";
 import type { FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -31,7 +31,6 @@ import {
   draftFromProfile,
   emptyBodyDraft,
   emptyProfileDraft,
-  issuesBySection,
   profileSectionInfo,
   profileSections,
   readStoredProfile,
@@ -45,7 +44,6 @@ import { scopeHasPendingChanges } from "@/lib/storage/scoped-storage";
 import {
   PROFILE_LIMITS,
   type ProfileValidationIssue,
-  type Sex,
   type TrainingType,
   type UserProfile,
   type WeeklyTrainingDays,
@@ -57,11 +55,6 @@ const signInWays = [
   ...enabledOAuthProviders(process.env.NEXT_PUBLIC_AUTH_PROVIDERS).map((provider) => `con ${oauthProviderLabels[provider]}`),
   "con tu email",
 ].join(" o ");
-
-const sexOptions: { label: string; value: Sex }[] = [
-  { label: "Hombre", value: "male" },
-  { label: "Mujer", value: "female" },
-];
 
 const trainingTypeOptions: { label: string; value: TrainingType }[] = [
   { label: "Fuerza", value: "strength" },
@@ -189,7 +182,6 @@ export default function ProfilePage() {
   const [draft, setDraft] = useState<ProfileDraft>(emptyProfileDraft);
   const [hasLoadedProfile, setHasLoadedProfile] = useState(false);
   const [saveStates, setSaveStates] = useState<Partial<Record<ProfileSection | "all", SectionSaveState>>>({});
-  const [isBodyOpen, setIsBodyOpen] = useState(false);
   const identity = useIdentity();
   const { signOut } = useIdentityActions();
   const userEmail = identity.email;
@@ -230,7 +222,6 @@ export default function ProfilePage() {
       setSaveStates({});
       setSyncState({});
       setConfirmSignOut(false);
-      setIsBodyOpen(false);
       applyProfile(readCachedProfile(dataIdentity));
       setHasLoadedProfile(!dataIdentity.userId);
 
@@ -269,9 +260,6 @@ export default function ProfilePage() {
 
     if (!built.ok) {
       setSaveStates((current) => ({ ...current, [target]: { status: "invalid", issues: built.issues } }));
-      if (issuesBySection(built.issues).body) {
-        setIsBodyOpen(true);
-      }
       return;
     }
 
@@ -379,6 +367,9 @@ export default function ProfilePage() {
     }
   };
 
+  const hasBodyData = Boolean(
+    savedProfile && (savedProfile.sex || savedProfile.birthDate || savedProfile.heightCm != null || savedProfile.weightKg != null),
+  );
   const goalSummary = savedProfile
     ? goalOptions.find((option) => option.value === savedProfile.goals[0])?.label ?? "Sin objetivo"
     : "Perfil sin guardar";
@@ -534,95 +525,23 @@ export default function ProfilePage() {
             ) : null}
           </SectionCard>
 
-          <SectionCard section="body" status={statuses.body} footer={sectionFooter("body")}>
-            <button
-              type="button"
-              aria-expanded={isBodyOpen}
-              aria-controls="body-fields"
-              onClick={() => setIsBodyOpen((open) => !open)}
-              className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-foreground)]"
-            >
-              {isBodyOpen ? "Ocultar datos corporales" : "Mostrar datos corporales"}
-              <ChevronDown
-                aria-hidden="true"
-                className={`h-4 w-4 transition-transform ${isBodyOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-
-            {isBodyOpen ? (
-              <div id="body-fields" className="space-y-3">
-                <ChoiceChips
-                  legend="Sexo"
-                  name="sex"
-                  type="radio"
-                  options={sexOptions}
-                  isSelected={(value) => draft.sex === value}
-                  onToggle={(sex) => updateDraft("body", { sex })}
-                />
-
-                <label className="block space-y-1.5">
-                  <FieldLabel>Fecha de nacimiento</FieldLabel>
-                  <input
-                    type="date"
-                    value={draft.birthDate}
-                    onChange={(event) => updateDraft("body", { birthDate: event.target.value })}
-                    className={compactInputClass}
-                  />
-                </label>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block min-w-0 space-y-1.5">
-                    <FieldLabel>Altura</FieldLabel>
-                    <span className="relative block">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        autoComplete="off"
-                        placeholder={`${PROFILE_LIMITS.heightCm.min}–${PROFILE_LIMITS.heightCm.max}`}
-                        value={draft.heightCm}
-                        onChange={(event) => updateDraft("body", { heightCm: event.target.value })}
-                        className={`${compactInputClass} pr-10`}
-                      />
-                      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-semibold text-[color:var(--color-muted-foreground)]">
-                        cm
-                      </span>
-                    </span>
-                  </label>
-
-                  <label className="block min-w-0 space-y-1.5">
-                    <FieldLabel>Peso</FieldLabel>
-                    <span className="relative block">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        autoComplete="off"
-                        placeholder={`${PROFILE_LIMITS.weightKg.min}–${PROFILE_LIMITS.weightKg.max}`}
-                        value={draft.weightKg}
-                        onChange={(event) => updateDraft("body", { weightKg: event.target.value })}
-                        className={`${compactInputClass} pr-10`}
-                      />
-                      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-semibold text-[color:var(--color-muted-foreground)]">
-                        kg
-                      </span>
-                    </span>
-                  </label>
-                </div>
-
-                {draft.sex || draft.birthDate || draft.heightCm.trim() || draft.weightKg.trim() ? (
-                  <Button
-                    type="button"
-                    variant="soft"
-                    onClick={() => updateDraft("body", emptyBodyDraft())}
-                    className="rounded-full"
-                  >
-                    Borrar datos corporales
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
-          </SectionCard>
+          {/* N06: beCook no longer asks for body data. A profile that has some can delete it. */}
+          {hasBodyData ? (
+            <SectionCard section="body" status={statuses.body} footer={sectionFooter("body")}>
+              {draft.sex || draft.birthDate || draft.heightCm.trim() || draft.weightKg.trim() ? (
+                <Button
+                  type="button"
+                  variant="soft"
+                  onClick={() => updateDraft("body", emptyBodyDraft())}
+                  className="rounded-full"
+                >
+                  Borrar datos corporales
+                </Button>
+              ) : (
+                <p className="t-meta">Guarda para borrarlos de tu cuenta.</p>
+              )}
+            </SectionCard>
+          ) : null}
 
           <Card className="space-y-3 p-3.5 sm:p-4">
             <h2 className="t-h2 text-[color:var(--color-foreground)]">Cuenta</h2>

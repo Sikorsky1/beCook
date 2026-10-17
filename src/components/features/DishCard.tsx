@@ -9,7 +9,9 @@ import type { DataIdentity } from "@/lib/data/repositories";
 import { newRequestKey } from "@/lib/data/repositories";
 import type { IsoWeek } from "@/lib/isoWeek";
 import { loginHrefFor } from "@/lib/navigation";
-import { formatIngredientAmount, type RecipeCard, type RecipeCardContent } from "@/lib/recipes/card";
+import { highMercury } from "@/lib/menu-generation/food-groups";
+import { formatIngredientAmount, recipeAllergenLabels, type RecipeCard, type RecipeCardContent } from "@/lib/recipes/card";
+import { normalizeFood } from "@/lib/recipes/food-lexicon";
 import {
   cardToShow,
   dishCardSlotKey,
@@ -63,18 +65,34 @@ function ConflictLabels({ labels }: { labels: string[] }) {
   );
 }
 
-// Ingredients first, then the steps. «estimated»: a card the AI estimated from the title.
-// base: the catalogue recipe the dish starts with, when the dish adds something to it.
-function RecipeBody({ recipe, estimated, base = null }: { recipe: RecipeCardContent; estimated: boolean; base?: string | null }) {
+// Ingredients first, then the steps, then the allergens the recipe may contain (N03).
+// review: «reviewed»; «estimated», a card the AI estimated from the title; «draft», a catalogue
+// recipe not yet reviewed by a professional. base: the catalogue recipe the dish starts with, when
+// the dish adds something to it.
+function RecipeBody({
+  recipe,
+  review,
+  title,
+  base = null,
+}: {
+  recipe: RecipeCardContent;
+  review: "reviewed" | "estimated" | "draft";
+  title: string;
+  base?: string | null;
+}) {
   const id = useId();
   const ingredientsId = `${id}-dish-card-ingredients`;
   const stepsId = `${id}-dish-card-steps`;
+  const allergensId = `${id}-dish-card-allergens`;
   const meta = [
     `Para ${recipe.baseServings} ${recipe.baseServings === 1 ? "persona" : "personas"}`,
     recipe.totalMinutes ? `${recipe.totalMinutes} min` : null,
-    estimated ? "Estimada por IA · sin revisar" : null,
+    review === "estimated" ? "Estimada por IA · sin revisar" : review === "draft" ? "Receta sin revisar por un profesional" : null,
     base ? `Receta de «${base}»` : null,
   ].filter(Boolean);
+  const allergens = recipe.possibleAllergens.map((allergen) => recipeAllergenLabels[allergen].toLowerCase());
+  // N15: the AESAN advice on mercury, on the recipes with those species.
+  const mercury = [title, ...recipe.ingredients.map((ingredient) => ingredient.name)].some((text) => highMercury.test(normalizeFood(text)));
 
   return (
     <div className="space-y-4">
@@ -108,6 +126,21 @@ function RecipeBody({ recipe, estimated, base = null }: { recipe: RecipeCardCont
             </li>
           ))}
         </ol>
+      </section>
+
+      <section aria-labelledby={allergensId} className="space-y-1">
+        <h3 id={allergensId} className="t-body-strong">
+          Alérgenos
+        </h3>
+        {/* No list is never «sin alérgenos»: only the labelling line. */}
+        {allergens.length ? <p className="t-body">Puede contener: {allergens.join(", ")}.</p> : null}
+        <p className="t-meta">Revisa siempre el etiquetado de los productos que compres.</p>
+        {mercury ? (
+          <p className="t-meta">
+            La AESAN recomienda que embarazadas, lactantes y niños menores de 10 años eviten el pez espada, el atún rojo, el
+            tiburón y el lucio, por su contenido en mercurio.
+          </p>
+        ) : null}
       </section>
     </div>
   );
@@ -248,13 +281,13 @@ export function DishCard({
           ) : null}
 
           {card ? (
-            <RecipeBody recipe={card} estimated={card.reviewStatus !== "reviewed"} />
+            <RecipeBody recipe={card} title={title} review={card.reviewStatus === "reviewed" ? "reviewed" : "estimated"} />
           ) : !view ? (
             <p className="t-body" role="status">
               Cargando la ficha…
             </p>
           ) : view.kind === "catalog_recipe" ? (
-            <RecipeBody recipe={view.recipe} estimated={false} base={view.base} />
+            <RecipeBody recipe={view.recipe} title={title} review="draft" base={view.base} />
           ) : view.kind === "error" ? (
             <div className="space-y-2">
               <p className="t-body text-[color:var(--color-danger)]" role="alert">

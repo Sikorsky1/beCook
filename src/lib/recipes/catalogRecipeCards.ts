@@ -11,7 +11,7 @@ export type CatalogRecipeFile = { recipes: { id: string; title: string; card: un
 // mixta» → «Salmón a la plancha»); null when the titles are the same.
 export type CatalogRecipeMatch = { recipe: RecipeCardContent; base: string | null };
 
-type Entry = { title: string; recipe: RecipeCardContent };
+type Entry<T = RecipeCardContent> = { title: string; recipe: T };
 
 let index: Promise<Map<string, Entry>> | null = null;
 
@@ -28,11 +28,11 @@ export function catalogRecipeIndex(file: CatalogRecipeFile) {
 
 // The exact title first; otherwise the longest catalogue title the dish starts with, followed by
 // «y …», «con …» or «, …» (a side or an extra added to the recipe, as the nutritionist's plan does).
-export function findCatalogRecipe(map: Map<string, Entry>, title: string): CatalogRecipeMatch | null {
+export function findCatalogRecipe<T = RecipeCardContent>(map: Map<string, Entry<T>>, title: string): { recipe: T; base: string | null } | null {
   const key = recipeTitleKey(title);
   const exact = map.get(key);
   if (exact) return { recipe: exact.recipe, base: null };
-  let best: Entry | null = null;
+  let best: Entry<T> | null = null;
   let bestLength = 0;
   for (const [candidate, entry] of map) {
     if (candidate.length > bestLength && key.startsWith(candidate) && /^(,| y | con )/.test(key.slice(candidate.length))) {
