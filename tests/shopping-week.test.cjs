@@ -157,6 +157,15 @@ test("first open generates once and stores one list for the week; reopening reus
  assert.equal(account.listsOf(W41).length, 1);
 });
 
+test("N11: a week of catalogue dishes gets its list from the catalogue recipes, without AI", async () => {
+ const days = withWeekDates([{day: "Lunes", date: "", lunch: "Lentejas estofadas", dinner: "Tortilla de patata"}], W41);
+ account.writeWeek(W41, days);
+ const result = await openShopping(asA, W41, days);
+ assert.equal(result.status, "ready");
+ assert.equal(ai.calls, 0);
+ assert.ok(result.view.items.some(item => /lenteja/.test(item.name)));
+});
+
 test("marking writes only that item: no new list, no AI, the other items untouched", async () => {
  account.writeWeek(W41, menu());
  const {view} = await openShopping();

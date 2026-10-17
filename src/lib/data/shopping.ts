@@ -28,6 +28,8 @@ import {
   type ShoppingEdit,
 } from "@/lib/data/repositories";
 import { getDayPosition, getIsoWeekStorageId, type IsoWeek } from "@/lib/isoWeek";
+import type { RecipeCardContent } from "@/lib/recipes/card";
+import { loadCatalogRecipe } from "@/lib/recipes/catalogRecipeCards";
 import {
   aiItemsFromList,
   buildDesiredList,
@@ -777,9 +779,18 @@ async function computeList(
 ): Promise<ComputedList> {
   const dishes = plannedDishes(days);
   const cards = await loadRecipeCards(dishes.flatMap((dish) => (dish.versionId ? [dish.versionId] : [])));
+  // N11: a catalogue dish (exact title) takes its catalogue recipe, without AI.
+  const catalogCards = new Map<string, RecipeCardContent>();
+  for (const dish of dishes) {
+    if (dish.versionId && cards.has(dish.versionId)) continue;
+    const match = await loadCatalogRecipe(dish.title);
+    if (match && match.base === null) catalogCards.set(slotKey(dish.day, dish.meal), match.recipe);
+  }
   const aiItems = reuse ? aiItemsFromList(reuse, dishes) : new Map<string, DishIngredient[]>();
   const memoKey = (dish: PlannedDish) => `${contextKey}|${slotKey(dish.day, dish.meal)}|${dish.dish}`;
-  const missing = dishes.filter((dish) => !(dish.versionId && cards.has(dish.versionId)) && !aiItems.has(slotKey(dish.day, dish.meal)));
+  const missing = dishes.filter(
+    (dish) => !(dish.versionId && cards.has(dish.versionId)) && !catalogCards.has(slotKey(dish.day, dish.meal)) && !aiItems.has(slotKey(dish.day, dish.meal)),
+  );
   for (const dish of missing) {
     const known = memo.items.get(memoKey(dish));
     if (known) aiItems.set(slotKey(dish.day, dish.meal), known);
@@ -807,7 +818,7 @@ async function computeList(
     }
   }
 
-  const built = buildDesiredList({ dishes, servings, cards, aiItems });
+  const built = buildDesiredList({ dishes, servings, cards, aiItems, catalogCards });
   return { items: built.items, pending: built.pending, aiError: built.pending.length ? memo.error : null, legacyItems: memo.legacyItems };
 }
 

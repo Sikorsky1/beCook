@@ -1,12 +1,14 @@
 // What the week's dishes need (C4, roadmap step 19). Pure: no network, no storage.
 // - A dish with a card (C2) takes the card's ingredients scaled to the week's servings
 //   (servings / card.baseServings). Optional ingredients are left out (and reported).
+// - A catalogue dish without a card takes the ingredients of its catalogue recipe, scaled the same
+//   way, without AI (N11). They are unreviewed drafts: «card_inferred», without a version.
 // - A dish without a card takes the AI ingredients computed for that dish (already for the week's
 //   servings): reused from the list's own origins, or from one breakdown call (data/shopping.ts).
 // - A dish with neither is pending: the rest of the list is still built.
 // - The pantry (B7) has no amounts: nothing is subtracted; it only changes how a line is shown.
 import { getDayPosition } from "@/lib/isoWeek";
-import { recipeTitleKey, type RecipeCard } from "@/lib/recipes/card";
+import { recipeTitleKey, type RecipeCard, type RecipeCardContent } from "@/lib/recipes/card";
 import {
   dishOriginsOf,
   supermarketCategoryLabels,
@@ -112,6 +114,8 @@ export type BuildInput = {
   cards: Map<string, RecipeCard>;
   // AI ingredients of dishes without a card, by slotKey(day, meal).
   aiItems: Map<string, DishIngredient[]>;
+  // Catalogue recipes of dishes without a card, by slotKey(day, meal) (N11).
+  catalogCards?: Map<string, RecipeCardContent>;
 };
 
 export type BuildResult = {
@@ -122,23 +126,24 @@ export type BuildResult = {
   excludedOptional: { dish: string; name: string }[];
 };
 
-export function buildDesiredList({ dishes, servings, cards, aiItems }: BuildInput): BuildResult {
+export function buildDesiredList({ dishes, servings, cards, aiItems, catalogCards = new Map() }: BuildInput): BuildResult {
   const contributions: Contribution[] = [];
   const pending: PlannedDish[] = [];
   const excludedOptional: BuildResult["excludedOptional"] = [];
 
   for (const dish of dishes) {
-    const card = dish.versionId ? cards.get(dish.versionId) : undefined;
+    const versioned = dish.versionId ? cards.get(dish.versionId) : undefined;
+    const card = versioned ?? catalogCards.get(slotKey(dish.day, dish.meal));
     if (card) {
       const factor = servings / card.baseServings;
-      const kind = card.reviewStatus === "reviewed" ? "card_reviewed" : "card_inferred";
+      const kind = versioned?.reviewStatus === "reviewed" ? "card_reviewed" : "card_inferred";
       for (const ingredient of card.ingredients) {
         if (ingredient.optional) {
           excludedOptional.push({ dish: dish.title, name: ingredient.name });
           continue;
         }
         const scaled = { ...ingredient, quantity: ingredient.quantity === null ? null : ingredient.quantity * factor };
-        const entry = contribution(dish, scaled, kind, card.versionId);
+        const entry = contribution(dish, scaled, kind, versioned?.versionId);
         if (entry) contributions.push(entry);
       }
       continue;
