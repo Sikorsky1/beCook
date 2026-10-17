@@ -300,3 +300,14 @@ test("N20: the same species at most twice a week and never on consecutive days",
  }
  assert.ok(clean / weeks >= 0.9, `${clean}/${weeks}`);
 });
+
+test("N18: recipes that use pantry products come first («usa lo que tienes»)", () => {
+ const profile = readMenuProfile({});
+ const uses = dishes => dishes.filter(dish => (catalogCardForCheck(dish)?.ingredients ?? []).some(i => !i.optional && / garbanzos /.test(` ${normalizeFood(i.name)} `))).length;
+ let withPantry = 0, without = 0;
+ for (let seed = 1; seed <= 30; seed++) {
+  withPantry += uses(weekOf(catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed, pantry: ["garbanzos", "sal"]})));
+  without += uses(weekOf(catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed})));
+ }
+ assert.ok(withPantry > without, `${withPantry} vs ${without}`);
+});

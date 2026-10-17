@@ -89,6 +89,8 @@ export type CatalogMenuRequest = {
   seed: number;
   // Month of the week (1–12, Spain), for recipes in season (N16). Without it, no preference.
   month?: number;
+  // Products marked in Despensa: recipes that use them score a little more (N18, «usa lo que tienes»).
+  pantry?: string[];
 };
 
 type Candidate = CatalogRecipe & {
@@ -114,8 +116,12 @@ function elaborationDistance(a: CatalogElaboration, b: CatalogElaboration) {
 // Sandwiches, wraps and toasts: the ultra-processed bread of the catalogue («Cocinar más en casa»).
 const breadDish = /^(sandwich|sandwiches|wrap|wraps|bocadillo|bocadillos|tosta|tostas|tostada|tostadas|burrito|burritos|quesadillas?|pizza|pizzas|hamburguesa de)\b/;
 
+// A pantry product in an ingredient: whole words, ignoring basics everyone has.
+const pantryBasics = /^(sal|aceite.*|agua|pimienta.*|vinagre.*|azucar|harina)$/;
+
 function candidatesFor(meal: "lunch" | "dinner", request: CatalogMenuRequest, recent: Set<string>): Candidate[] {
   const goals = new Set(request.profile.goals);
+  const pantry = (request.pantry ?? []).map(normalizeFood).filter((item) => item.length >= 3 && !pantryBasics.test(item));
   return catalogRecipes.flatMap((recipe) => {
     if (recipe.slot !== meal) return [];
     const key = normalizeFood(recipe.name);
@@ -131,7 +137,8 @@ function candidatesFor(meal: "lunch" | "dinner", request: CatalogMenuRequest, re
       (styleMatches ? 10 + styleMatches * 2 : 0) +
       (recipe.elaboration === request.elaboration ? 4 : elaborationDistance(recipe.elaboration, request.elaboration) === 1 ? 1 : 0) +
       (goals.has("save_time") && card?.totalMinutes != null && card.totalMinutes <= 30 ? 2 : 0) -
-      (goals.has("cook_home") && breadDish.test(key) ? 3 : 0);
+      (goals.has("cook_home") && breadDish.test(key) ? 3 : 0) +
+      (pantry.length && (card?.ingredients ?? []).some((ingredient) => !ingredient.optional && pantry.some((item) => ` ${normalizeFood(ingredient.name)} `.includes(` ${item} `))) ? 1 : 0);
     const groups = dishGroups(recipe.name, card?.ingredients ?? null);
     // «kind»: the first word of the title («ensalada», «tortilla», «lentejas»), so a week is not
     // seven salads.

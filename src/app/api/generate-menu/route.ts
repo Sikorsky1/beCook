@@ -42,6 +42,7 @@ export async function POST(request: Request) {
       styles: readCatalogMenuStyles(guard.body.menuStyle),
       elaboration: elaborationForLevel(guard.body.elaborationLevel),
       recentDishes: stringList(guard.body.recentDishes),
+      pantry: stringList(guard.body.pantryItems, 80, 80),
       seed: Math.floor(Math.random() * 2 ** 31),
       month: Number(new Intl.DateTimeFormat("en-GB", {month: "numeric", timeZone: "Europe/Madrid"}).format(new Date())),
     });
