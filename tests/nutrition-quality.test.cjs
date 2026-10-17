@@ -216,3 +216,17 @@ test("N14: at most one dish with ultra-processed ingredients a week, also «Ráp
   assert.ok(upf <= 1, `seed ${seed}: ${upf}`);
  }
 });
+
+test("N10: the week summary is positive, cites its source and suggests what is missing", () => {
+ const {weekSummary} = require("../src/lib/menu-generation/week-summary.ts");
+ const profile = readMenuProfile({});
+ const good = weekSummary(weekOf(week(profile, 3)), profile);
+ assert.ok(good.highlights.some(text => /legumbre/.test(text)));
+ assert.deepEqual(good.suggestions, []);
+ for (const reason of good.reasons) assert.ok(reason.source.length > 3, reason.topic);
+ const meaty = weekSummary(["Muslos de pavo al horno con patatas", "Hamburguesas de pollo caseras", "Bocadillo de lomo de ternera con vegetales", "Pollo al ras el hanout con cuscús, maíz y guisantes", "Alcachofas con jamón", "Tortilla de patata", "Crema de brócoli"], profile);
+ assert.ok(meaty.suggestions.some(text => /legumbre/.test(text)));
+ const text = normalizeFood(JSON.stringify([good, meaty]));
+ assert.doesNotMatch(text, /malo|prohibid|culpa|engorda|caloria/);
+ assert.equal(weekSummary(["Lentejas estofadas"], profile), null, "too few dishes to say anything");
+});

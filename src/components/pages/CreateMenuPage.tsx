@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { AiLoginNotice } from "@/components/features/AiLoginNotice";
 import { GenerationContextSummary } from "@/components/features/GenerationContextSummary";
+import { WeekBalance } from "@/components/features/WeekBalance";
 import { GenerationProgress } from "@/components/features/GenerationProgress";
 import { ImportMenuPanel } from "@/components/features/ImportMenuPanel";
 import { ProfileReadinessNotice } from "@/components/features/ProfileReadinessNotice";
@@ -1734,6 +1735,11 @@ function CreateMenuPageContent() {
                 </ul>
               </details>
             ) : null}
+
+            <WeekBalance
+              dishes={importedWeekDays.flatMap((day) => [day.lunch, day.dinner])}
+              profile={profile}
+            />
 
             <p className="t-meta">
               ¿Algún plato no encaja? Pulsa «Otra idea» para cambiar solo ese; el resto de la semana no cambia.

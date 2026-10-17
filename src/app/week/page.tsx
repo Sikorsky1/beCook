@@ -6,6 +6,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { DishCard } from "@/components/features/DishCard";
 import { dishCardRestrictions } from "@/lib/recipes/dishCardFlow";
+import { WeekBalance } from "@/components/features/WeekBalance";
 import { type RequestDishIdea, WeekDayCard } from "@/components/features/WeekDayCard";
 import { StickyPageHeader } from "@/components/layout/StickyPageHeader";
 import { AnimatedGroup } from "@/components/motion-primitives/animated-group";
@@ -337,6 +338,15 @@ function WeekPageContent() {
     isRepeatingRef.current = false;
     setIsRepeating(false);
   };
+
+  // N10: the profile parts the week summary reads (diets and goals), when the profile is loaded.
+  const loadedProfile = profileEntry?.key === profileKey ? (profileEntry.data as { dietaryRestrictions?: unknown; goals?: unknown } | null) : null;
+  const balanceProfile = loadedProfile
+    ? {
+        dietaryRestrictions: Array.isArray(loadedProfile.dietaryRestrictions) ? loadedProfile.dietaryRestrictions.filter((value): value is string => typeof value === "string") : [],
+        goals: Array.isArray(loadedProfile.goals) ? loadedProfile.goals.filter((value): value is string => typeof value === "string") : [],
+      }
+    : null;
 
   // «Otra idea»: reviewed catalogue first (free); AI only when the user asks after it runs out.
   const handleRequestIdea: RequestDishIdea = (dayName, mealKey, rejected, mode, signal) => {
@@ -675,6 +685,8 @@ function WeekPageContent() {
                   </AnimatedGroup>
                 </div>
               ) : null}
+
+              <WeekBalance dishes={weekDays.flatMap((day) => [day.lunch, day.dinner])} profile={balanceProfile} />
             </div>
           ) : (
             <EmptyWeekState
