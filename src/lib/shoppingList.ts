@@ -79,6 +79,8 @@ export type ShoppingViewItem = {
   // D5: added by hand (not from the dishes) · its quantity was changed by the user · its quantity
   // can be changed here (one row with an amount).
   manual: boolean;
+  // An item for the breakfasts, mid-mornings and snacks of the week (manual|extras|…).
+  forDailyMeals: boolean;
   adjusted: boolean;
   editable: boolean;
 };

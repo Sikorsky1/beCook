@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { accountDish, accountWithMenu, completeOnboarding, createUser, dishButton, pageFor, password, readOwnRows, settleAccountLoad, shoppingItem } from "./helpers";
+import { accountDish, accountWithMenu, completeOnboarding, createUser, dishButton, pageFor, password, readOwnRows, settleAccountLoad, shoppingRows } from "./helpers";
 
 // Positive signals first (the empty states only render once the account has answered), then
 // the absence of A's dishes and items.
@@ -10,7 +10,7 @@ async function expectNothingOfA(page: Page, dishOfA: string) {
   await expect(dishButton(page, dishOfA)).toHaveCount(0);
   await page.goto("/shopping/list");
   await expect(page.getByText("No hay una semana guardada.")).toBeVisible();
-  await expect(shoppingItem(page, "Huevos")).toHaveCount(0);
+  await expect(shoppingRows(page)).toHaveCount(0);
 }
 
 // Aislamiento A/B: otra cuenta no ve ni lee la semana de A, ni en otro navegador ni al cambiar

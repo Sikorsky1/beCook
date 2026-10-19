@@ -48,7 +48,7 @@ export function applyPendingPlanExtras(identity: DataIdentity, isoWeek: IsoWeek,
     if (!items.length) return null;
     const waiting: PlanShoppingItem[] = [];
     for (const [index, item] of items.entries()) {
-      const result = await addManualShoppingItem(identity, isoWeek, item, days);
+      const result = await addManualShoppingItem(identity, isoWeek, item, days, true);
       if (result.status === "no_list" || result.status === "stale") {
         waiting.push(...items.slice(index));
         break;

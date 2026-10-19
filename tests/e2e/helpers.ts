@@ -138,7 +138,18 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&
 export const dishButton = (page: Page, dish: string) => page.getByRole("button", { name: new RegExp(`: ${escapeRegExp(dish)}\\. Ver ficha$`) });
 
 // Shopping rows: «Tomate, 28 ud» (the quantity depends on the week, the name does not).
-export const shoppingItem = (page: Page, name: string) => page.getByRole("checkbox", { name: new RegExp(`^${name}, `) });
+export const shoppingItem = (page: Page, name: string) => page.getByRole("checkbox", { name: new RegExp(`^${escapeRegExp(name)}, `) });
+
+// Every row of the list. Catalogue dishes take the items of their recipe (no AI), so which items a
+// week needs depends on its recipes: tests pick rows by position and read their names.
+export const shoppingRows = (page: Page) => page.getByRole("main").getByRole("checkbox", { name: /, / });
+
+export async function listedItem(page: Page, index = 0) {
+  const rows = shoppingRows(page);
+  await expect(rows.nth(index)).toBeVisible({ timeout: 20_000 });
+  const name = ((await rows.nth(index).getAttribute("aria-label")) ?? "").split(", ")[0];
+  return shoppingItem(page, name);
+}
 
 // Local PostgREST (v16) caches its clock and can reject a fresh, valid JWT as «issued at future»
 // (PGRST303); scripts/e2e.cjs keeps it awake to avoid it. If it still happens on the first load,

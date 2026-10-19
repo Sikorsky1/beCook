@@ -42,7 +42,7 @@ import {
   type PlannedDish,
 } from "@/lib/shopping/build";
 import { diffShoppingList, discardedAdjustments, type ExistingShoppingRow, type ReconcileSummary } from "@/lib/shopping/reconcile";
-import { isManualKey, manualItemKey } from "@/lib/shopping/units";
+import { dailyItemKey, isDailyKey, isManualKey, manualItemKey } from "@/lib/shopping/units";
 import {
   dishOriginsOf,
   getShoppingItemId,
@@ -147,6 +147,7 @@ function visibleItems(items: CachedShoppingItem[], rowOf: (id: string, item: Cac
       needsReview: Boolean(item.needsReview),
       removed: Boolean(item.removed),
       manual: isManualKey(item.itemKey),
+      forDailyMeals: isDailyKey(item.itemKey),
       adjusted: isAdjustedItem(item),
       editable: item.quantity !== null && !item.removed && rowOf(id, item) !== null,
     });
@@ -530,13 +531,15 @@ const validAmount = (quantity: number | null) => quantity === null || (Number.is
 export type ManualItemInput = { name: string; quantity: number | null; unit: string; category: SupermarketCategory };
 
 // Adds an item by hand to the week's list (only when the week has one). quantity null: «al gusto».
-export function addManualShoppingItem(identity: DataIdentity, isoWeek: IsoWeek, input: ManualItemInput, days: WeekDay[]) {
+// forDailyMeals: an item of the week's breakfasts and snacks (planExtras.ts), labelled as such.
+export function addManualShoppingItem(identity: DataIdentity, isoWeek: IsoWeek, input: ManualItemInput, days: WeekDay[], forDailyMeals = false) {
   return runEdit(identity, isoWeek, days, (cache, signedIn): EditPlan => {
     const name = cleanText(input.name).slice(0, 120);
     const unit = input.quantity === null ? "al gusto" : cleanText(input.unit || "ud").slice(0, 40);
     if (!name || !unit || !validAmount(input.quantity) || !supermarketCategoryLabels.includes(input.category)) return "refused";
-    const itemKey = manualItemKey(name);
-    if (cache.items.some((item) => item.itemKey === itemKey && !item.removed)) return "existing";
+    const itemKey = forDailyMeals ? dailyItemKey(name) : manualItemKey(name);
+    const sameName = [manualItemKey(name), dailyItemKey(name)];
+    if (cache.items.some((item) => sameName.includes(item.itemKey ?? "") && !item.removed)) return "existing";
     const edit: ShoppingEdit = { op: "add", id: crypto.randomUUID(), change: crypto.randomUUID(), name, quantity: input.quantity, unit, category: input.category, itemKey };
     return signedIn ? edit : { local: (current) => ({ ...applyEdit(current, edit), itemIds: current.itemIds }) };
   });

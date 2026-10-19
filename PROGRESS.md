@@ -1,6 +1,6 @@
 # beCook — Progreso del roadmap
 
-Actualizado: 2026-10-12 · Rama: `audit-opt` (= `main` tras PR #19: pasos 34, 35 y 37 en producción; quedan los pasos 36 y 38, de Sergio) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
+Actualizado: 2026-10-17 · Rama: `audit-opt` (= `main` tras PR #29: análisis nutricional en producción; quedan los pasos 36 y 38, de Sergio) · Plan: `docs/development/2026-10-05-plan-implementacion-roadmap.md`
 Roadmap: `docs/audit-2026-09-15/beCook_roadmap_unificado.md`
 
 Leyenda: ✅ cerrado · 🟡 en curso · ⏳ pendiente · ⛔ bloqueado (ver nota)
@@ -829,6 +829,16 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | Despliegue be-cook | `dpl_4bfGyLyXm4CamQtd5xFQSsQRVn7v` READY en `www.becook.xyz` (anterior para rollback: `dpl_8ukytWzYiicL5aeb7tvnoaLXFJPd`). `/login` con el diseño nuevo y el botón de Google |
 | Pendiente (Sergio) | Probar «Continuar con Google» en `www.becook.xyz/login` (orígenes de JavaScript autorizados en Google Cloud) |
 
+## Análisis nutricional en producción ✅ (2026-10-17)
+Informe: `analisis/analisis-nutricional-becook.md` (biblioteca del proyecto). Tests: `tests/nutrition-quality.test.cjs`.
+| Elemento | Resultado |
+|---|---|
+| Fase 1 · PR [#28](https://github.com/Sikorsky1/beCook/pull/28), merge `92b1eed` | N01: Crear menú, «Otra idea», el plan de la nutricionista y los menús de IA comprueban la receta del catálogo (`catalog-checks.json`), no solo el título. N02: 14 alérgenos UE y «Leche» separada de «Intolerancia a la lactosa». N03: la ficha dice «Receta sin revisar por un profesional» y lista sus alérgenos. N04: grupos AESAN (`food-groups.ts`; el plan de la nutricionista conserva sus categorías del PDF). N05: cupos semanales (legumbre ≥4, pescado 3-4 con azul, carne ≤3, roja ≤1, procesada 0, huevo ≤4; 100 % en 200 semanas simuladas). N06: objetivos de hábito, sin estilos de peso y sin pedir datos corporales (no se borra ninguno; cada usuario puede borrarlos). N15: cuándo consultar a un profesional |
+| Fases 2 y 3 · PR [#29](https://github.com/Sikorsky1/beCook/pull/29), merge `e9caa72` | N07 etiquetas (`catalog-tags.json`, pendientes de revisión). N08 orden de revisión en `docs/nutricion/revision-fichas-prioridad.md`. N09 desayunos, fruta y tentempiés opcionales. N10 resumen semanal en positivo. N11 compra desde la receta del catálogo sin IA. N12 «Para completar el plato». N14 ≤1 ultraprocesado por semana. N16 temporada. N17 «Cocinar una vez para dos comidas». N18 preferencia por la despensa. N19 «Ahorrar tiempo» (≤30 min entre semana) y «Gastar menos». N20 misma especie ≤2 y nunca en días seguidos |
+| Migración | `20261017090000_profiles_allergens_habit_goals` (amplía dos CHECK de `profiles`): preview 20261017105717; producción 20261017112439, tras backup completo en `~/Backups/becook/2026-10-17-nutricion-fase1` |
+| Validación | Unitarias 581/581, `test:db` 449/449, build, recorrido local con cuentas de prueba, 63 checks del Preview contra becook-preview, CI (application, database, e2e, Vercel) |
+| Pendiente | N08: revisión de las fichas por una dietista-nutricionista (profesional externa). N13: raciones por adultos y niños (solo está el objetivo «Comer con niños», que evita las especies con mercurio). N18: cantidades y caducidad en la despensa. Las dos últimas necesitan columnas nuevas |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
@@ -889,6 +899,7 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | shopping_manual_items (`20261014090000`) | ✅ | ✅ 20261012002220 | ✅ 20261012002444 (tras backup completo en ~/Backups/becook/2026-10-12-ola7) |
 | ai_usage_keep_on_account_delete (`20261015090000`) | ✅ | ✅ 20261012021426 | ✅ 20261012060819 (tras backup completo en ~/Backups/becook/2026-10-12-ola8) |
 | pantry_oils_into_basics (`20261016090000`) | ✅ | ✅ 20261012114830 | ✅ 20261012120026 (tras backup completo en ~/Backups/becook/2026-10-12-ola9 y copia `backup_20261012`) |
+| profiles_allergens_habit_goals (`20261017090000`) | ✅ | ✅ 20261017105717 | ✅ 20261017112439 (tras backup completo en ~/Backups/becook/2026-10-17-nutricion-fase1) |
 
 ## Decisiones
 | # | Decisión | Fecha |
@@ -903,3 +914,4 @@ Orden: becook-preview → validar Preview → producción con OK explícito, **a
 | D7 | «Otra idea» con IA cuenta en el flujo `menu` (1 de los 4/día y 20/mes), sin migración de cuota propia | 2026-10-09 |
 | D8 | Menú sin petición en texto libre: se compone del catálogo (`src/data/nutritionist-recipes.json`, 541 recetas por tipo de menú, elaboración y comida/cena), sin OpenAI ni cuota; con petición en texto o si el catálogo no llega, IA | 2026-10-14 |
 | D9 | Crear menú sin «¿Qué te apetece esta semana?»: el menú siempre sale del catálogo (IA solo si no llena la semana). La ficha de Semana muestra la receta del catálogo (`src/data/recipe-cards/catalog-recipes.json`, 2 personas, sin revisar) y solo incompatibilidades seguras en etiquetas cortas | 2026-10-15 |
+| D10 | Análisis nutricional: Crear menú sigue las frecuencias AESAN 2022 con máximos de carne que nunca se relajan; objetivos de hábito en lugar de peso; el plan de la nutricionista mantiene sus propias categorías | 2026-10-17 |

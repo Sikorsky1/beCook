@@ -22,7 +22,7 @@ const PLATFORM_SCHEMAS = ["auth", "storage", "extensions", "supabase_functions",
 // Tables whose rows belong to a user: after the restore each must still find its auth.users row.
 const OWNED = [
   ["profiles", "user_id"], ["weeks", "user_id"], ["pantry_items", "user_id"], ["menu_generation_requests", "user_id"],
-  ["onboarding_progress", "user_id"], ["week_food_contexts", "user_id"], ["recipes", "owner_user_id"], ["ai_usage_events", "user_id"],
+  ["onboarding_progress", "user_id"], ["week_food_contexts", "user_id"], ["week_daily_meals", "user_id"], ["recipes", "owner_user_id"], ["ai_usage_events", "user_id"],
 ];
 
 function quiet(binary, args, { input, user = "postgres", db } = {}) {

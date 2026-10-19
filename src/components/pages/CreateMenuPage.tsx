@@ -89,6 +89,7 @@ import { loadPantry, readCachedPantry } from "@/lib/data/pantry";
 import { pantryItemsOrDefault } from "@/lib/pantryStorage";
 import { readStoredProfile } from "@/lib/profileForm";
 import { ensureShoppingList } from "@/lib/data/shopping";
+import { saveWeekDailyMeals } from "@/lib/data/dailyMeals";
 import { applyPendingPlanExtras, writePendingPlanExtras } from "@/lib/data/planExtras";
 import { dailyExtras } from "@/lib/menu-generation/daily-extras";
 import { generatePlanWeek, parseNutritionPlan, planDailyMealLabels, planExtras, planWarnings } from "@/lib/nutritionPlan";
@@ -1215,6 +1216,8 @@ function CreateMenuPageContent() {
       // and the Compra page shows its own state.
       clearMenuProposal(dataIdentity, weekForUse);
       writePendingPlanExtras(dataIdentity, weekForUse, importedMenu.planExtras?.items);
+      // Today's breakfast, mid-morning and snack are shown in Semana (none: an empty list).
+      void saveWeekDailyMeals(dataIdentity, weekForUse, importedMenu.planExtras?.days).catch(() => undefined);
       // C6: the form of this week is done with once its menu is saved.
       clearMenuFormDraft(dataIdentity, weekForUse);
       formTouchedRef.current = false;
@@ -1292,6 +1295,7 @@ function CreateMenuPageContent() {
     setUndo(null);
     // The plan's items are no longer for this week's menu.
     writePendingPlanExtras({ scope: identity.scope, userId: identity.userId }, weekForUse, null);
+    void saveWeekDailyMeals({ scope: identity.scope, userId: identity.userId }, weekForUse, null).catch(() => undefined);
 
     if (result.status === "conflict") {
       // The week changed elsewhere: nothing was undone and the list follows the account's week.

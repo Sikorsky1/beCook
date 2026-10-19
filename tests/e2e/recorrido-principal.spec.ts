@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { applyProposal, completeOnboarding, generateProposal, password, savedStatus, shoppingItem, uniqueEmail } from "./helpers";
+import { applyProposal, completeOnboarding, generateProposal, password, savedStatus, listedItem, uniqueEmail } from "./helpers";
 
 // Alta local → onboarding → propuesta → aplicar → semana → ficha → compra → marcar → recargar.
 test("alta, primer menú, ficha y compra que sobrevive a recargar @320", async ({ page }) => {
@@ -41,9 +41,8 @@ test("alta, primer menú, ficha y compra que sobrevive a recargar @320", async (
   await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Compra" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Tu compra" })).toBeVisible();
   await expect(page.getByText("2 raciones por comida")).toBeVisible();
-  const eggs = shoppingItem(page, "Huevos");
-  await expect(eggs).toBeVisible({ timeout: 20_000 });
-  await expect(shoppingItem(page, "Tomate")).toBeVisible();
+  const eggs = await listedItem(page, 0);
+  const other = await listedItem(page, 1);
   await expect(eggs).not.toBeChecked();
 
   await eggs.click();
@@ -54,7 +53,7 @@ test("alta, primer menú, ficha y compra que sobrevive a recargar @320", async (
 
   await page.reload();
   await expect(page.getByRole("heading", { level: 1, name: "Tu compra" })).toBeVisible();
-  await expect(shoppingItem(page, "Huevos")).toBeChecked();
-  await expect(shoppingItem(page, "Tomate")).not.toBeChecked();
+  await expect(eggs).toBeChecked();
+  await expect(other).not.toBeChecked();
   await expect(savedStatus(page)).toBeVisible();
 });

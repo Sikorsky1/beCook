@@ -130,6 +130,14 @@
       "sha256": "835aafb21c838d407801017d5c8b3c8522de7e32efea1ddb0191d9b650aa9f30",
       "appliedAt": "2026-10-17",
       "notes": "Conector, sin comentarios. Definiciones de profiles_allergies_check y profiles_goals_allowed_chk idénticas a la BD local (pg_get_constraintdef), validadas."
+    },
+    {
+      "version": "20261019101358",
+      "name": "week_daily_meals",
+      "source": "supabase/migrations/20261019090000_week_daily_meals.sql",
+      "sha256": "13f2598eaf5789c74faeb07d44aac4a63b0306013bc0d2dfd9580cec675bdfe0",
+      "appliedAt": "2026-10-19",
+      "notes": "Conector, sin comentarios. Tabla nueva con RLS, 3 políticas propias; anon sin permisos, authenticated SELECT/INSERT/UPDATE."
     }
   ]
 }

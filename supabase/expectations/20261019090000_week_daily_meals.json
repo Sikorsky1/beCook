@@ -1,0 +1,207 @@
+{
+  "migration": "20261019090000_week_daily_meals",
+  "supersedes": {
+    "schema": "New table week_daily_meals (one row per user and ISO week) with RLS own-row policies; nothing else changes.",
+    "rollout": "Order: migration → code. The client of main never reads the table."
+  },
+  "columns": [
+    {
+      "table_name": "week_daily_meals",
+      "name": "user_id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "auth.uid()"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "name": "iso_year",
+      "type": "integer",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_daily_meals",
+      "name": "iso_week",
+      "type": "integer",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_daily_meals",
+      "name": "days",
+      "type": "jsonb",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "week_daily_meals",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    }
+  ],
+  "tables": [
+    {
+      "relname": "week_daily_meals",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "week_daily_meals_iso_year_chk",
+      "table_name": "week_daily_meals",
+      "definition": "CHECK (((iso_year >= 2000) AND (iso_year <= 2100)))"
+    },
+    {
+      "conname": "week_daily_meals_iso_week_chk",
+      "table_name": "week_daily_meals",
+      "definition": "CHECK (((iso_week >= 1) AND (iso_week <= 53)))"
+    },
+    {
+      "conname": "week_daily_meals_days_chk",
+      "table_name": "week_daily_meals",
+      "definition": "CHECK (((jsonb_typeof(days) = 'array'::text) AND (octet_length((days)::text) <= 16384)))"
+    },
+    {
+      "conname": "week_daily_meals_pkey",
+      "table_name": "week_daily_meals",
+      "definition": "PRIMARY KEY (user_id, iso_year, iso_week)"
+    },
+    {
+      "conname": "week_daily_meals_user_id_fkey",
+      "table_name": "week_daily_meals",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "week_daily_meals",
+      "indexname": "week_daily_meals_pkey",
+      "indexdef": "CREATE UNIQUE INDEX week_daily_meals_pkey ON public.week_daily_meals USING btree (user_id, iso_year, iso_week)"
+    }
+  ],
+  "policies": [
+    {
+      "tablename": "week_daily_meals",
+      "policyname": "week_daily_meals_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "week_daily_meals",
+      "policyname": "week_daily_meals_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    },
+    {
+      "tablename": "week_daily_meals",
+      "policyname": "week_daily_meals_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    }
+  ],
+  "grants": [
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "authenticated",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "week_daily_meals",
+      "grantee": "authenticated",
+      "privilege_type": "UPDATE"
+    }
+  ]
+}

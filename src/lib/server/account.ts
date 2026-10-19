@@ -101,6 +101,7 @@ export const exportTables: TableSpec[] = [
   { table: "weeks", owner: "user_id", order: "id" },
   { table: "week_days", order: "id" },
   { table: "week_food_contexts", owner: "user_id", order: "week_id" },
+  { table: "week_daily_meals", owner: "user_id", order: "iso_year" },
   { table: "menu_generation_requests", owner: "user_id", order: "id" },
   { table: "shopping_lists", order: "id" },
   { table: "shopping_items", order: "id" },

@@ -80,7 +80,11 @@ export function ShoppingRow({ row, actions }: { row: ShoppingRowData; actions: S
           </label>
           <div id={`${baseId}-state`} className="mt-1 space-y-1">
             {forDishes.length > 0 ? <p className="t-meta">Para: {forDishes.join(", ")}</p> : null}
-            {item.manual ? <p className="t-meta">Añadido por ti</p> : null}
+            {item.forDailyMeals ? (
+              <p className="t-meta">Para desayunos y tentempiés</p>
+            ) : item.manual ? (
+              <p className="t-meta">Añadido por ti</p>
+            ) : null}
             {item.adjusted && !item.manual ? <p className="t-meta">Cantidad cambiada por ti</p> : null}
             {status === "review" ? (
               <p className="inline-flex w-fit rounded-full bg-[color:var(--color-warning-soft)] px-2.5 py-1 text-sm font-semibold text-[color:var(--color-foreground)]">

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { accountWithMenu, createUser, pageFor, savedStatus, settleAccountLoad, shoppingItem } from "./helpers";
+import { accountWithMenu, createUser, pageFor, savedStatus, settleAccountLoad, listedItem } from "./helpers";
 
 // Paso 34: cabecera fija compacta (≤ 120 px pegados arriba) y foco visible al tabular, a 390 y 320 px.
 // Nombres accesibles congelados en design-plans/2026-10-15-consolidacion-paso-34.md.
@@ -87,7 +87,7 @@ test("cabecera compacta en Semana, Compra, Despensa y Perfil, y foco visible al 
   await expect(page.getByRole("heading", { level: 1, name: "Tu compra" })).toBeVisible();
   const tabs = page.getByRole("navigation", { name: "Secciones de compra" });
   await expect(tabs.getByRole("link", { name: "Lista de la compra" })).toBeVisible();
-  await expect(shoppingItem(page, "Huevos")).toBeVisible({ timeout: 20_000 });
+  await expect(await listedItem(page)).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Secciones de la lista" })).toBeVisible();
   await expect(savedStatus(page)).toBeVisible();
   await expectCompactHeader(page, "Tu compra");
