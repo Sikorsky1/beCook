@@ -847,6 +847,13 @@ Informe: `analisis/analisis-nutricional-becook.md` (biblioteca del proyecto). Te
 | PR | [#30](https://github.com/Sikorsky1/beCook/pull/30), merge `e6f4491`. E2E de la compra por filas (los productos dependen de las recetas) |
 | Pendiente | Las listas de semanas aplicadas antes de este cambio siguen mostrando «Añadido por ti» en esos productos |
 
+## Desayunos y meriendas del plan de la nutricionista ✅ (2026-10-19, en producción)
+| Elemento | Resultado |
+|---|---|
+| Cambio | Al importar el PDF, sus opciones de desayuno, media mañana, merienda y antes de dormir se guardan en la cuenta y Crear menú las usa. Rotación fija pedida por Sergio: desayuno 1 2 3 1 2 3 2, media mañana 2 1 1 3 1 1 1, merienda 2 3 1 3 2 1 2 |
+| Migración | `20261019120000_nutrition_plans` (tabla nueva con RLS) en preview y producción |
+| PR | [#31](https://github.com/Sikorsky1/beCook/pull/31) (primera versión, sustituida) y [#32](https://github.com/Sikorsky1/beCook/pull/32) |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
@@ -909,6 +916,7 @@ Informe: `analisis/analisis-nutricional-becook.md` (biblioteca del proyecto). Te
 | pantry_oils_into_basics (`20261016090000`) | ✅ | ✅ 20261012114830 | ✅ 20261012120026 (tras backup completo en ~/Backups/becook/2026-10-12-ola9 y copia `backup_20261012`) |
 | profiles_allergens_habit_goals (`20261017090000`) | ✅ | ✅ 20261017105717 | ✅ 20261017112439 (tras backup completo en ~/Backups/becook/2026-10-17-nutricion-fase1) |
 | week_daily_meals (`20261019090000`) | ✅ | ✅ 20261019101358 | ✅ 20261019102725 (tras backup completo en ~/Backups/becook/2026-10-19-desayunos) |
+| nutrition_plans (`20261019120000`) | ✅ | ✅ 20261019114214 | ✅ 20261019114815 (tras backup completo en ~/Backups/becook/2026-10-19-plan-nutricionista) |
 
 ## Decisiones
 | # | Decisión | Fecha |

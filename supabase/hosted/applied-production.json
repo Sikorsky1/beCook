@@ -177,6 +177,14 @@
       "sha256": "13f2598eaf5789c74faeb07d44aac4a63b0306013bc0d2dfd9580cec675bdfe0",
       "appliedAt": "2026-10-19",
       "notes": "Tras backup completo en ~/Backups/becook/2026-10-19-desayunos. Conector, sin comentarios. Tabla nueva (ninguna fila existente modificada): RLS, 3 políticas propias, anon sin permisos, authenticated SELECT/INSERT/UPDATE; igual que becook-preview."
+    },
+    {
+      "version": "20261019114815",
+      "name": "nutrition_plans",
+      "source": "supabase/migrations/20261019120000_nutrition_plans.sql",
+      "sha256": "af3f87e76b1168662be09fc527509bd23d7b7fa7ddadaa36d287542126fcb186",
+      "appliedAt": "2026-10-19",
+      "notes": "Tras backup completo en ~/Backups/becook/2026-10-19-plan-nutricionista. Conector, sin comentarios. Tabla nueva (ninguna fila existente modificada): RLS, 4 políticas propias, anon sin permisos; igual que becook-preview."
     }
   ]
 }
