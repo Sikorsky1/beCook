@@ -21,7 +21,7 @@ test("invitado sube un PDF con texto: se lee en el dispositivo, sin IA @320", as
   await upload(page, "menu-texto.pdf");
 
   await expect(page.getByRole("status").filter({ hasText: "Hemos pasado «menu-texto.pdf» a texto" })).toBeVisible();
-  const pasted = page.getByRole("textbox", { name: "Pega tu menú de la semana" });
+  const pasted = page.getByRole("textbox", { name: "Escribe o pega tu menú" });
   await expect(pasted).toHaveValue(/Lunes\tCrema de calabaza\tTortilla francesa/);
   await page.getByRole("button", { name: "Procesar menú" }).click();
 
@@ -43,7 +43,7 @@ test("con sesión, una foto del menú la lee la IA y el texto se revisa antes de
   await upload(page, "menu-foto.png");
 
   await expect(page.getByText("Lo ha leído la IA", { exact: false })).toBeVisible();
-  const pasted = page.getByRole("textbox", { name: "Pega tu menú de la semana" });
+  const pasted = page.getByRole("textbox", { name: "Escribe o pega tu menú" });
   await expect(pasted).toHaveValue(/^Lunes\nComida: Crema de calabaza\nCena: Tortilla francesa/);
   await pasted.fill((await pasted.inputValue()).replace("Lentejas estofadas", "Lentejas con arroz"));
   await page.getByRole("button", { name: "Procesar menú" }).click();
@@ -55,14 +55,14 @@ test("con sesión, una foto del menú la lee la IA y el texto se revisa antes de
 
 test("un texto que no se puede ordenar muestra el problema en pantalla, no fuera de la vista", async ({ page }) => {
   await page.goto("/create-menu?mode=import");
-  await page.getByRole("textbox", { name: "Pega tu menú de la semana" }).fill(Array.from({ length: 90 }, (_, i) => `Línea ${i + 1}`).join("\n"));
+  await page.getByRole("textbox", { name: "Escribe o pega tu menú" }).fill(Array.from({ length: 90 }, (_, i) => `Línea ${i + 1}`).join("\n"));
   await page.getByRole("button", { name: "Procesar menú" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "demasiadas líneas" })).toBeInViewport();
 });
 
 test("invitado pega una tabla con los días en columnas (L M X) y se ordena sin IA", async ({ page }) => {
   await page.goto("/create-menu?mode=import");
-  await page.getByRole("textbox", { name: "Pega tu menú de la semana" }).fill(
+  await page.getByRole("textbox", { name: "Escribe o pega tu menú" }).fill(
     ["\tL\tM\tX", "Comida\tLentejas\tArroz con verduras\tPasta", "Cena\tSopa\tTortilla francesa\tLIBRE"].join("\n"),
   );
   await page.getByRole("button", { name: "Procesar menú" }).click();

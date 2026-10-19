@@ -917,6 +917,7 @@ Informe: `analisis/analisis-nutricional-becook.md` (biblioteca del proyecto). Te
 | profiles_allergens_habit_goals (`20261017090000`) | ✅ | ✅ 20261017105717 | ✅ 20261017112439 (tras backup completo en ~/Backups/becook/2026-10-17-nutricion-fase1) |
 | week_daily_meals (`20261019090000`) | ✅ | ✅ 20261019101358 | ✅ 20261019102725 (tras backup completo en ~/Backups/becook/2026-10-19-desayunos) |
 | nutrition_plans (`20261019120000`) | ✅ | ✅ 20261019114214 | ✅ 20261019114815 (tras backup completo en ~/Backups/becook/2026-10-19-plan-nutricionista) |
+| profiles_training_weekdays (`20261020090000`) | ✅ | ⏳ | ⏳ |
 
 ## Decisiones
 | # | Decisión | Fecha |

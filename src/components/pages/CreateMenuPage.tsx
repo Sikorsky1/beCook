@@ -7,7 +7,6 @@ import { useEffect, useRef, useState } from "react";
 
 import { AiLoginNotice } from "@/components/features/AiLoginNotice";
 import { GenerationContextSummary } from "@/components/features/GenerationContextSummary";
-import { WeekBalance } from "@/components/features/WeekBalance";
 import { GenerationProgress } from "@/components/features/GenerationProgress";
 import { ImportMenuPanel } from "@/components/features/ImportMenuPanel";
 import { ProfileReadinessNotice } from "@/components/features/ProfileReadinessNotice";
@@ -171,7 +170,7 @@ function isProfile(value: unknown): value is UserProfile {
   return readStoredProfile(value) !== null;
 }
 
-// «14 platos · 7 días»: what «Usar este menú» saves.
+// «14 platos · 7 días»: what «Usar este menú» saves (for screen readers).
 function proposalSummary(weekDays: WeekDay[]) {
   const dishes = weekDays.reduce(
     (count, day) => count + [day.lunch, day.dinner].filter((meal) => meal !== "LIBRE" && meal.trim()).length,
@@ -1606,11 +1605,6 @@ function CreateMenuPageContent() {
                   ? "Planificar también desayuno, media mañana y merienda de tu plan nutricional"
                   : "Planificar también desayunos, fruta y tentempiés"}
               </span>
-              <span className="t-meta block">
-                {savedPlan
-                  ? "Las opciones del PDF de tu nutricionista, por turnos durante la semana; van a la lista de la compra."
-                  : "Fruta cada día y frutos secos varios días; van a la lista de la compra."}
-              </span>
             </span>
           </label>
           {savedPlan ? (
@@ -1765,24 +1759,16 @@ function CreateMenuPageContent() {
               Revisa tu semana
             </h2>
             {restoredMenu ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2">
-                <p className="t-meta">
-                  Propuesta sin aplicar, recuperada de este dispositivo.
-                </p>
-                <button
-                  type="button"
-                  onClick={discardProposal}
-                  disabled={useWeekStatus === "applying"}
-                  className="min-h-11 rounded-full px-3 text-sm font-semibold text-[color:var(--color-muted-foreground)] underline underline-offset-2 hover:text-[color:var(--color-foreground)] disabled:opacity-50"
-                >
-                  Descartar propuesta
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={discardProposal}
+                disabled={useWeekStatus === "applying"}
+                className="-ml-3 min-h-11 self-start rounded-full px-3 text-sm font-semibold text-[color:var(--color-muted-foreground)] underline underline-offset-2 hover:text-[color:var(--color-foreground)] disabled:opacity-50"
+              >
+                Descartar propuesta
+              </button>
             ) : null}
 
-            {proposalFoodContext ? (
-              <GenerationContextSummary verified={proposalFoodContext} peopleCount={peopleCount} />
-            ) : null}
 
             {showImportWarnings ? (
               <div className="space-y-1.5 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
@@ -1838,10 +1824,6 @@ function CreateMenuPageContent() {
               </details>
             ) : null}
 
-            <WeekBalance
-              dishes={importedWeekDays.flatMap((day) => [day.lunch, day.dinner])}
-              profile={profile}
-            />
 
             <p className="t-meta">
               ¿Algún plato no encaja? Pulsa «Otra idea» para cambiar solo ese; el resto de la semana no cambia.

@@ -1,3 +1,4 @@
+import { isValidTrainingWeekdays, normalizeTrainingWeekdays, type TrainingWeekday } from "@/lib/trainingDays";
 import { supabase } from "./client";
 
 export type Sex = "male" | "female";
@@ -7,6 +8,7 @@ export type TrainingType =
   | "crossfit"
   | "hyrox"
   | "running"
+  | "cardio"
   | "cycling"
   | "padel"
   | "swimming"
@@ -80,6 +82,9 @@ export type UserProfile = {
   weightKg: number | null;
   householdSize: number;
   weeklyTrainingDays: WeeklyTrainingDays;
+  // The days marked (1 = Monday … 7 = Sunday, see @/lib/trainingDays). Absent in copies saved
+  // before they were asked: then the count is what is known.
+  trainingWeekdays?: TrainingWeekday[];
   trainingTypes: TrainingType[];
   otherTrainingType?: string;
   goals: Goal[];
@@ -106,6 +111,8 @@ export type ProfileRow = {
   weight_kg: number | null;
   household_size: number | null;
   weekly_training_days: number | null;
+  // null: saved before the days were asked (20261020090000).
+  training_weekdays?: number[] | null;
   training_types: string[] | null;
   other_training_type: string | null;
   goal: string | null;
@@ -120,7 +127,7 @@ export type ProfileRow = {
 };
 
 export const PROFILE_COLUMNS =
-  "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_types,other_training_type,goal,goals,other_goal,dietary_restrictions,allergies,other_allergies,disliked_foods,confirmed_sections";
+  "id,user_id,sex,birth_date,height_cm,weight_kg,household_size,weekly_training_days,training_weekdays,training_types,other_training_type,goal,goals,other_goal,dietary_restrictions,allergies,other_allergies,disliked_foods,confirmed_sections";
 
 // Same ranges as the CHECK constraints on public.profiles; weekly_training_days 0–7 since
 // 20261007090000_profiles_training_days_0_7.
@@ -156,6 +163,7 @@ const trainingTypeValues = new Set<TrainingType>([
   "crossfit",
   "hyrox",
   "running",
+  "cardio",
   "cycling",
   "padel",
   "swimming",
@@ -458,6 +466,13 @@ export function validateProfileForStorage(profile: UserProfile): ProfileValidati
     );
   }
 
+  if (
+    profile.trainingWeekdays !== undefined &&
+    (!isValidTrainingWeekdays(profile.trainingWeekdays) || profile.trainingWeekdays.length !== profile.weeklyTrainingDays)
+  ) {
+    addIssue("trainingWeekdays", "Los días de entrenamiento no son válidos.");
+  }
+
   if (!hasOnlyAllowedValues(profile.trainingTypes, trainingTypeValues)) {
     addIssue("trainingTypes", "Hay un tipo de entrenamiento no válido.");
   }
@@ -521,6 +536,8 @@ export function profileToRow(
     weight_kg: profile.weightKg ?? null,
     household_size: profile.householdSize,
     weekly_training_days: profile.weeklyTrainingDays,
+    // Only sent when known: a copy saved before the days were asked keeps the account's.
+    ...(profile.trainingWeekdays ? { training_weekdays: normalizeTrainingWeekdays(profile.trainingWeekdays) } : {}),
     training_types: profile.trainingTypes,
     other_training_type: optionalText(profile.otherTrainingType),
     goal: legacyGoalFromGoals(goals),
@@ -554,6 +571,9 @@ export function profileFromRow(row: ProfileRow): UserProfile {
     weightKg: parseOptionalNumber(row.weight_kg),
     householdSize: parseRequiredNumber(row.household_size, "household_size"),
     weeklyTrainingDays: parseWeeklyTrainingDays(row.weekly_training_days),
+    ...(Array.isArray(row.training_weekdays)
+      ? { trainingWeekdays: normalizeTrainingWeekdays(row.training_weekdays) ?? [] }
+      : {}),
     trainingTypes: parseEnumArray(
       row.training_types,
       trainingTypeValues,

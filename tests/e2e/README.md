@@ -97,7 +97,7 @@ aquí. Nombres en los que se apoyan (lista de P34 «nombres congelados» incluid
   mis datos», campo «Escribe ELIMINAR para confirmar», «Eliminar mi cuenta», aviso «Tu cuenta se ha
   eliminado.».
 - Compra: casillas «Huevos, 14 ud» (se busca por el nombre, no la cantidad), «N/M comprados»,
-  «2 raciones por comida», vacía «No hay una semana guardada.».
+  «2 comensales», vacía «No hay una semana guardada.».
 - Estados (B5): «Guardado en tu cuenta», «Solo en este dispositivo», «Pendiente de sincronizar» /
   «Error: reintentar» y botón «Reintentar»; conflicto «Tu cuenta tenía cambios más recientes de otro dispositivo».
 

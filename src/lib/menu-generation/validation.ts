@@ -17,6 +17,8 @@ export type MenuProfile = {
   goals: string[];
   otherGoal: string;
   weeklyTrainingDays: number;
+  // 1 = Monday … 7 = Sunday: the marked days, or a spread of weeklyTrainingDays (@/lib/trainingDays).
+  trainingWeekdays: number[];
   trainingTypes: string[];
 };
 

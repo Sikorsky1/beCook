@@ -5,8 +5,8 @@ import { useEffect, useId, useState } from "react";
 import { weekSummary } from "@/lib/menu-generation/week-summary";
 import { loadCatalogTags, type TagsLookup } from "@/lib/recipes/loadCatalogTags";
 
-// What a week has, in positive (N10): a line of highlights, a suggestion when something is missing
-// and a «¿Por qué?» with the source. Informative: no calories, no colours of «bien/mal».
+// What a week has, in positive (N10): a line of highlights and a suggestion when something is missing.
+// Informative: no calories, no colours of «bien/mal».
 export function WeekBalance({
   dishes,
   profile,
@@ -45,16 +45,6 @@ export function WeekBalance({
           {suggestion}
         </p>
       ))}
-      <details>
-        <summary className="t-meta min-h-11 cursor-pointer content-center font-semibold">¿Por qué?</summary>
-        <ul className="t-meta mt-1 space-y-1">
-          {summary.reasons.map((reason) => (
-            <li key={reason.topic}>
-              <span className="font-semibold">{reason.topic}:</span> {reason.text} <span>({reason.source})</span>
-            </li>
-          ))}
-        </ul>
-      </details>
     </section>
   );
 }

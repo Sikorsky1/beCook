@@ -79,9 +79,15 @@ export function ShoppingRow({ row, actions }: { row: ShoppingRowData; actions: S
             {name}
           </label>
           <div id={`${baseId}-state`} className="mt-1 space-y-1">
-            {forDishes.length > 0 ? <p className="t-meta">Para: {forDishes.join(", ")}</p> : null}
+            {/* Two dishes at most; more are cut with «…». */}
+            {forDishes.length > 0 ? (
+              <p className="t-meta">
+                Para: {forDishes.slice(0, 2).join(", ")}
+                {forDishes.length > 2 ? "…" : null}
+              </p>
+            ) : null}
             {item.forDailyMeals ? (
-              <p className="t-meta">Para desayunos y tentempiés</p>
+              <p className="t-meta">Para desayunos y meriendas</p>
             ) : item.manual ? (
               <p className="t-meta">Añadido por ti</p>
             ) : null}

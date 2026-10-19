@@ -85,14 +85,17 @@ export function GenerationContextSummary(props: GenerationContextSummaryProps) {
     },
   ];
 
+  // Without a profile the menu cannot be created yet: the only note left says what is missing.
   return (
     <SummaryFrame title={generating ? "Generando para…" : "Se creará para…"} rows={rows}>
-      {profile
-        ? "Según tu perfil. Comprobamos las restricciones con el nombre de cada plato y la receta del catálogo, que aún no ha revisado un profesional: revisa la propuesta."
-        : "Para crear un menú hace falta guardar tu perfil (comensales, restricciones y alergias)."}{" "}
-      <Link href="/profile" className="font-semibold underline underline-offset-2">
-        {profile ? "Revisar perfil" : "Completar perfil"}
-      </Link>
+      {profile ? null : (
+        <>
+          Para crear un menú hace falta guardar tu perfil (comensales, restricciones y alergias).{" "}
+          <Link href="/profile" className="font-semibold underline underline-offset-2">
+            Completar perfil
+          </Link>
+        </>
+      )}
     </SummaryFrame>
   );
 }
@@ -120,7 +123,7 @@ function SummaryFrame({
           </div>
         ))}
       </dl>
-      <p className="t-meta mt-2">{children}</p>
+      {children ? <p className="t-meta mt-2">{children}</p> : null}
     </section>
   );
 }

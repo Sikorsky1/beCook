@@ -35,12 +35,12 @@ test("alta, primer menú, ficha y compra que sobrevive a recargar @320", async (
   expect(await card.getByRole("region", { name: "Pasos" }).getByRole("listitem").count()).toBeGreaterThanOrEqual(3);
   await expect(card.getByRole("button", { name: "Crear ficha estimada (IA)" })).toHaveCount(0);
   await expect(card.getByText(/alérgenos|trazas|Compatibilidad/)).toHaveCount(0);
-  await card.getByRole("button", { name: "Cerrar" }).click();
+  await card.getByRole("button", { name: "Cerrar", exact: true }).click();
   await expect(card).toBeHidden();
 
   await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Compra" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Tu compra" })).toBeVisible();
-  await expect(page.getByText("2 raciones por comida")).toBeVisible();
+  await expect(page.getByText("2 comensales")).toBeVisible();
   const eggs = await listedItem(page, 0);
   const other = await listedItem(page, 1);
   await expect(eggs).not.toBeChecked();

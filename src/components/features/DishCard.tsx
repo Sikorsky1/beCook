@@ -1,9 +1,11 @@
 "use client";
 
+import { RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { PrimaryButton, SecondaryButton, TertiaryButton } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
 import type { MealKey, WeekDay } from "@/data/mockWeek";
 import type { DataIdentity } from "@/lib/data/repositories";
 import { newRequestKey } from "@/lib/data/repositories";
@@ -108,7 +110,7 @@ function RecipeBody({
   const meta = [
     `Para ${recipe.baseServings} ${recipe.baseServings === 1 ? "persona" : "personas"}`,
     recipe.totalMinutes ? `${recipe.totalMinutes} min` : null,
-    review === "estimated" ? "Estimada por IA · sin revisar" : review === "draft" ? "Receta sin revisar por un profesional" : null,
+    review === "estimated" ? "Estimada por IA · sin revisar" : null,
     base ? `Receta de «${base}»` : null,
     tags?.season.includes(month) ? "De temporada" : null,
   ].filter(Boolean);
@@ -128,7 +130,7 @@ function RecipeBody({
           {recipe.ingredients.map((ingredient, index) => (
             <li key={`${ingredient.name}-${index}`} className="t-body flex justify-between gap-3">
               <span className="min-w-0 [overflow-wrap:anywhere]">
-                {ingredient.name}
+                {capitalize(ingredient.name)}
                 {ingredient.optional ? <span className="t-meta"> (opcional)</span> : null}
               </span>
               <span className="t-meta shrink-0">{formatIngredientAmount(ingredient) || "al gusto"}</span>
@@ -169,13 +171,13 @@ function RecipeBody({
         </section>
       ) : null}
 
+      {allergens.length || mercury ? (
       <section aria-labelledby={allergensId} className="space-y-1">
         <h3 id={allergensId} className="t-body-strong">
           Alérgenos
         </h3>
         {/* No list is never «sin alérgenos»: only the labelling line. */}
         {allergens.length ? <p className="t-body">Puede contener: {allergens.join(", ")}.</p> : null}
-        <p className="t-meta">Revisa siempre el etiquetado de los productos que compres.</p>
         {mercury ? (
           <p className="t-meta">
             La AESAN recomienda que embarazadas, lactantes y niños menores de 10 años eviten el pez espada (emperador), el atún
@@ -183,8 +185,14 @@ function RecipeBody({
           </p>
         ) : null}
       </section>
+      ) : null}
     </div>
   );
+}
+
+// Ingredients start with a capital letter in the card («Aceite de oliva», not «aceite de oliva»).
+function capitalize(text: string) {
+  return text.charAt(0).toLocaleUpperCase("es-ES") + text.slice(1);
 }
 
 export function DishCard({
@@ -220,7 +228,11 @@ export function DishCard({
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      // The title takes the focus (not the icon buttons at the top), without a visible ring.
+      titleRef.current?.focus();
+    }
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
@@ -294,6 +306,16 @@ export function DishCard({
 
   const signedIn = identity.userId !== null;
 
+  const changeDish = () => {
+    if (!slot) return;
+    const current = slot;
+    // Close the native dialog now, so it gives focus back to the dish before the
+    // editor mounts and its field takes the focus (not after, which would steal it).
+    dialogRef.current?.close();
+    close();
+    onChangeDish(current);
+  };
+
   return (
     <dialog
       ref={dialogRef}
@@ -306,11 +328,29 @@ export function DishCard({
     >
       {open && slot ? (
         <div className="space-y-4 p-5">
-          <div>
-            <p className="t-meta">
-              {mealLabels[slot.meal]} · {slot.day}
-            </p>
-            <h2 id={titleId} ref={titleRef} tabIndex={-1} className="t-h2 mt-1 text-[color:var(--color-foreground)] [overflow-wrap:anywhere]">
+          {/* «contents»: the bar below sticks to the whole card, not just to this block. */}
+          <div className="contents">
+            {/* Changing the dish and closing are also at the top (and stay there while the recipe
+                scrolls), so a long recipe needs no scroll to reach them. */}
+            <div className="sticky top-0 z-10 -mx-5 -mt-5 flex items-center justify-between gap-2 bg-[color:var(--color-surface)] px-5 pb-1 pt-5">
+              <p className="t-meta">
+                {mealLabels[slot.meal]} · {slot.day}
+              </p>
+              <div className="-mr-1.5 -mt-1.5 flex shrink-0 items-center gap-1.5">
+                <IconButton onClick={changeDish} aria-label="Cambiar plato" title="Cambiar plato">
+                  <RefreshCw aria-hidden="true" className="h-4 w-4" />
+                </IconButton>
+                <IconButton onClick={close} aria-label="Cerrar ficha" title="Cerrar">
+                  <X aria-hidden="true" className="h-4 w-4" />
+                </IconButton>
+              </div>
+            </div>
+            <h2
+              id={titleId}
+              ref={titleRef}
+              tabIndex={-1}
+              className="t-h2 mb-4 text-[color:var(--color-foreground)] [overflow-wrap:anywhere] focus:outline-none focus-visible:outline-none"
+            >
               {title}
             </h2>
           </div>
@@ -409,14 +449,7 @@ export function DishCard({
               Cerrar
             </TertiaryButton>
             <SecondaryButton
-              onClick={() => {
-                const current = slot;
-                // Close the native dialog now, so it gives focus back to the dish before the
-                // editor mounts and its field takes the focus (not after, which would steal it).
-                dialogRef.current?.close();
-                close();
-                onChangeDish(current);
-              }}
+              onClick={changeDish}
               aria-label={`Cambiar plato de la ${mealLabels[slot.meal].toLowerCase()} del ${slot.day}`}
               className="w-full sm:w-auto"
             >

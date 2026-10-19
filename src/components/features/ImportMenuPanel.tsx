@@ -10,7 +10,6 @@ import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
 import { TextArea } from "@/components/ui/TextArea";
 import { isNutritionPlanText } from "@/lib/nutritionPlan";
-import { professionalAdvice } from "@/lib/professionalAdvice";
 
 // C6 (roadmap step 22; Crear menú part of step 32): the menu the user already has, pasted as text.
 // It is a secondary path under «Generar»: shown when the disclosure opens or with ?mode=import.
@@ -52,22 +51,38 @@ export function ImportMenuPanel({
   onBeforeLogin,
 }: ImportMenuPanelProps) {
   const textId = `${idPrefix}-text`;
-  const helpId = `${idPrefix}-help`;
   // A file is being read into the box: nothing else may change it meanwhile.
   const [fileBusy, setFileBusy] = useState(false);
   const locked = disabled || fileBusy;
 
   return (
     <Card className="space-y-3 p-3.5 sm:p-5">
-      <div>
-        <label htmlFor={textId} className="t-body-strong text-[color:var(--color-foreground)]">
-          Pega tu menú de la semana
-        </label>
-        <p id={helpId} className="t-meta mt-1">
-          Si cada día va en su línea con «Comida:» y «Cena:», o como filas o columnas de una tabla, lo ordenamos al
-          momento en este dispositivo, sin IA. Vale «Lunes», «L» o «Día 1»; sin días, la primera fila es el lunes. Si
-          no, lo ordena la IA (necesita sesión iniciada).
-        </p>
+      <label htmlFor={textId} className="t-body-strong block text-[color:var(--color-foreground)]">
+        Escribe o pega tu menú
+      </label>
+
+      <div className="relative rounded-[var(--radius-control)] border border-[color:var(--color-border)]">
+        <IconButton
+          onClick={() => onChange("")}
+          disabled={!value || locked}
+          aria-label="Limpiar texto"
+          className="absolute right-3 top-3 z-10"
+        >
+          <Eraser aria-hidden="true" className="h-4 w-4" />
+        </IconButton>
+
+        {hasMounted ? (
+          <TextArea
+            id={textId}
+            value={value}
+            disabled={locked}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder={placeholder}
+            className={textAreaClass}
+          />
+        ) : (
+          <TextArea id={textId} defaultValue="" placeholder={placeholder} className={textAreaClass} />
+        )}
       </div>
 
       <MenuFileUpload
@@ -83,31 +98,6 @@ export function ImportMenuPanel({
         }}
         onBusyChange={setFileBusy}
       />
-
-      <div className="relative rounded-[var(--radius-control)] border border-[color:var(--color-border)]">
-        <IconButton
-          onClick={() => onChange("")}
-          disabled={!value || locked}
-          aria-label="Limpiar texto"
-          className="absolute right-3 top-3 z-10"
-        >
-          <Eraser aria-hidden="true" className="h-4 w-4" />
-        </IconButton>
-
-        {hasMounted ? (
-          <TextArea
-            id={textId}
-            aria-describedby={helpId}
-            value={value}
-            disabled={locked}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder={placeholder}
-            className={textAreaClass}
-          />
-        ) : (
-          <TextArea id={textId} aria-describedby={helpId} defaultValue="" placeholder={placeholder} className={textAreaClass} />
-        )}
-      </div>
 
       {needsLogin ? (
         <div role="status">
@@ -130,7 +120,6 @@ export function ImportMenuPanel({
         )}
       </PrimaryButton>
 
-      <p className="t-meta">{professionalAdvice}</p>
     </Card>
   );
 }

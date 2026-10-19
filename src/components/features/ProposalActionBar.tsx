@@ -7,11 +7,12 @@ import { PrimaryButton, TertiaryButton } from "@/components/ui/Button";
 import type { MenuSaveState } from "@/lib/applyWeek";
 
 // D3, step 26: «Usar este menú» is always in reach while a proposal is on screen, fixed above the
-// bottom navigation, with what will be saved and where. After a replacement it offers «Deshacer»
+// bottom navigation. After a replacement it offers «Deshacer»
 // for a short time.
 export type ProposalBarStatus = "idle" | "applying" | "success" | "error";
 
 type ProposalActionBarProps = {
+  // «14 platos · 7 días» and the week: read by screen readers only (not shown).
   summary: string;
   weekLabel: string;
   status: ProposalBarStatus;
@@ -71,8 +72,9 @@ export function ProposalActionBar({
             </p>
           ) : null}
         </div>
+
         {message || askContext ? null : (
-          <p className="t-meta mb-2">
+          <p className="sr-only">
             {summary} · se guarda en {weekLabel}
           </p>
         )}

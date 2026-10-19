@@ -29,7 +29,6 @@ import {
   buildNewProfile,
   canSaveSection,
   draftFromProfile,
-  emptyBodyDraft,
   emptyProfileDraft,
   profileSectionInfo,
   profileSections,
@@ -42,12 +41,12 @@ import {
 } from "@/lib/profileForm";
 import { scopeHasPendingChanges } from "@/lib/storage/scoped-storage";
 import {
-  PROFILE_LIMITS,
   type ProfileValidationIssue,
   type TrainingType,
   type UserProfile,
   type WeeklyTrainingDays,
 } from "@/lib/supabase/profiles";
+import { trainingWeekdays } from "@/lib/trainingDays";
 import { pageBleedClass, pageShellStickyClass, pageStickyColumnClass } from "@/lib/ui";
 
 // Inlined at build time, as in OAuthButtons: «con Google o con tu email» where Google is enabled.
@@ -59,6 +58,7 @@ const signInWays = [
 const trainingTypeOptions: { label: string; value: TrainingType }[] = [
   { label: "Fuerza", value: "strength" },
   { label: "CrossFit", value: "crossfit" },
+  { label: "Cardio", value: "cardio" },
   { label: "Hyrox", value: "hyrox" },
   { label: "Running", value: "running" },
   { label: "Ciclismo", value: "cycling" },
@@ -77,12 +77,6 @@ const statusLabels: Record<SectionStatus, string> = {
   assumed: "Asumido",
   optional: "Opcional",
 };
-
-function toWeeklyTrainingDays(value: number): WeeklyTrainingDays {
-  const { min, max } = PROFILE_LIMITS.weeklyTrainingDays;
-
-  return Math.min(Math.max(value, min), max) as WeeklyTrainingDays;
-}
 
 function StatusBadge({ status }: { status: SectionStatus }) {
   const tone =
@@ -122,7 +116,7 @@ function SectionFeedback({ state }: { state: SectionSaveState | undefined }) {
 
   const messages: Record<Exclude<SectionSaveState["status"], "idle" | "invalid">, string> = {
     saving: "Guardando…",
-    "saved-remote": "Guardado en tu cuenta",
+    "saved-remote": "Guardado",
     "saved-local": "Guardado en este dispositivo",
     pending: "No se pudo guardar en tu cuenta. El cambio queda pendiente en este dispositivo y se reintentará.",
     conflict: "Tu cuenta tenía una versión más reciente: se muestra esa. Revisa y vuelve a guardar.",
@@ -367,9 +361,6 @@ export default function ProfilePage() {
     }
   };
 
-  const hasBodyData = Boolean(
-    savedProfile && (savedProfile.sex || savedProfile.birthDate || savedProfile.heightCm != null || savedProfile.weightKg != null),
-  );
   const goalSummary = savedProfile
     ? goalOptions.find((option) => option.value === savedProfile.goals[0])?.label ?? "Sin objetivo"
     : "Perfil sin guardar";
@@ -460,41 +451,44 @@ export default function ProfilePage() {
           </SectionCard>
 
           <SectionCard section="training" status={statuses.training} footer={sectionFooter("training")}>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2.5">
-              <FieldLabel id="training-days-label">Días que entrenas a la semana</FieldLabel>
-              <div
-                role="group"
-                aria-labelledby="training-days-label"
-                className="inline-flex items-center gap-2 rounded-full bg-[color:var(--color-surface-muted)] p-1"
-              >
-                <button
-                  type="button"
-                  disabled={draft.weeklyTrainingDays === 0}
-                  onClick={() =>
-                    updateDraft("training", { weeklyTrainingDays: toWeeklyTrainingDays(draft.weeklyTrainingDays - 1) })
-                  }
-                  aria-label="Reducir días de entrenamiento"
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
-                >
-                  -
-                </button>
-                <span aria-live="polite" className="t-body-strong min-w-10 text-center text-[color:var(--color-foreground)]">
-                  {draft.weeklyTrainingDays}
-                  <span className="sr-only"> {draft.weeklyTrainingDays === 1 ? "día" : "días"}</span>
-                </span>
-                <button
-                  type="button"
-                  disabled={draft.weeklyTrainingDays === 7}
-                  onClick={() =>
-                    updateDraft("training", { weeklyTrainingDays: toWeeklyTrainingDays(draft.weeklyTrainingDays + 1) })
-                  }
-                  aria-label="Aumentar días de entrenamiento"
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--color-surface)] text-base font-semibold text-[color:var(--color-foreground)] shadow-[var(--shadow-card)] disabled:cursor-not-allowed disabled:text-[color:var(--color-border-strong)]"
-                >
-                  +
-                </button>
+            {/* The days marked get the starchy dishes in Crear menú (pasta, rice, potato…). */}
+            <fieldset className="space-y-2">
+              <legend className="t-body-strong mb-2 text-[color:var(--color-foreground)]">Días que entrenas</legend>
+              <div className="grid grid-cols-7 gap-1.5">
+                {trainingWeekdays.map((day) => {
+                  const checked = draft.trainingWeekdays.includes(day.value);
+
+                  return (
+                    <label
+                      key={day.value}
+                      className={`flex min-h-11 cursor-pointer items-center justify-center rounded-full border text-sm font-semibold transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[color:var(--color-accent)] ${
+                        checked
+                          ? "border-[color:var(--color-secondary)] bg-[color:var(--color-secondary-soft)] text-[color:var(--color-foreground)]"
+                          : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-muted-foreground)] hover:border-[color:var(--color-border-strong)]"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        name="training-weekdays"
+                        aria-label={day.name}
+                        checked={checked}
+                        onChange={() => {
+                          const days = checked
+                            ? draft.trainingWeekdays.filter((value) => value !== day.value)
+                            : [...draft.trainingWeekdays, day.value].sort((first, second) => first - second);
+                          updateDraft("training", {
+                            trainingWeekdays: days,
+                            weeklyTrainingDays: days.length as WeeklyTrainingDays,
+                          });
+                        }}
+                        className="sr-only"
+                      />
+                      <span aria-hidden="true">{day.initial}</span>
+                    </label>
+                  );
+                })}
               </div>
-            </div>
+            </fieldset>
 
             <ChoiceChips
               legend="Tipos de entrenamiento"
@@ -524,27 +518,6 @@ export default function ProfilePage() {
               </label>
             ) : null}
           </SectionCard>
-
-          {/* N06: beCook no longer asks for body data. A profile that has some can delete it. */}
-          {/* Kept after the deletion is saved, so its feedback stays where the person is. */}
-          {hasBodyData || (saveStates.body && saveStates.body.status !== "idle") ? (
-            <SectionCard section="body" status={statuses.body} footer={sectionFooter("body")}>
-              {draft.sex || draft.birthDate || draft.heightCm.trim() || draft.weightKg.trim() ? (
-                <Button
-                  type="button"
-                  variant="soft"
-                  onClick={() => updateDraft("body", emptyBodyDraft())}
-                  className="rounded-full"
-                >
-                  Borrar datos corporales
-                </Button>
-              ) : hasBodyData ? (
-                <p className="t-meta">Guarda para borrarlos de tu cuenta.</p>
-              ) : (
-                <p className="t-meta">No hay datos corporales guardados.</p>
-              )}
-            </SectionCard>
-          ) : null}
 
           <Card className="space-y-3 p-3.5 sm:p-4">
             <h2 className="t-h2 text-[color:var(--color-foreground)]">Cuenta</h2>

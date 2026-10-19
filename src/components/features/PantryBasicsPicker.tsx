@@ -38,7 +38,7 @@ export function PantryBasicsPicker({ offered, onAdd }: PantryBasicsPickerProps) 
         onClick={() => setOpen((value) => !value)}
         className="flex min-h-11 w-full items-center justify-between gap-3 rounded-[var(--radius-card)] px-4 py-3 text-left"
       >
-        <span className="t-body-strong text-[color:var(--color-foreground)]">Añadir básicos que sueles tener</span>
+        <span className="t-body-strong text-[color:var(--color-foreground)]">Añadir productos que sueles tener</span>
         <Plus aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform duration-150 motion-reduce:transition-none ${open ? "rotate-45" : ""}`} />
       </button>
       {open ? (

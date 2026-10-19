@@ -291,7 +291,7 @@ function ProposalMeal({
               onClick={() => void requestIdea("catalog")}
               disabled={locked || idea.loading}
               aria-label={`Otra idea para la ${mealName}`}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-1 text-sm font-semibold text-[color:var(--color-secondary-hover)] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+              className="mx-auto flex min-h-11 items-center gap-1.5 rounded-full px-1 text-sm font-semibold text-[color:var(--color-secondary-hover)] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
             >
               <RefreshCw aria-hidden="true" className="h-4 w-4" />
               Otra idea
