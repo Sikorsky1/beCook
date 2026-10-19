@@ -191,7 +191,7 @@ const planItems = [
  {name: "yogur proteico", quantity: 9, unit: "ud", category: "lácteos"},
 ];
 
-test("the plan's items wait without a list and join it as items added by hand once it exists", async () => {
+test("the plan's items wait without a list and join it, labelled for breakfasts and snacks, once it exists", async () => {
  account.writeWeek(W41, week);
  planExtrasData.writePendingPlanExtras(asA, W41, planItems);
  assert.equal(await planExtrasData.applyPendingPlanExtras(asA, W41, week), null, "no list: nothing to show");
@@ -200,16 +200,16 @@ test("the plan's items wait without a list and join it as items added by hand on
  assert.equal((await shopping.ensureShoppingList(asA, W41, week)).status, "ready");
  const view = await planExtrasData.applyPendingPlanExtras(asA, W41, week);
  const line = view.items.find((entry) => entry.name === "leche desnatada");
- assert.deepEqual([line.quantity, line.unit, line.manual], [2500, "ml", true]);
+ assert.deepEqual([line.quantity, line.unit, line.manual, line.forDailyMeals], [2500, "ml", true, true]);
  assert.ok(view.items.some((entry) => entry.name === "merluza"), "the dishes' items stay");
  assert.deepEqual(planExtrasData.readPendingPlanExtras(asA, W41), [], "nothing left waiting");
  const rows = account.listsOf(W41).at(-1).items;
- assert.equal(rows.filter((row) => row.itemKey === "manual|yogur proteico").length, 1);
+ assert.equal(rows.filter((row) => row.itemKey === "manual|extras|yogur proteico").length, 1);
 
  // Applying again (another tab) adds nothing twice.
  planExtrasData.writePendingPlanExtras(asA, W41, planItems);
  await planExtrasData.applyPendingPlanExtras(asA, W41, week);
- assert.equal(account.listsOf(W41).at(-1).items.filter((row) => row.itemKey === "manual|yogur proteico").length, 1);
+ assert.equal(account.listsOf(W41).at(-1).items.filter((row) => row.itemKey === "manual|extras|yogur proteico").length, 1);
  assert.deepEqual(planExtrasData.readPendingPlanExtras(asA, W41), []);
 });
 
@@ -217,4 +217,18 @@ test("a menu that is not a plan clears what was waiting for the week", () => {
  planExtrasData.writePendingPlanExtras(asA, W41, planItems);
  planExtrasData.writePendingPlanExtras(asA, W41, undefined);
  assert.deepEqual(planExtrasData.readPendingPlanExtras(asA, W41), []);
+});
+
+test("the week's breakfasts and snacks are kept for Semana (guest: on the device); a menu without them clears them", async () => {
+ const dailyMeals = require("../src/lib/data/dailyMeals.ts");
+ const guest = {scope: "guest", userId: null};
+ const extras = np.planExtras(plan);
+ await dailyMeals.saveWeekDailyMeals(guest, W41, extras.days);
+ const loaded = await dailyMeals.loadWeekDailyMeals(guest, W41);
+ assert.equal(loaded.length, 7);
+ assert.equal(loaded[0].dayName, "Lunes");
+ assert.ok(loaded[0].meals.some(meal => meal.meal === "breakfast"));
+ assert.deepEqual(dailyMeals.parseDailyMeals([{dayName: "Lunes", meals: [{meal: "lunch", text: "x", option: 1, options: 1}]}, "x"]), [{dayName: "Lunes", meals: []}], "only daily meals, well formed");
+ await dailyMeals.saveWeekDailyMeals(guest, W41, undefined);
+ assert.deepEqual(await dailyMeals.loadWeekDailyMeals(guest, W41), []);
 });

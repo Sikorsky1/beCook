@@ -29,7 +29,9 @@ import {
   type IsoWeek,
 } from "@/lib/isoWeek";
 import { resolveApplyWeekAttempt, type ApplyWeekAttempt } from "@/lib/applyWeek";
+import { loadWeekDailyMeals, type DailyMealsDay } from "@/lib/data/dailyMeals";
 import { nextCatalogIdea, requestAiIdea } from "@/lib/dishSubstitution";
+import { planDailyMealLabels } from "@/lib/nutritionPlan";
 import { foodContextChangeNotice, type WeekFoodContextStatus } from "@/lib/menu-generation/food-context";
 import {
   loadProfile,
@@ -339,6 +341,29 @@ function WeekPageContent() {
     setIsRepeating(false);
   };
 
+  // Breakfast, mid-morning, snack… of the selected week (shown only on today's card).
+  const [dailyMealsEntry, setDailyMealsEntry] = useState<{ key: string; days: DailyMealsDay[] } | null>(null);
+  const dailyMealsKey = selectedIsoWeek ? `${identity.scope}:${identity.epoch}:${getIsoWeekStorageId(selectedIsoWeek)}` : null;
+  useEffect(() => {
+    if (!selectedIsoWeek || !dailyMealsKey) return;
+    let active = true;
+    loadWeekDailyMeals({ scope: identity.scope, userId: identity.userId }, selectedIsoWeek)
+      .then((days) => {
+        if (active) setDailyMealsEntry({ key: dailyMealsKey, days });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [dailyMealsKey, selectedIsoWeek, identity.scope, identity.userId]);
+  const todayDailyMeals =
+    layout?.todayDay && dailyMealsEntry?.key === dailyMealsKey
+      ? (dailyMealsEntry.days.find((entry) => entry.dayName === layout.todayDay?.day)?.meals ?? []).map((meal) => ({
+          label: planDailyMealLabels[meal.meal],
+          text: meal.text,
+        }))
+      : [];
+
   // N10: the profile parts the week summary reads (diets and goals), when the profile is loaded.
   const loadedProfile = profileEntry?.key === profileKey ? (profileEntry.data as { dietaryRestrictions?: unknown; goals?: unknown } | null) : null;
   const balanceProfile = loadedProfile
@@ -635,6 +660,7 @@ function WeekPageContent() {
                       key={`${selectedIsoWeek?.isoYear}-${selectedIsoWeek?.isoWeek}-${layout.todayDay.day}`}
                       day={layout.todayDay}
                       variant="today"
+                      dailyMeals={todayDailyMeals}
                       onMealChange={handleMealChange}
                       onRequestIdea={handleRequestIdea}
                       onOpenDish={(dayName, meal) => setDishCardSlot({ day: dayName, meal })}

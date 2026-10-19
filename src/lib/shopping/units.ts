@@ -113,3 +113,14 @@ export function manualItemKey(name: string) {
 }
 
 export const isManualKey = (key: string | null | undefined) => typeof key === "string" && key.startsWith(MANUAL_KEY_PREFIX);
+
+// What the week's breakfasts, mid-mornings and snacks need (a nutritionist's plan, or the optional
+// ones of Crear menú): items added for the user, «manual|extras|…», shown as «Para desayunos y
+// tentempiés» instead of «Añadido por ti». Same rules as any item added by hand.
+export const DAILY_KEY_PREFIX = `${MANUAL_KEY_PREFIX}extras|`;
+
+export function dailyItemKey(name: string) {
+  return `${DAILY_KEY_PREFIX}${shoppingNameKey(name)}`.slice(0, 200);
+}
+
+export const isDailyKey = (key: string | null | undefined) => typeof key === "string" && key.startsWith(DAILY_KEY_PREFIX);

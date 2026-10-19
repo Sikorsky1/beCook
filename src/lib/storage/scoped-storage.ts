@@ -16,7 +16,9 @@ export type ScopedEntity =
   | "menu-draft"
   // A nutritionist's plan applied to a week: what its breakfasts, mid-mornings and snacks need, until
   // it is in the week's shopping list (as items added by hand).
-  | "plan-extras";
+  | "plan-extras"
+  // The breakfasts, mid-mornings and snacks of a week, day by day (copy of week_daily_meals).
+  | "daily-meals";
 
 export const STORAGE_FORMAT_VERSION = 1;
 

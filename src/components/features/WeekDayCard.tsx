@@ -49,6 +49,9 @@ type WeekDayCardProps = {
   editRequest?: { meal: MealKey; key: number } | null;
   // Called once the request has opened the editor, so a later remount does not open it again.
   onEditRequestHandled?: () => void;
+  // «today» only: breakfast, mid-morning, snack… of the day (src/lib/data/dailyMeals.ts), shown
+  // under lunch and dinner, which stay the featured meals.
+  dailyMeals?: { label: string; text: string }[];
 };
 
 // What the «Otra idea» helper shows for the meal being edited.
@@ -79,6 +82,7 @@ export function WeekDayCard({
   onOpenDish,
   editRequest = null,
   onEditRequestHandled,
+  dailyMeals = [],
 }: WeekDayCardProps) {
   const [editingMeal, setEditingMeal] = useState<MealKey | null>(null);
   const [draftValue, setDraftValue] = useState("");
@@ -322,6 +326,22 @@ export function WeekDayCard({
             );
           })}
         </div>
+
+        {dailyMeals.length ? (
+          <section aria-labelledby={`${headingId}-daily`} className="relative mt-4 border-t border-[color:var(--color-border)] pt-3">
+            <h3 id={`${headingId}-daily`} className="t-micro">
+              Resto del día
+            </h3>
+            <dl className="mt-1.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5">
+              {dailyMeals.map((meal) => (
+                <div key={meal.label} className="contents">
+                  <dt className="t-meta font-semibold">{meal.label}</dt>
+                  <dd className="t-body min-w-0 text-[color:var(--color-foreground)] [overflow-wrap:anywhere]">{meal.text}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ) : null}
       </article>
     );
   }
