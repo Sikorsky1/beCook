@@ -257,3 +257,24 @@ test("the plan's daily options are kept after importing it and drive the breakfa
  await store.saveDailyPlanOptions(guest, null);
  assert.equal(await store.loadDailyPlanOptions(guest), null);
 });
+
+test("on training days (Perfil) the plan's pre-workout and post-workout replace breakfast; post-workout options take turns", () => {
+ assert.deepEqual(plan.preWorkout.map(o => o.text), ["Café + manzana (sin piel)"]);
+ assert.equal(plan.postWorkout.length, 3);
+ assert.match(plan.postWorkout[1].text, /^15gr de whey \+ 150ml de kéfir \+ plátano \+ tostada .* 60gr de pavo$/);
+ const extras = np.planExtras(plan, [1, 3, 5]);
+ const meals = (index) => extras.days[index].meals.map(m => `${m.meal}${m.option}`);
+ assert.deepEqual(meals(0).slice(0, 2), ["preWorkout1", "postWorkout1"]);
+ assert.ok(!meals(0).some(m => m.startsWith("breakfast")));
+ assert.deepEqual(meals(2).slice(0, 2), ["preWorkout1", "postWorkout2"]);
+ assert.deepEqual(meals(4).slice(0, 2), ["preWorkout1", "postWorkout3"]);
+ assert.equal(meals(1)[0], "breakfast2", "a rest day keeps its breakfast (weekly rotation)");
+ // The other meals keep the weekly rotation.
+ assert.deepEqual(extras.days.map(d => d.meals.find(m => m.meal === "snack").option), [2, 3, 1, 3, 2, 1, 2]);
+ const items = Object.fromEntries(extras.items.map(i => [i.name, i]));
+ assert.equal(items["manzana"].quantity, 3);
+ assert.equal(items["proteína whey"].quantity, 7 * 20 + 3 * 15);
+ // Without training days, as before.
+ assert.deepEqual(np.planExtras(plan).days, np.planExtras(plan, []).days);
+ assert.ok(np.planExtras(plan).days.every(d => d.meals[0].meal === "breakfast"));
+});

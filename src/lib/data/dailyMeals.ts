@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase/client";
 
 export type DailyMealsDay = PlanExtras["days"][number];
 
-const mealKeys: PlanDailyMealKey[] = ["breakfast", "midMorning", "snack", "bedtime"];
+const mealKeys: PlanDailyMealKey[] = ["preWorkout", "postWorkout", "breakfast", "midMorning", "snack", "bedtime"];
 
 export function parseDailyMeals(value: unknown): DailyMealsDay[] {
   if (!Array.isArray(value)) return [];

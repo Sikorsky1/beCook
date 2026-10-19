@@ -89,6 +89,7 @@ import { pantryItemsOrDefault } from "@/lib/pantryStorage";
 import { readStoredProfile } from "@/lib/profileForm";
 import { ensureShoppingList } from "@/lib/data/shopping";
 import { saveWeekDailyMeals } from "@/lib/data/dailyMeals";
+import { trainingWeekdaysOf } from "@/lib/trainingDays";
 import {
   dailyPlanOptionsOf,
   loadDailyPlanOptions,
@@ -740,7 +741,7 @@ function CreateMenuPageContent() {
       setUseWeekMenu(null);
       setGenerationRequestId(null);
       showNewProposal(
-        { ...localMenuResponse(days, planWarnings(plan, days)), week: "Plan nutricional", planExtras: planExtras(plan) },
+        { ...localMenuResponse(days, planWarnings(plan, days)), week: "Plan nutricional", planExtras: planExtras(plan, profile ? trainingWeekdaysOf(profile) : []) },
         null,
         targetIsoWeek ?? getCurrentIsoWeek(),
         "import",
@@ -1026,7 +1027,7 @@ function CreateMenuPageContent() {
       const extras = !withDailyExtras
         ? null
         : savedPlan
-          ? planExtras(planFromDailyOptions(savedPlan))
+          ? planExtras(planFromDailyOptions(savedPlan), profileForGeneration ? trainingWeekdaysOf(profileForGeneration) : [])
           : profileForGeneration
             ? dailyExtras({ ...profileForGeneration, otherAllergies: profileForGeneration.otherAllergies ?? "" }, peopleCount)
             : null;

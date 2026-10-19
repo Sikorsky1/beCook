@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase/client";
 
 export type DailyPlanOptions = Record<PlanDailyMealKey, PlanOption[]>;
 
-const mealKeys: PlanDailyMealKey[] = ["breakfast", "midMorning", "snack", "bedtime"];
+const mealKeys: PlanDailyMealKey[] = ["preWorkout", "postWorkout", "breakfast", "midMorning", "snack", "bedtime"];
 
 export function parseDailyPlanOptions(value: unknown): DailyPlanOptions | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -31,7 +31,14 @@ export function parseDailyPlanOptions(value: unknown): DailyPlanOptions | null {
 }
 
 export function dailyPlanOptionsOf(plan: NutritionPlan): DailyPlanOptions {
-  return { breakfast: plan.breakfast, midMorning: plan.midMorning, snack: plan.snack, bedtime: plan.bedtime };
+  return {
+    preWorkout: plan.preWorkout ?? [],
+    postWorkout: plan.postWorkout ?? [],
+    breakfast: plan.breakfast,
+    midMorning: plan.midMorning,
+    snack: plan.snack,
+    bedtime: plan.bedtime,
+  };
 }
 
 // A plan with only these options (lunch and dinner are not planned from it here).

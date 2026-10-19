@@ -28,6 +28,10 @@ export type PlanMealRules = { rules: PlanRule[]; examples: string[] };
 export type PlanOption = { text: string; fillings: string[] };
 
 export type NutritionPlan = {
+  // «Si entrenamos»: before and after training, instead of breakfast on training days. Optional:
+  // plans read before 2026-10-19 (and saved copies of them) have none.
+  preWorkout?: PlanOption[];
+  postWorkout?: PlanOption[];
   breakfast: PlanOption[];
   midMorning: PlanOption[];
   snack: PlanOption[];
@@ -40,9 +44,11 @@ export type NutritionPlan = {
   noRedMeatAtDinner: boolean;
 };
 
-export type PlanDailyMealKey = "breakfast" | "midMorning" | "snack" | "bedtime";
+export type PlanDailyMealKey = "preWorkout" | "postWorkout" | "breakfast" | "midMorning" | "snack" | "bedtime";
 
 export const planDailyMealLabels: Record<PlanDailyMealKey, string> = {
+  preWorkout: "Pre-entreno",
+  postWorkout: "Post-entreno",
   breakfast: "Desayuno",
   midMorning: "Media mañana",
   snack: "Merienda",
@@ -77,6 +83,8 @@ export function normalizePlanText(value: string) {
 // --- Reading the plan ---------------------------------------------------------------------------
 
 type Section =
+  | "preWorkout"
+  | "postWorkout"
   | "breakfast"
   | "midMorning"
   | "snack"
@@ -96,10 +104,10 @@ const sectionHeaders: Record<string, Section> = {
   comida: "lunch",
   almuerzo: "lunch",
   cena: "dinner",
-  "pre-entreno": "training",
-  "pre entreno": "training",
-  "post-entreno": "training",
-  "post entreno": "training",
+  "pre-entreno": "preWorkout",
+  "pre entreno": "preWorkout",
+  "post-entreno": "postWorkout",
+  "post entreno": "postWorkout",
   "plan nutricional": "other",
   observaciones: "other",
   alimentos: "other",
@@ -192,6 +200,8 @@ function withoutMarker(line: string) {
 
 export function parseNutritionPlan(text: string): NutritionPlan | null {
   const plan: NutritionPlan = {
+    preWorkout: [],
+    postWorkout: [],
     breakfast: [],
     midMorning: [],
     snack: [],
@@ -237,10 +247,11 @@ export function parseNutritionPlan(text: string): NutritionPlan | null {
       continue;
     }
 
-    const options = plan[section];
+    const options = (plan[section] ??= []);
     const option = withoutMarker(line).match(/^opci[oó]n\s*\d+\s*[:.)-]\s*(.+)$/i);
     if (option && optionLine.test(normalizePlanText(withoutMarker(line)))) {
-      options.push({ text: option[1].trim(), fillings: [] });
+      // «15gr de whey + (elegir entre):» then «Opción 1: …»: the base goes with every option.
+      options.push({ text: snackBase ? `${snackBase} + ${option[1].trim()}` : option[1].trim(), fillings: [] });
       continue;
     }
 
@@ -542,29 +553,44 @@ export function generatePlanWeek(plan: NutritionPlan, seed: number, profile: Res
 // 2026-10-19 so a day does not repeat the same option number at every meal: breakfast 1 2 3 1 2 3 2,
 // mid-morning 2 1 1 3 1 1 1, snack 2 3 1 3 2 1 2 (snack: its base, «Yogur proteico +», and the
 // chosen option). A meal with fewer options wraps around; bedtime has one.
-const weekRotation: Record<PlanDailyMealKey, number[]> = {
+const weekRotation: Record<Exclude<PlanDailyMealKey, "preWorkout" | "postWorkout">, number[]> = {
   breakfast: [1, 2, 3, 1, 2, 3, 2],
   midMorning: [2, 1, 1, 3, 1, 1, 1],
   snack: [2, 3, 1, 3, 2, 1, 2],
   bedtime: [1, 2, 3, 1, 2, 3, 1],
 };
 
-const dailyMealKeys: PlanDailyMealKey[] = ["breakfast", "midMorning", "snack", "bedtime"];
+const dailyMealKeys: PlanDailyMealKey[] = ["preWorkout", "postWorkout", "breakfast", "midMorning", "snack", "bedtime"];
 
-export function planOptionIndex(meal: PlanDailyMealKey, dayIndex: number, optionCount: number) {
+export function planOptionIndex(meal: Exclude<PlanDailyMealKey, "preWorkout" | "postWorkout">, dayIndex: number, optionCount: number) {
   return (weekRotation[meal][dayIndex % 7] - 1) % optionCount;
 }
 
+// trainingDays: ISO weekdays (1 = Monday … 7 = Sunday) the user trains (Perfil). On those days a
+// plan with «Si entrenamos» has its pre-workout and post-workout instead of breakfast; the
+// post-workout options take turns over the training days of the week (1, 2, 3, 1…).
+function optionIndexFor(meal: PlanDailyMealKey, dayIndex: number, optionCount: number, trainingDays: number[]) {
+  if (meal === "preWorkout" || meal === "postWorkout") {
+    const turn = trainingDays.filter((day) => day <= (dayIndex % 7) + 1).length - 1;
+    return Math.max(0, turn) % optionCount;
+  }
+  return planOptionIndex(meal, dayIndex, optionCount);
+}
+
 // The options of one day (0 = Monday), following weekRotation.
-export function planDailyMeals(plan: NutritionPlan, dayIndex: number): PlanDailyMeal[] {
+export function planDailyMeals(plan: NutritionPlan, dayIndex: number, trainingDays: number[] = []): PlanDailyMeal[] {
+  const days = [...new Set(trainingDays)].filter((day) => day >= 1 && day <= 7).sort((a, b) => a - b);
+  const training = days.includes((dayIndex % 7) + 1) && Boolean(plan.preWorkout?.length || plan.postWorkout?.length);
   return dailyMealKeys.flatMap((meal) => {
-    const options = plan[meal];
+    if ((meal === "preWorkout" || meal === "postWorkout") && !training) return [];
+    if (meal === "breakfast" && training) return [];
+    const options = plan[meal] ?? [];
     if (!options.length) return [];
-    const index = planOptionIndex(meal, dayIndex, options.length);
+    const index = optionIndexFor(meal, dayIndex, options.length, days);
     const option = options[index];
     // A sandwich «Podrá ser de: pavo y queso, jamón y tomate…» changes its filling each time it is eaten.
     let round = 0;
-    for (let earlier = 0; earlier < dayIndex % 7; earlier++) if (planOptionIndex(meal, earlier, options.length) === index) round++;
+    for (let earlier = 0; earlier < dayIndex % 7; earlier++) if (optionIndexFor(meal, earlier, options.length, days) === index) round++;
     const filling = option.fillings.length ? option.fillings[round % option.fillings.length] : null;
     const parts = option.text.split(/\s+\+\s+/);
     if (filling) {
@@ -689,10 +715,10 @@ const itemKey = (entry: Pick<PlanShoppingItem, "name">) => normalizePlanText(ent
 
 // Everything the week's breakfasts, mid-mornings, snacks and bedtime need, added up per item (one
 // person: the plan's amounts are personal).
-export function planShoppingItems(plan: NutritionPlan): PlanShoppingItem[] {
+export function planShoppingItems(plan: NutritionPlan, trainingDays: number[] = []): PlanShoppingItem[] {
   const totals = new Map<string, PlanShoppingItem>();
   for (let day = 0; day < 7; day++) {
-    for (const meal of planDailyMeals(plan, day)) {
+    for (const meal of planDailyMeals(plan, day, trainingDays)) {
       for (const entry of optionItems(meal.text)) {
         const known = totals.get(itemKey(entry));
         if (!known) totals.set(itemKey(entry), { ...entry });
@@ -704,10 +730,10 @@ export function planShoppingItems(plan: NutritionPlan): PlanShoppingItem[] {
   return [...totals.values()].map((entry) => ({ ...entry, quantity: Math.round(entry.quantity) }));
 }
 
-export function planExtras(plan: NutritionPlan): PlanExtras {
+export function planExtras(plan: NutritionPlan, trainingDays: number[] = []): PlanExtras {
   return {
-    days: dayNames.map((dayName, index) => ({ dayName, meals: planDailyMeals(plan, index) })),
-    items: planShoppingItems(plan),
+    days: dayNames.map((dayName, index) => ({ dayName, meals: planDailyMeals(plan, index, trainingDays) })),
+    items: planShoppingItems(plan, trainingDays),
     fromPlan: true,
   };
 }
