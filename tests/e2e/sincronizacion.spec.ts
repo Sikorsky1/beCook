@@ -1,13 +1,12 @@
 import { expect, test, type Request } from "@playwright/test";
-import { accountDish, accountWithMenu, completeOnboarding, createUser, dishButton, generateProposal, pageFor, readOwnRows, savedStatus, settleAccountLoad, shoppingItem } from "./helpers";
+import { accountDish, accountWithMenu, completeOnboarding, createUser, dishButton, generateProposal, pageFor, readOwnRows, savedStatus, settleAccountLoad, listedItem } from "./helpers";
 
 test("sin red con la cuenta: pendiente de sincronizar, «Reintentar» y guardado al volver", async ({ browser }, testInfo) => {
   const user = await createUser("red");
   const page = await pageFor(browser, testInfo, user);
   await accountWithMenu(page);
   await page.goto("/shopping/list");
-  const eggs = shoppingItem(page, "Huevos");
-  await expect(eggs).toBeVisible({ timeout: 20_000 });
+  const eggs = await listedItem(page);
   await expect(savedStatus(page)).toBeVisible();
 
   // Only the account API fails; the page and the app keep working.
@@ -22,7 +21,7 @@ test("sin red con la cuenta: pendiente de sincronizar, «Reintentar» y guardado
   await retry.click();
   await expect(savedStatus(page)).toBeVisible();
   await page.reload();
-  await expect(shoppingItem(page, "Huevos")).toBeChecked();
+  await expect(eggs).toBeChecked();
 });
 
 test("dos dispositivos editan el mismo plato: el segundo ve el conflicto y la versión de la cuenta", async ({ browser }, testInfo) => {
