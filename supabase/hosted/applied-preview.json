@@ -138,6 +138,14 @@
       "sha256": "13f2598eaf5789c74faeb07d44aac4a63b0306013bc0d2dfd9580cec675bdfe0",
       "appliedAt": "2026-10-19",
       "notes": "Conector, sin comentarios. Tabla nueva con RLS, 3 políticas propias; anon sin permisos, authenticated SELECT/INSERT/UPDATE."
+    },
+    {
+      "version": "20261019114214",
+      "name": "nutrition_plans",
+      "source": "supabase/migrations/20261019120000_nutrition_plans.sql",
+      "sha256": "af3f87e76b1168662be09fc527509bd23d7b7fa7ddadaa36d287542126fcb186",
+      "appliedAt": "2026-10-19",
+      "notes": "Conector, sin comentarios. Tabla nueva con RLS, 4 políticas propias; anon sin permisos, authenticated SELECT/INSERT/UPDATE/DELETE."
     }
   ]
 }
