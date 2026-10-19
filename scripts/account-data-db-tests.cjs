@@ -39,7 +39,7 @@ async function runAccountDataTests({ check, sql, id, api, createClient }) {
     "(SELECT count(*) FROM public.pantry_items WHERE user_id='" + user + "'), (SELECT count(*) FROM public.menu_generation_requests WHERE user_id='" + user + "'), " +
     "(SELECT count(*) FROM public.onboarding_progress WHERE user_id='" + user + "'), (SELECT count(*) FROM public.week_food_contexts WHERE user_id='" + user + "'), " +
     "(SELECT count(*) FROM public.recipes WHERE owner_user_id='" + user + "'), (SELECT count(*) FROM public.ai_usage_events WHERE user_id='" + user + "'), " +
-    "(SELECT count(*) FROM public.week_daily_meals WHERE user_id='" + user + "'));").trim();
+    "(SELECT count(*) FROM public.week_daily_meals WHERE user_id='" + user + "'), (SELECT count(*) FROM public.nutrition_plans WHERE user_id='" + user + "'));").trim();
   const bBefore = countsFor(userB);
   const requestIds = [randomUUID(), randomUUID()];
   let tempId = null;
@@ -65,6 +65,7 @@ async function runAccountDataTests({ check, sql, id, api, createClient }) {
     const frozen = await temp.rpc("freeze_week_food_context", { p_iso_year: YEAR, p_iso_week: 1, p_request_key: applyKey, p_generation_request_id: null });
     const shopping = await temp.rpc("save_shopping_list", { p_iso_year: YEAR, p_iso_week: 1, p_week_signature: "shop1:p37", p_items: [{ name: "lentejas", quantity: 200, unit: "g", category: "despensa" }] });
     const pantry = await temp.rpc("add_pantry_items", { p_items: [{ id: randomUUID(), name: "Sal sintética P37", category: "básicos", active: true }] });
+    const nutritionPlan = await temp.from("nutrition_plans").insert({ user_id: tempId, options: { breakfast: [{ text: "pieza de fruta", fillings: [] }] } });
     const dailyMeals = await temp.from("week_daily_meals").insert({ user_id: tempId, iso_year: YEAR, iso_week: 1, days: [{ dayName: "Lunes", meals: [{ meal: "breakfast", option: 1, options: 1, text: "pieza de fruta" }] }] });
     // Ledger: one finished request and one still open when the account is deleted.
     const ledger = sql("BEGIN; SET LOCAL ROLE service_role;" +
@@ -73,10 +74,10 @@ async function runAccountDataTests({ check, sql, id, api, createClient }) {
     const weekIds = sql("SELECT string_agg(id::text, ',') FROM public.weeks WHERE user_id='" + tempId + "';").trim();
     check("P37 account: a temporary account has rows in every table", () => {
       assert.ok(tempId && token);
-      for (const result of [profile, onboarding, generation, applied, frozen, shopping, pantry, dailyMeals]) assert.equal(result.error, null);
+      for (const result of [profile, onboarding, generation, applied, frozen, shopping, pantry, dailyMeals, nutritionPlan]) assert.equal(result.error, null);
       assert.ok(saved.versionId);
       assert.match(ledger, /true[\s\S]*true/);
-      assert.deepEqual(countsFor(tempId).split(",").map(Number).map((n) => n > 0), Array(11).fill(true));
+      assert.deepEqual(countsFor(tempId).split(",").map(Number).map((n) => n > 0), Array(12).fill(true));
     });
 
     // 2. Export: every table of the user, the ledger without ip_hash, nothing of other users.
@@ -120,7 +121,7 @@ async function runAccountDataTests({ check, sql, id, api, createClient }) {
       assert.equal(removal.status, 200);
       assert.equal(sql("SELECT count(*) FROM auth.users WHERE id='" + tempId + "';").trim(), "0");
       assert.equal(sql("SELECT count(*) FROM auth.identities WHERE user_id='" + tempId + "';").trim(), "0");
-      assert.equal(countsFor(tempId), "0,0,0,0,0,0,0,0,0,0,0");
+      assert.equal(countsFor(tempId), "0,0,0,0,0,0,0,0,0,0,0,0");
       assert.equal(weekRows, "0");
       assert.equal(sql("SELECT count(*) FROM public.recipe_versions WHERE id='" + saved.versionId + "';").trim(), "0");
     });

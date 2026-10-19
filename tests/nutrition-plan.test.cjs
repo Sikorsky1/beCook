@@ -105,23 +105,23 @@ test("with the profile, the week leaves out dishes that show its allergies, diet
  }
 });
 
-test("breakfast, mid-morning and snack never repeat a food within a day (fruit, bread, tortitas, cold meats); the sandwich filling changes", () => {
+test("breakfast, mid-morning and snack follow the weekly rotation set with the plan; the sandwich filling changes", () => {
  const extras = np.planExtras(plan);
  const options = (meal) => extras.days.map((day) => day.meals.find((entry) => entry.meal === meal).option);
- // Same plan, same week; every breakfast and mid-morning option is used.
- assert.deepEqual(np.planExtras(plan), extras);
- for (const meal of ["breakfast", "midMorning"]) assert.deepEqual([...new Set(options(meal))].sort(), [1, 2, 3], meal);
+ // Sergio, 2026-10-19: Monday first.
+ assert.deepEqual(options("breakfast"), [1, 2, 3, 1, 2, 3, 2]);
+ assert.deepEqual(options("midMorning"), [2, 1, 1, 3, 1, 1, 1]);
+ assert.deepEqual(options("snack"), [2, 3, 1, 3, 2, 1, 2]);
  assert.deepEqual(options("bedtime"), [1, 1, 1, 1, 1, 1, 1]);
- const foods = [/fruta|naranja|platano|manzana/, /\bpan\b|tostada|sandwich/, /tortitas/, /jamon/, /pavo/, /frutos [se]?ecos/];
- for (const day of extras.days) {
-  const texts = day.meals.filter((meal) => meal.meal !== "bedtime").map((meal) => np.normalizePlanText(meal.text));
-  for (const food of foods) assert.ok(texts.filter((text) => food.test(text)).length <= 1, `${day.dayName}: ${food} in ${texts.join(" | ")}`);
-  assert.ok(texts.some((text) => /fruta|naranja/.test(text)), `${day.dayName}: fruit once`);
- }
- // No option on consecutive days at breakfast.
- assert.ok(options("breakfast").every((option, index, all) => index === 0 || option !== all[index - 1]));
- const sandwiches = extras.days.flatMap((day) => day.meals.filter((meal) => /sándwich/.test(meal.text)).map((meal) => meal.text));
- assert.ok(sandwiches.length >= 2 && new Set(sandwiches).size >= 2, "the filling changes");
+ const meal = (index, key) => extras.days[index].meals.find((entry) => entry.meal === key).text;
+ assert.equal(meal(0, "breakfast"), "250ml de leche desnatada + 40gr de copos de maíz + pieza de fruta");
+ assert.equal(meal(0, "midMorning"), "sándwich de pan integral (pavo y queso) + yogur desnatado");
+ assert.equal(meal(1, "breakfast"), "4 tortitas de arroz o maíz + 60gr de jamón cocido + yogur proteico");
+ assert.equal(meal(1, "snack"), "Yogur proteico + 60gr de pavo, jamón cocido o lacón");
+ assert.equal(meal(2, "breakfast"), "kéfir (150ml) + tostada de pan integral con tomate y 40gr de jamón o lomo embuchado");
+ assert.equal(meal(3, "midMorning"), "2 tortitas de arroz o maíz + 50gr de pavo + naranja");
+ assert.equal(meal(0, "snack"), "Yogur proteico + 15gr de frutos secos", "the PDF's typo is shown as meant");
+ assert.equal(meal(2, "snack"), "Yogur proteico + 250gr de fruta");
 });
 
 test("the week's shopping for those meals is added up from the plan's amounts (one person)", () => {
@@ -240,4 +240,20 @@ test("the week's breakfasts and snacks are kept for Semana (guest: on the device
  assert.deepEqual(dailyMeals.parseDailyMeals([{dayName: "Lunes", meals: [{meal: "lunch", text: "x", option: 1, options: 1}]}, "x"]), [{dayName: "Lunes", meals: []}], "only daily meals, well formed");
  await dailyMeals.saveWeekDailyMeals(guest, W41, undefined);
  assert.deepEqual(await dailyMeals.loadWeekDailyMeals(guest, W41), []);
+});
+
+test("the plan's daily options are kept after importing it and drive the breakfasts of the next menus", async () => {
+ const store = require("../src/lib/data/nutritionPlanStore.ts");
+ const guest = {scope: "guest", userId: null};
+ await store.saveDailyPlanOptions(guest, store.dailyPlanOptionsOf(plan));
+ const loaded = await store.loadDailyPlanOptions(guest);
+ assert.equal(loaded.breakfast.length, 3);
+ assert.equal(loaded.midMorning[1].fillings.length > 0, true, "the sandwich fillings are kept");
+ // The same week as importing the plan itself.
+ const fromStore = np.planExtras(store.planFromDailyOptions(loaded));
+ assert.deepEqual(fromStore.days, np.planExtras(plan).days);
+ assert.equal(fromStore.fromPlan, true);
+ assert.equal(store.parseDailyPlanOptions({breakfast: [{text: ""}], snack: "x"}), null);
+ await store.saveDailyPlanOptions(guest, null);
+ assert.equal(await store.loadDailyPlanOptions(guest), null);
 });

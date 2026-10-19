@@ -1,0 +1,199 @@
+{
+  "migration": "20261019120000_nutrition_plans",
+  "supersedes": {
+    "schema": "New table nutrition_plans (one row per user) with RLS own-row policies; nothing else changes.",
+    "rollout": "Order: migration → code. The client of main never reads the table."
+  },
+  "columns": [
+    {
+      "table_name": "nutrition_plans",
+      "name": "user_id",
+      "type": "uuid",
+      "not_null": true,
+      "default_expr": "auth.uid()"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "name": "options",
+      "type": "jsonb",
+      "not_null": true,
+      "default_expr": null
+    },
+    {
+      "table_name": "nutrition_plans",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "not_null": true,
+      "default_expr": "now()"
+    }
+  ],
+  "tables": [
+    {
+      "relname": "nutrition_plans",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "nutrition_plans_options_chk",
+      "table_name": "nutrition_plans",
+      "definition": "CHECK (((jsonb_typeof(options) = 'object'::text) AND (octet_length((options)::text) <= 16384)))"
+    },
+    {
+      "conname": "nutrition_plans_pkey",
+      "table_name": "nutrition_plans",
+      "definition": "PRIMARY KEY (user_id)"
+    },
+    {
+      "conname": "nutrition_plans_user_id_fkey",
+      "table_name": "nutrition_plans",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "nutrition_plans",
+      "indexname": "nutrition_plans_pkey",
+      "indexdef": "CREATE UNIQUE INDEX nutrition_plans_pkey ON public.nutrition_plans USING btree (user_id)"
+    }
+  ],
+  "policies": [
+    {
+      "tablename": "nutrition_plans",
+      "policyname": "nutrition_plans_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    {
+      "tablename": "nutrition_plans",
+      "policyname": "nutrition_plans_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    },
+    {
+      "tablename": "nutrition_plans",
+      "policyname": "nutrition_plans_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "UPDATE",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+    },
+    {
+      "tablename": "nutrition_plans",
+      "policyname": "nutrition_plans_delete_own",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "DELETE",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    }
+  ],
+  "grants": [
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "authenticated",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "authenticated",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "authenticated",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "service_role",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "service_role",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "service_role",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "postgres",
+      "privilege_type": "INSERT"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "postgres",
+      "privilege_type": "SELECT"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "postgres",
+      "privilege_type": "DELETE"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "table_name": "nutrition_plans",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER"
+    }
+  ]
+}
