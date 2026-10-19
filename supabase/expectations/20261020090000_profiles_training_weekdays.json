@@ -1,0 +1,47 @@
+{
+  "migration": "20261020090000_profiles_training_weekdays",
+  "supersedes": {
+    "schema": "New nullable column profiles.training_weekdays with its CHECK; profiles_training_types_check widened with 'cardio'; current_food_context() also returns preferences.trainingWeekdays.",
+    "rollout": "Order: migration → code. The client of main does not select the new column and never sends 'cardio'."
+  },
+  "replaces": {
+    "constraints": [
+      {
+        "conname": "profiles_training_types_check",
+        "table_name": "profiles"
+      }
+    ],
+    "functions": [
+      {
+        "proname": "current_food_context"
+      }
+    ]
+  },
+  "columns": [
+    {
+      "table_name": "profiles",
+      "name": "training_weekdays",
+      "type": "smallint[]",
+      "not_null": false,
+      "default_expr": null
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "profiles_training_weekdays_chk",
+      "table_name": "profiles",
+      "definition": "CHECK (((training_weekdays IS NULL) OR ((training_weekdays <@ ARRAY[(1)::smallint, (2)::smallint, (3)::smallint, (4)::smallint, (5)::smallint, (6)::smallint, (7)::smallint]) AND (cardinality(training_weekdays) <= 7))))"
+    },
+    {
+      "conname": "profiles_training_types_check",
+      "table_name": "profiles",
+      "definition": "CHECK ((training_types <@ ARRAY['strength'::text, 'crossfit'::text, 'hyrox'::text, 'running'::text, 'cycling'::text, 'padel'::text, 'swimming'::text, 'team_sports'::text, 'hiking'::text, 'yoga_pilates'::text, 'other'::text, 'cardio'::text]))"
+    }
+  ],
+  "functions": [
+    {
+      "proname": "current_food_context",
+      "definition": "CREATE OR REPLACE FUNCTION public.current_food_context()\n RETURNS jsonb\n LANGUAGE sql\n STABLE\n SET search_path TO ''\nAS $function$\n  SELECT coalesce((\n    SELECT jsonb_build_object(\n      'found', true,\n      'householdSize', p.household_size,\n      'restrictions', r.restrictions,\n      'version', public.food_context_version(r.restrictions),\n      'preferences', jsonb_build_object(\n        'goals', to_jsonb(p.goals),\n        'otherGoal', coalesce(p.other_goal, ''),\n        'weeklyTrainingDays', p.weekly_training_days,\n        'trainingWeekdays', to_jsonb(p.training_weekdays),\n        'trainingTypes', to_jsonb(p.training_types)),\n      'updatedAt', p.updated_at)\n    FROM public.profiles AS p\n    CROSS JOIN LATERAL (SELECT public.food_context_restrictions(\n      p.dietary_restrictions, p.allergies, p.other_allergies, p.disliked_foods) AS restrictions) AS r\n    WHERE p.user_id = (SELECT auth.uid())\n    LIMIT 1\n  ), jsonb_build_object('found', false));\n$function$\n"
+    }
+  ]
+}

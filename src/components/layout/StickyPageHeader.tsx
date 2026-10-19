@@ -5,8 +5,8 @@ import { TextEffect } from "@/components/motion-primitives/text-effect";
 import { pageBleedClass } from "@/lib/ui";
 
 type StickyPageHeaderProps = {
-  // Section name, always visible in the fixed bar.
-  title: string;
+  // Section name, always visible in the fixed bar. Semana leaves it out: its h1 already names the week.
+  title?: string;
   // The page's h1 and what goes under it (tabs, week line): they scroll away.
   heading?: ReactNode;
   headingLabel?: string;
@@ -41,10 +41,14 @@ export function StickyPageHeader({
         }`}
       >
         <div className="flex h-14 items-center justify-between gap-3">
-          <p className="t-eyebrow flex min-w-0 items-center gap-2">
-            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-[color:var(--color-accent)] shadow-[0_0_0_4px_var(--glow)]" />
-            <span className="line-clamp-2">{title}</span>
-          </p>
+          {title ? (
+            <p className="t-eyebrow flex min-w-0 items-center gap-2">
+              <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-[color:var(--color-accent)] shadow-[0_0_0_4px_var(--glow)]" />
+              <span className="line-clamp-2">{title}</span>
+            </p>
+          ) : (
+            <span aria-hidden="true" />
+          )}
           {action}
         </div>
         {/* Motion Primitives: reading progress along the bar's lower edge (decorative). */}

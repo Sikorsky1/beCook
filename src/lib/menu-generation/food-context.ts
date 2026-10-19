@@ -2,6 +2,7 @@
 // and its shopping list depend on. Always read from the account (current_food_context /
 // week_food_context_status), never from the browser. Canonical form and version are computed in
 // the database (food_context_restrictions / food_context_version), so they are only compared here.
+import { normalizeTrainingWeekdays } from "@/lib/trainingDays";
 import { readMenuProfile } from "./profile-input";
 import type { MenuProfile } from "./validation";
 
@@ -20,7 +21,8 @@ export type CurrentFoodContext =
       householdSize: number;
       restrictions: FoodRestrictions;
       version: string;
-      preferences: { goals: string[]; otherGoal: string; weeklyTrainingDays: number; trainingTypes: string[] };
+      // trainingWeekdays: null when the profile has only the count (see @/lib/trainingDays).
+      preferences: { goals: string[]; otherGoal: string; weeklyTrainingDays: number; trainingWeekdays: number[] | null; trainingTypes: string[] };
     };
 
 // What one week was planned with, frozen when its menu was applied.
@@ -77,6 +79,7 @@ export function parseCurrentFoodContext(value: unknown): CurrentFoodContext {
       goals: strings(preferences.goals) ?? [],
       otherGoal: typeof preferences.otherGoal === "string" ? preferences.otherGoal : "",
       weeklyTrainingDays: typeof preferences.weeklyTrainingDays === "number" ? preferences.weeklyTrainingDays : 0,
+      trainingWeekdays: normalizeTrainingWeekdays(preferences.trainingWeekdays),
       trainingTypes: strings(preferences.trainingTypes) ?? [],
     },
   };

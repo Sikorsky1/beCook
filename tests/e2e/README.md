@@ -84,7 +84,7 @@ aquí. Nombres en los que se apoyan (lista de P34 «nombres congelados» incluid
   «Despensa exprés» (botones con `aria-pressed`), «Terminar y crear mi menú» / «Saltar y crear mi menú».
 - Crear menú: «Crear menú semanal», región «Usar la propuesta» con «Usar este menú» y su estado
   «Menú guardado en tu cuenta.», «Ver mi semana», «Otra idea para la comida del lunes».
-  Importar: cuadro «Pega tu menú de la semana», «Procesar menú».
+  Importar: cuadro «Escribe o pega tu menú», «Procesar menú».
 - Semana: botones «Comida de hoy: X. Ver ficha» / «Comida del Martes: X. Ver ficha»; diálogo con
   el nombre del plato, «Crear ficha estimada (IA)», regiones «Ingredientes» y «Pasos», «Cerrar»,
   «Cambiar plato de la comida del Martes», cuadro «Comida del Martes», «Guardar comida de Martes».
@@ -97,7 +97,7 @@ aquí. Nombres en los que se apoyan (lista de P34 «nombres congelados» incluid
   mis datos», campo «Escribe ELIMINAR para confirmar», «Eliminar mi cuenta», aviso «Tu cuenta se ha
   eliminado.».
 - Compra: casillas «Huevos, 14 ud» (se busca por el nombre, no la cantidad), «N/M comprados»,
-  «2 raciones por comida», vacía «No hay una semana guardada.».
+  «2 comensales», vacía «No hay una semana guardada.».
 - Estados (B5): «Guardado en tu cuenta», «Solo en este dispositivo», «Pendiente de sincronizar» /
   «Error: reintentar» y botón «Reintentar»; conflicto «Tu cuenta tenía cambios más recientes de otro dispositivo».
 

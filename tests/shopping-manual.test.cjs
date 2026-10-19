@@ -369,7 +369,7 @@ test("Compra: one continuous list with section anchors, the usual-at-home group 
  assert.match(read("src/app/layout.tsx"), /has-\[\[data-sticky-header\]\]:scroll-pt-/);
  assert.match(page, /<details/);
  assert.match(page, /Ya lo tienes habitualmente/);
- assert.match(page, /raciones/);
+ assert.match(page, /comensales/);
  assert.match(page, /Se me acabó/);
  assert.match(section, /Añadir a despensa/);
 });

@@ -26,7 +26,7 @@ export function CategoryPill({
         isCompleted
           ? "border-[color:var(--color-success)] bg-[color:var(--color-success-soft)] text-[color:var(--color-success-hover)] shadow-[0_10px_24px_rgba(107,127,74,0.12)] hover:border-[color:var(--color-success-hover)]"
           : isSelected
-            ? "border-[color:var(--color-ink)] bg-[color:var(--color-ink)] text-[color:var(--color-ink-foreground)] shadow-[0_12px_26px_-12px_rgba(42,33,28,0.6)]"
+            ? "border-[color:var(--color-accent-strong)] bg-[color:var(--color-accent-strong)] text-white shadow-[var(--shadow-pop)]"
             : "border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-foreground)] hover:border-[color:var(--color-border-strong)]",
         className,
       ].join(" ")}
@@ -43,7 +43,7 @@ export function CategoryPill({
               isCompleted
                 ? "text-[color:var(--color-success-hover)]"
                 : isSelected
-                  ? "text-[color:var(--color-ink-foreground)]"
+                  ? "text-white/85"
                   : "text-[color:var(--color-muted-foreground)]",
             ].join(" ")}
           >

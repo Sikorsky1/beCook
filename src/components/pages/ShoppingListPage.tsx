@@ -50,7 +50,7 @@ import {
   type ShoppingView,
 } from "@/lib/data/shopping";
 import { applyPendingPlanExtras, readPendingPlanExtras } from "@/lib/data/planExtras";
-import { formatIsoWeekTitle, getCurrentIsoWeek, type IsoWeek } from "@/lib/isoWeek";
+import { formatIsoWeekTitle, getCurrentIsoWeek, getIsoWeekStorageId, type IsoWeek } from "@/lib/isoWeek";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { pageShellStickyClass, pageStickyColumnClass } from "@/lib/ui";
 import {
@@ -74,6 +74,8 @@ import {
 import { ShoppingListApiError } from "@/lib/shoppingListStorage";
 import { createActionNotices, noticeText, type ActionNotice } from "@/lib/actionNotices";
 import { withWeekDates } from "@/lib/weekStorage";
+import { loadWeekDailyMeals } from "@/lib/data/dailyMeals";
+import { optionItems } from "@/lib/nutritionPlan";
 
 type ShoppingProgressProps = {
   checkedItemsCount: number;
@@ -125,12 +127,21 @@ type SectionView = { category: SupermarketCategory; rows: ShoppingRowData[]; don
 
 // D5 (roadmap step 30): the whole list at once. Each section: what is still to buy (to review
 // first), then what is bought; items usually at home are kept apart (folded) and not counted.
-function buildSections(items: ShoppingViewItem[], checkedItems: string[], pantryItems: string[], dishes: PlannedDish[]) {
+function buildSections(
+  items: ShoppingViewItem[],
+  checkedItems: string[],
+  pantryItems: string[],
+  dishes: PlannedDish[],
+  dailyNames: Set<string> | null,
+) {
   const groups = classifyShoppingView(items, checkedItems, pantryItems);
   const checked = new Set(checkedItems);
   const pantry = pantryNameKeys(pantryItems);
+  // An item added by hand that the week's breakfasts or snacks need reads as theirs.
+  const labelled = (item: ShoppingViewItem) =>
+    item.manual && !item.forDailyMeals && dailyNames?.has(shoppingNameKey(item.name)) ? { ...item, forDailyMeals: true } : item;
   const row = (item: ShoppingViewItem, status: ShoppingRowData["status"]): ShoppingRowData => ({
-    item,
+    item: labelled(item),
     status,
     checked: checked.has(item.id),
     // A bought item no dish needs any more is not «for» anything now.
@@ -182,7 +193,7 @@ const notesOf = (view: ShoppingView, current: Omit<ListNoticesProps, "calculatin
 // C4: what the last update changed, a list that could not be updated, dishes still without
 // ingredients and where items come from. Always rendered (empty or not) inside a polite live
 // region, so screen readers hear a new summary or a new pending dish.
-function ListNotices({ change, pendingDishes, aiError, fromCards, notUpdated, discardedAdjustments, calculating, onCalculate }: ListNoticesProps) {
+function ListNotices({ change, pendingDishes, aiError, notUpdated, discardedAdjustments, calculating, onCalculate }: ListNoticesProps) {
   const calculateButton = (label: string) => (
     <button
       type="button"
@@ -233,12 +244,6 @@ function ListNotices({ change, pendingDishes, aiError, fromCards, notUpdated, di
           {aiError ? <p className="t-meta mt-2 max-w-xl">{aiError}</p> : null}
           {calculateButton("Calcular (IA)")}
         </Card>
-      ) : null}
-      {fromCards ? (
-        <p className="t-meta px-1">
-          Parte de la lista sale de las fichas de los platos, para las raciones de la semana. Los
-          ingredientes opcionales de las fichas no se incluyen.
-        </p>
       ) : null}
     </div>
   );
@@ -498,10 +503,31 @@ export default function ShoppingListPage() {
     };
   }, [hasLoadedWeek, weekDays, isoWeek, identity.scope, identity.userId, listReload]);
 
+  // The week's breakfasts and snacks: what they need is labelled as such, also in lists saved
+  // before those items had their own key (they were added as items «Añadido por ti»).
+  const [dailyEntry, setDailyEntry] = useState<{ key: string; names: Set<string> } | null>(null);
+  const dailyKey = isoWeek ? `${identity.scope}:${identity.epoch}:${getIsoWeekStorageId(isoWeek)}` : null;
+  useEffect(() => {
+    if (!isoWeek || !dailyKey || identity.status !== "ready") return;
+    let active = true;
+    loadWeekDailyMeals({ scope: identity.scope, userId: identity.userId }, isoWeek)
+      .then((days) => {
+        const names = new Set(
+          days.flatMap((day) => day.meals.flatMap((meal) => optionItems(meal.text).map((item) => shoppingNameKey(item.name)))),
+        );
+        if (active) setDailyEntry({ key: dailyKey, names });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [dailyKey, isoWeek, identity.status, identity.scope, identity.userId]);
+  const dailyNames = dailyEntry?.key === dailyKey ? dailyEntry.names : null;
+
   const dishes = useMemo(() => plannedDishes(weekDays ?? []), [weekDays]);
   const { sections, atHome } = useMemo(
-    () => buildSections(generatedItems, checkedItems, pantryItems, dishes),
-    [generatedItems, checkedItems, pantryItems, dishes],
+    () => buildSections(generatedItems, checkedItems, pantryItems, dishes, dailyNames),
+    [generatedItems, checkedItems, pantryItems, dishes, dailyNames],
   );
 
   // C4: «Calcular (IA)» for the dishes still without ingredients (one call, marks kept).
@@ -694,7 +720,7 @@ export default function ShoppingListPage() {
   const checkedVisibleItems = sections.reduce((total, section) => total + section.done, 0);
   const hasList = generatedItems.length > 0 && !isUpdatingList && !isLoadingList && !errorMessage && !needsLogin && !accountUnreachable;
   const weekLine = isoWeek
-    ? `Semana ${isoWeek.isoWeek} · ${formatIsoWeekTitle(isoWeek, { compact: true })}${servings ? ` · ${servings} ${servings === 1 ? "ración" : "raciones"} por comida` : ""}`
+    ? `${formatIsoWeekTitle(isoWeek, { compact: true })}${servings ? ` · ${servings} ${servings === 1 ? "comensal" : "comensales"}` : ""}`
     : "";
 
   return (

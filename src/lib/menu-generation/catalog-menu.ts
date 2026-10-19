@@ -8,6 +8,7 @@ import { culinaryIssue } from "./culinary-rules";
 import { dishGroups, highMercury, isFish, mainProtein, type DishGroup } from "./food-groups";
 import { addGroups, countGroups, missingMinimums, weekQuotas, withinMaximums, type WeekCounts, type WeekQuotas } from "./quotas";
 import { batchFriendly, leftoverTitle } from "./leftovers";
+import { isStarchyDish, prefersStarch } from "./carbs";
 import { dayNames, isGenericDish, normalizeFood, selectionToMenu, type MenuProfile } from "./validation";
 
 // Weekly menu from the recipe catalogue (src/data/nutritionist-recipes.json), without the AI.
@@ -15,7 +16,7 @@ import { dayNames, isGenericDish, normalizeFood, selectionToMenu, type MenuProfi
 // and how elaborate it is (Sencillo, Equilibrado, Elaborado). The week takes the recipes that fit
 // the chosen types and level, leaves out every recipe whose title conflicts with the profile
 // (diets, allergies, «otras alergias» and foods the user does not like) and the dishes of recent
-// weeks, keeps the weekly frequencies of AESAN 2022 (quotas.ts, N05) and spreads the main proteins. Each recipe is checked with its title and its recipe
+// weeks, puts the starchy dishes on the training days of the profile (carbs.ts), keeps the weekly frequencies of AESAN 2022 (quotas.ts, N05) and spreads the main proteins. Each recipe is checked with its title and its recipe
 // (catalog-checks.json); the recipes are unreviewed drafts, so passing the check never certifies
 // the absence of allergens or traces (the same rule as the AI menus).
 
@@ -109,6 +110,8 @@ type Candidate = CatalogRecipe & {
   season: number[];
   cost: 1 | 2 | 3;
   species: string | null;
+  // Pasta, rice, potato, bread… (carbs.ts), for the training days of the profile.
+  starchy: boolean;
   score: number;
 };
 
@@ -158,6 +161,7 @@ function candidatesFor(meal: "lunch" | "dinner", request: CatalogMenuRequest, re
       season: tags?.season ?? [],
       cost: tags?.cost ?? 2,
       species: tags?.species ?? null,
+      starchy: isStarchyDish(recipe.name, card?.ingredients ?? null),
       score,
     }];
   });
@@ -190,6 +194,8 @@ function pickWeek(pools: Pools, request: CatalogMenuRequest, quotas: WeekQuotas,
 
   for (let day = 0; day < 7; day++) {
     let lunchProtein: string | null = null;
+    // Training day: lunch and dinner with a starch; another day: without one (null: no preference).
+    const starch = prefersStarch(request.profile.trainingWeekdays ?? [], day);
     for (const meal of ["lunch", "dinner"] as const) {
       const slotsLeft = 14 - (day * 2 + (meal === "dinner" ? 1 : 0));
       const withinMax = pools[meal].filter((candidate) => !used.has(candidate.key) && withinMaximums(addGroups(week.counts, candidate.groups), quotas));
@@ -212,7 +218,9 @@ function pickWeek(pools: Pools, request: CatalogMenuRequest, quotas: WeekQuotas,
       // than the lunch's (fish counts as one), the same species at most twice a week and never on
       // consecutive days (N20), in season (N16), no kind of dish and no protein more than twice a
       // week per meal, and cheap recipes for «Gastar menos» (N19).
+      // The training days go first (the last preference to be dropped), then the rest.
       const filters: ((candidate: Candidate) => boolean)[] = [
+        (candidate) => starch === null || candidate.starchy === starch,
         (candidate) => candidate.score >= floors[meal],
         (candidate) => !(meal === "dinner" && candidate.protein && candidate.protein === lunchProtein),
         (candidate) =>
@@ -297,6 +305,9 @@ export function catalogMenu(request: CatalogMenuRequest): ImportedMenuResponse |
     for (let day = 0; day < 5 && batches < 2; day++) {
       if (!batchFriendly(lunches[day], lunchGroups[day])) continue;
       if (mainProtein(lunchGroups[day]) === mainProtein(lunchGroups[day + 1])) continue;
+      // The leftovers keep the training-day rule of the day they are eaten.
+      const starch = prefersStarch(request.profile.trainingWeekdays ?? [], day + 1);
+      if (starch !== null && best.lunch[day].starchy !== starch) continue;
       const swapped = dinnerGroups.map((groups, index) => (index === day + 1 ? lunchGroups[day] : groups));
       const counts = countGroups([...lunchGroups, ...swapped]);
       const after = missingMinimums(counts, quotas, available);

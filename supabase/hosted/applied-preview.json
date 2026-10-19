@@ -146,6 +146,14 @@
       "sha256": "af3f87e76b1168662be09fc527509bd23d7b7fa7ddadaa36d287542126fcb186",
       "appliedAt": "2026-10-19",
       "notes": "Conector, sin comentarios. Tabla nueva con RLS, 4 políticas propias; anon sin permisos, authenticated SELECT/INSERT/UPDATE/DELETE."
+    },
+    {
+      "version": "20261019204243",
+      "name": "profiles_training_weekdays",
+      "source": "supabase/migrations/20261020090000_profiles_training_weekdays.sql",
+      "sha256": "c17384d27880f10c3623d1ce42389f1563b4a4d6c57d324fd18346d8a3c45a7f",
+      "appliedAt": "2026-10-19",
+      "notes": "Conector, sin comentarios. Columna nueva training_weekdays (NULL en todas las filas), CHECK profiles_training_weekdays_chk y profiles_training_types_check con 'cardio', validados; current_food_context() con trainingWeekdays, grants intactos (authenticated EXECUTE)."
     }
   ]
 }

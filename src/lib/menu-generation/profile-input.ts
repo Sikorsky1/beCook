@@ -1,3 +1,4 @@
+import { trainingWeekdaysOf } from "@/lib/trainingDays";
 import type { MenuProfile } from "./validation";
 
 // The profile and list fields of a menu request, validated (from prompt.ts). Kept apart so the
@@ -28,6 +29,7 @@ export function readMenuProfile(value: unknown): MenuProfile {
     goals: stringList(profile.goals ?? (profile.goal ? [profile.goal] : [])),
     otherGoal: shortText(profile.otherGoal),
     weeklyTrainingDays: typeof profile.weeklyTrainingDays === "number" ? Math.max(0, Math.min(7, profile.weeklyTrainingDays)) : 0,
+    trainingWeekdays: trainingWeekdaysOf(profile),
     trainingTypes: stringList(profile.trainingTypes, 12),
   };
 }

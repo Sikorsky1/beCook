@@ -10,7 +10,7 @@ test("invitado importa una tabla sin IA y la semana queda en el dispositivo @320
 
   await page.goto("/import");
   await expect(page).toHaveURL(/\/create-menu\?mode=import/);
-  const pasted = page.getByRole("textbox", { name: "Pega tu menú de la semana" });
+  const pasted = page.getByRole("textbox", { name: "Escribe o pega tu menú" });
   await pasted.fill([
     "Lunes\tCrema de calabaza\tTortilla francesa",
     "Martes\tArroz con verduras\tLIBRE",

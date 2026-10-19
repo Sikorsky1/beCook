@@ -44,6 +44,16 @@ export function SyncStatus({
     return () => window.removeEventListener("online", retry);
   }, [canRetry]);
 
+  // Saved is the normal state: no visible badge for it (Semana, Compra, Despensa and Perfil);
+  // screen readers still hear it. Only what needs attention or is on its way is shown.
+  if (view.kind === "saved") {
+    return (
+      <p role="status" aria-live="polite" className="sr-only">
+        {view.label}
+      </p>
+    );
+  }
+
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       <div className="flex flex-wrap items-center gap-2">

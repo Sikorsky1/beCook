@@ -18,6 +18,7 @@ import {
   type UserProfile,
   type WeeklyTrainingDays,
 } from "@/lib/supabase/profiles";
+import { isValidTrainingWeekdays, trainingWeekdaysOf, type TrainingWeekday } from "@/lib/trainingDays";
 
 export type ProfileSection = "household" | "goals" | "restrictions" | "training" | "body";
 
@@ -60,7 +61,7 @@ const sectionFields: Record<ProfileSection, ProfileField[]> = {
   household: ["householdSize"],
   goals: ["goals", "goal", "otherGoal"],
   restrictions: ["dietaryRestrictions", "allergies", "otherAllergies", "dislikedFoods"],
-  training: ["weeklyTrainingDays", "trainingTypes", "otherTrainingType"],
+  training: ["weeklyTrainingDays", "trainingWeekdays", "trainingTypes", "otherTrainingType"],
   body: ["sex", "birthDate", "heightCm", "weightKg"],
 };
 
@@ -115,7 +116,9 @@ export type ProfileDraft = {
   noAllergies: boolean;
   otherAllergies: string;
   dislikedFoodsText: string;
+  // Always the number of trainingWeekdays (the form asks for the days).
   weeklyTrainingDays: WeeklyTrainingDays;
+  trainingWeekdays: TrainingWeekday[];
   trainingTypes: TrainingType[];
   otherTrainingType: string;
   sex: Sex | null;
@@ -135,6 +138,7 @@ export function emptyProfileDraft(): ProfileDraft {
     otherAllergies: "",
     dislikedFoodsText: "",
     weeklyTrainingDays: 0,
+    trainingWeekdays: [],
     trainingTypes: [],
     otherTrainingType: "",
     sex: null,
@@ -195,6 +199,8 @@ export function readStoredProfile(value: unknown): UserProfile | null {
 
   return {
     ...(profile as UserProfile),
+    // Days that are not a valid list are dropped: the count is what is known then.
+    trainingWeekdays: isValidTrainingWeekdays(profile.trainingWeekdays) ? profile.trainingWeekdays : undefined,
     sex: profile.sex ?? null,
     birthDate: profile.birthDate || null,
     heightCm: profile.heightCm ?? null,
@@ -226,7 +232,9 @@ export function draftFromProfile(profile: UserProfile | null): ProfileDraft {
     noAllergies: profile.allergies.length === 0,
     otherAllergies: profile.allergies.includes("other") ? profile.otherAllergies ?? "" : "",
     dislikedFoodsText: profile.dislikedFoods.join(", "),
-    weeklyTrainingDays: profile.weeklyTrainingDays,
+    // A profile saved with only a count shows a spread of that many days, to confirm or change.
+    weeklyTrainingDays: trainingWeekdaysOf(profile).length as WeeklyTrainingDays,
+    trainingWeekdays: trainingWeekdaysOf(profile),
     trainingTypes: [...profile.trainingTypes],
     otherTrainingType: profile.trainingTypes.includes("other") ? profile.otherTrainingType ?? "" : "",
     sex: profile.sex ?? null,
@@ -286,7 +294,8 @@ function sectionValues(draft: ProfileDraft, section: ProfileSection): SectionVal
       };
     case "training":
       return {
-        weeklyTrainingDays: draft.weeklyTrainingDays,
+        weeklyTrainingDays: draft.trainingWeekdays.length as WeeklyTrainingDays,
+        trainingWeekdays: [...draft.trainingWeekdays],
         trainingTypes: draft.trainingTypes,
         otherTrainingType: draft.trainingTypes.includes("other") ? draft.otherTrainingType.trim() : "",
       };
@@ -303,7 +312,7 @@ function sectionValues(draft: ProfileDraft, section: ProfileSection): SectionVal
 // Whether an optional section holds anything (training other than "0 days, no type"; any body data).
 function hasOptionalValues(draft: ProfileDraft, section: "training" | "body") {
   return section === "training"
-    ? draft.weeklyTrainingDays > 0 || draft.trainingTypes.length > 0
+    ? draft.trainingWeekdays.length > 0 || draft.trainingTypes.length > 0
     : Boolean(draft.sex || draft.birthDate || draft.heightCm.trim() || draft.weightKg.trim());
 }
 
@@ -474,7 +483,7 @@ export function resetSections(
     household: ["householdSize"],
     goals: ["goals", "otherGoal"],
     restrictions: ["dietaryRestrictions", "allergies", "noAllergies", "otherAllergies", "dislikedFoodsText"],
-    training: ["weeklyTrainingDays", "trainingTypes", "otherTrainingType"],
+    training: ["weeklyTrainingDays", "trainingWeekdays", "trainingTypes", "otherTrainingType"],
     body: ["sex", "birthDate", "heightCm", "weightKg"],
   };
 

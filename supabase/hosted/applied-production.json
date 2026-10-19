@@ -177,6 +177,22 @@
       "sha256": "13f2598eaf5789c74faeb07d44aac4a63b0306013bc0d2dfd9580cec675bdfe0",
       "appliedAt": "2026-10-19",
       "notes": "Tras backup completo en ~/Backups/becook/2026-10-19-desayunos. Conector, sin comentarios. Tabla nueva (ninguna fila existente modificada): RLS, 3 políticas propias, anon sin permisos, authenticated SELECT/INSERT/UPDATE; igual que becook-preview."
+    },
+    {
+      "version": "20261019114815",
+      "name": "nutrition_plans",
+      "source": "supabase/migrations/20261019120000_nutrition_plans.sql",
+      "sha256": "af3f87e76b1168662be09fc527509bd23d7b7fa7ddadaa36d287542126fcb186",
+      "appliedAt": "2026-10-19",
+      "notes": "Tras backup completo en ~/Backups/becook/2026-10-19-plan-nutricionista. Conector, sin comentarios. Tabla nueva (ninguna fila existente modificada): RLS, 4 políticas propias, anon sin permisos; igual que becook-preview."
+    },
+    {
+      "version": "20261019211827",
+      "name": "profiles_training_weekdays",
+      "source": "supabase/migrations/20261020090000_profiles_training_weekdays.sql",
+      "sha256": "c17384d27880f10c3623d1ce42389f1563b4a4d6c57d324fd18346d8a3c45a7f",
+      "appliedAt": "2026-10-19",
+      "notes": "OK de Sergio en el hilo («OK migración y merge #33»). Tras backup completo en ~/Backups/becook/2026-10-19-dias-entreno. Conector, sin comentarios. Columna nueva (NULL en todas las filas, ninguna fila modificada), CHECKs validados, current_food_context() con trainingWeekdays y grants intactos; igual que becook-preview."
     }
   ]
 }

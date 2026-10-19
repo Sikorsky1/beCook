@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -466,8 +467,7 @@ function WeekPageContent() {
       <div className={pageStickyColumnClass}>
         {/* Step 34: the bar (with the week arrows) and the day strip stay; the title scrolls. */}
         <StickyPageHeader
-          // The week stays named in the bar while the h1 is scrolled away (‹ › are next to it).
-          title={selectedIsoWeek ? formatIsoWeekTitle(selectedIsoWeek, { compact: true }) : "Plan semanal"}
+          // Only the h1 names the week (the small copy in the bar is gone); ‹ › stay in the bar.
           headingLabel={selectedIsoWeek ? formatIsoWeekTitle(selectedIsoWeek) : undefined}
           heading={
             selectedIsoWeek ? (
@@ -556,12 +556,24 @@ function WeekPageContent() {
                 Semana actual
               </span>
             ) : selectedIsoWeek && today ? (
+              // Same look as «Volver a Semana» in Crear menú: a quiet link-like control with a chevron
+              // that points to where today is.
               <button
                 type="button"
                 onClick={() => goToWeek(today.week)}
-                className="min-h-11 rounded-[var(--radius-input)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-semibold text-[color:var(--color-muted-foreground)] shadow-[0_8px_20px_rgba(32,28,23,0.04)] transition-colors hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-foreground)]"
+                className="-ml-2 inline-flex min-h-11 items-center gap-1 rounded-full px-2 text-sm font-semibold text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)]"
               >
-                <span aria-hidden="true">↩</span> Volver a hoy
+                {selectedIsoWeek.isoYear * 100 + selectedIsoWeek.isoWeek > today.week.isoYear * 100 + today.week.isoWeek ? (
+                  <>
+                    <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+                    Volver a hoy
+                  </>
+                ) : (
+                  <>
+                    Volver a hoy
+                    <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                  </>
+                )}
               </button>
             ) : (
               <span />

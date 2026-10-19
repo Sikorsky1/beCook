@@ -7,7 +7,7 @@ import { AiLoginNotice } from "@/components/features/AiLoginNotice";
 import { TertiaryButton } from "@/components/ui/Button";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { isAiLoginRequiredError, postAi } from "@/lib/ai-client";
-import { menuFileAccept, menuFileErrorMessage, menuFileLimits } from "@/lib/menuFile";
+import { menuFileAccept, menuFileErrorMessage } from "@/lib/menuFile";
 import { readMenuFile } from "@/lib/menuFileReader";
 import { getAccessToken } from "@/lib/supabase/auth";
 
@@ -31,7 +31,6 @@ type UploadState =
   | { status: "login" };
 
 export function MenuFileUpload({
-  idPrefix,
   disabled,
   loginReturnPath,
   onBeforeLogin,
@@ -42,7 +41,6 @@ export function MenuFileUpload({
   const controllerRef = useRef<AbortController | null>(null);
   const [state, setState] = useState<UploadState>({ status: "idle" });
   const busy = state.status === "reading";
-  const helpId = `${idPrefix}-file-help`;
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
@@ -107,17 +105,11 @@ export function MenuFileUpload({
         <TertiaryButton
           onClick={() => inputRef.current?.click()}
           disabled={disabled || busy}
-          aria-describedby={helpId}
           className="disabled:cursor-wait"
         >
           <FileUp aria-hidden="true" className="h-4 w-4" />
           {state.status === "reading" ? (state.withAi ? "Leyendo con IA…" : "Leyendo el archivo…") : "Subir PDF o foto"}
         </TertiaryButton>
-        <p id={helpId} className="t-meta">
-          PDF (con texto, hasta {menuFileLimits.maxTextPdfPages} páginas; escaneado, hasta {menuFileLimits.maxPages}) o
-          una foto. Un PDF con texto se lee aquí, sin IA, también el plan de tu nutricionista; una foto o un escaneo
-          los lee la IA (necesita sesión). No guardamos el archivo.
-        </p>
         <input
           ref={inputRef}
           type="file"

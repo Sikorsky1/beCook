@@ -35,7 +35,15 @@ async function expectCompactHeader(page: Page, h1: RegExp | string) {
   expect(measured.overflowX, "sin desplazamiento horizontal").toBe(false);
   expect(measured.fixedTop, "alto pegado arriba").toBeLessThanOrEqual(maxFixedHeaderPx);
   // The h1 scrolls away with the content; only the bar (and the pinned row) stay.
-  if (measured.scrollable) await expect(heading).not.toBeInViewport();
+  // A short page (Despensa) may scroll just enough to tuck it under the bar: hidden all the same.
+  if (measured.scrollable) {
+    await expect
+      .poll(async () => {
+        const box = await heading.boundingBox();
+        return box ? box.y + box.height : Number.NEGATIVE_INFINITY;
+      })
+      .toBeLessThanOrEqual(measured.fixedTop + 1);
+  }
   await page.evaluate(() => window.scrollTo(0, 0));
 }
 

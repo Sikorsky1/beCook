@@ -123,8 +123,9 @@ test("Semana, Perfil, Compra and Despensa use the header; tabs and titles scroll
     const pinned = start === -1 ? "" : source.slice(start, source.indexOf("\n          }", start));
     assert.ok(!pinned.includes("<ShoppingTabs") && !pinned.includes("<h1"), `${file}: tabs and h1 are not pinned`);
   }
-  // No other element of the app sticks to the top (it would hide under or over the header).
-  for (const file of sourceFiles("src").filter((file) => !file.endsWith("StickyPageHeader.tsx"))) {
+  // No other element of the app sticks to the top (it would hide under or over the header). The
+  // dish card's top bar sticks inside its own modal dialog (top layer), never against the page.
+  for (const file of sourceFiles("src").filter((file) => !file.endsWith("StickyPageHeader.tsx") && !file.endsWith("DishCard.tsx"))) {
     assert.doesNotMatch(read(file), /\bsticky top-0\b/, file);
   }
   // Pinned rows: the section links in Compra and the day strip in Semana, 44 px controls.
@@ -316,7 +317,7 @@ test("the accessible names frozen for E2E are still in the code", () => {
       "aria-label={`${category}: ${active} de ${total} disponibles`}",
     ],
     "src/components/features/PantryStockToggle.tsx": ["aria-label={`¿Tienes ${name} en casa?`}"],
-    "src/components/features/PantryBasicsPicker.tsx": ["Añadir básicos que sueles tener"],
+    "src/components/features/PantryBasicsPicker.tsx": ["Añadir productos que sueles tener"],
     "src/app/profile/page.tsx": ['heading="Lo que necesita tu menú"', '"Guardar perfil"'],
     "src/app/onboarding/page.tsx": ["Bienvenido a beCook", "Para quién cocinas y qué necesitas", "¿Qué tienes ya en casa?"],
     "src/app/login/page.tsx": [">Email<", ">Contraseña<", '"Entrar"'],
