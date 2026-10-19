@@ -161,7 +161,7 @@ async function runOnboardingTests({ check, sql, id, api, createClient, supabase 
     // Replica role skips set_profiles_updated_at so the original version is restored too.
     sql("BEGIN; SET LOCAL session_replication_role = replica; UPDATE public.profiles p SET " +
       "sex=r.sex,birth_date=r.birth_date,height_cm=r.height_cm,weight_kg=r.weight_kg,household_size=r.household_size," +
-      "weekly_training_days=r.weekly_training_days,training_types=r.training_types,other_training_type=r.other_training_type," +
+      "weekly_training_days=r.weekly_training_days,training_weekdays=r.training_weekdays,training_types=r.training_types,other_training_type=r.other_training_type," +
       "goal=r.goal,goals=r.goals,other_goal=r.other_goal,dietary_restrictions=r.dietary_restrictions,allergies=r.allergies," +
       "other_allergies=r.other_allergies,disliked_foods=r.disliked_foods,confirmed_sections=r.confirmed_sections,updated_at=r.updated_at" +
       " FROM json_populate_record(NULL::public.profiles, $snap$" + snapshot + "$snap$) r WHERE p.id=r.id; COMMIT;");
