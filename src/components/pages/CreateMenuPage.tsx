@@ -90,6 +90,13 @@ import { pantryItemsOrDefault } from "@/lib/pantryStorage";
 import { readStoredProfile } from "@/lib/profileForm";
 import { ensureShoppingList } from "@/lib/data/shopping";
 import { saveWeekDailyMeals } from "@/lib/data/dailyMeals";
+import {
+  dailyPlanOptionsOf,
+  loadDailyPlanOptions,
+  planFromDailyOptions,
+  saveDailyPlanOptions,
+  type DailyPlanOptions,
+} from "@/lib/data/nutritionPlanStore";
 import { applyPendingPlanExtras, writePendingPlanExtras } from "@/lib/data/planExtras";
 import { dailyExtras } from "@/lib/menu-generation/daily-extras";
 import { generatePlanWeek, parseNutritionPlan, planDailyMealLabels, planExtras, planWarnings } from "@/lib/nutritionPlan";
@@ -246,6 +253,22 @@ function CreateMenuPageContent() {
   // The proposal whose profile change the user already accepted (a retry does not ask again).
   const contextAcceptedRef = useRef<ImportedMenuResponse | null>(null);
   const identity = useIdentity();
+  // The breakfast, mid-morning and snack options of the user's nutritionist plan, if imported.
+  const [savedPlanEntry, setSavedPlanEntry] = useState<{ key: string; options: DailyPlanOptions | null } | null>(null);
+  const savedPlanKey = `${identity.scope}:${identity.epoch}`;
+  const savedPlan = savedPlanEntry?.key === savedPlanKey ? savedPlanEntry.options : null;
+  useEffect(() => {
+    if (identity.status !== "ready") return;
+    let active = true;
+    loadDailyPlanOptions({ scope: identity.scope, userId: identity.userId })
+      .then((options) => {
+        if (active) setSavedPlanEntry({ key: savedPlanKey, options });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [identity.status, identity.scope, identity.userId, savedPlanKey]);
   const [activePantryItemNames, setActivePantryItemNames] = useState<string[]>([]);
   const [useWeekStatus, setUseWeekStatus] = useState<UseWeekStatus>("idle");
   const [useWeekMessage, setUseWeekMessage] = useState("");
@@ -707,6 +730,10 @@ function CreateMenuPageContent() {
     const plan = source.length <= nutritionPlanMaxLength ? parseNutritionPlan(source) : null;
 
     if (plan) {
+      // Its breakfasts, mid-mornings and snacks are kept for the next menus created here.
+      const options = dailyPlanOptionsOf(plan);
+      setSavedPlanEntry({ key: savedPlanKey, options });
+      void saveDailyPlanOptions({ scope: identity.scope, userId: identity.userId }, options).catch(() => undefined);
       // Allergies, diets and disliked foods of the profile leave out the dishes that show them.
       const days = generatePlanWeek(plan, Math.floor(Math.random() * 2 ** 31), profileReady ? importWarningProfile(profile) : null);
       setUseWeekStatus("idle");
@@ -995,7 +1022,15 @@ function CreateMenuPageContent() {
 
       persistenceMs = Math.round(performance.now() - persistenceStartedAt);
       // N09: the optional breakfasts and snacks travel with the proposal as its daily extras.
-      const extras = withDailyExtras && profileForGeneration ? dailyExtras({ ...profileForGeneration, otherAllergies: profileForGeneration.otherAllergies ?? "" }, peopleCount) : null;
+      // From the user's nutritionist plan when one was imported (its options and rotation), else
+      // beCook's own options for everyone at home.
+      const extras = !withDailyExtras
+        ? null
+        : savedPlan
+          ? planExtras(planFromDailyOptions(savedPlan))
+          : profileForGeneration
+            ? dailyExtras({ ...profileForGeneration, otherAllergies: profileForGeneration.otherAllergies ?? "" }, peopleCount)
+            : null;
       showNewProposal(extras ? { ...generatedMenu, planExtras: extras } : generatedMenu, currentGenerationRequestId, weekForGeneration, "generate");
       setGenerationRequestId(currentGenerationRequestId);
       finish({ status: "proposal" });
@@ -1567,11 +1602,30 @@ function CreateMenuPageContent() {
             />
             <span>
               <span className="t-body-strong block text-[color:var(--color-foreground)]">
-                Planificar también desayunos, fruta y tentempiés
+                {savedPlan
+                  ? "Planificar también desayuno, media mañana y merienda de tu plan nutricional"
+                  : "Planificar también desayunos, fruta y tentempiés"}
               </span>
-              <span className="t-meta block">Fruta cada día y frutos secos varios días; van a la lista de la compra.</span>
+              <span className="t-meta block">
+                {savedPlan
+                  ? "Las opciones del PDF de tu nutricionista, por turnos durante la semana; van a la lista de la compra."
+                  : "Fruta cada día y frutos secos varios días; van a la lista de la compra."}
+              </span>
             </span>
           </label>
+          {savedPlan ? (
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() => {
+                setSavedPlanEntry({ key: savedPlanKey, options: null });
+                void saveDailyPlanOptions({ scope: identity.scope, userId: identity.userId }, null).catch(() => undefined);
+              }}
+              className="t-meta min-h-11 self-start font-semibold underline underline-offset-2 disabled:cursor-not-allowed"
+            >
+              Usar las opciones de beCook en vez de tu plan
+            </button>
+          ) : null}
 
           {/* N17: a stew cooked once for lunch and its second half the next day at dinner. */}
           <label className="flex min-h-11 cursor-pointer items-start gap-3">
@@ -1762,7 +1816,7 @@ function CreateMenuPageContent() {
                   Desayunos, medias mañanas y meriendas
                 </summary>
                 <p className="t-meta mt-1">
-                  {importedMenu.week === "Plan nutricional"
+                  {importedMenu.week === "Plan nutricional" || importedMenu.planExtras.fromPlan
                     ? `Cada día una opción del plan, por turnos. Al usar este menú añadimos a la lista de la compra lo que necesitan para una persona (${importedMenu.planExtras.items.length} productos); podrás cambiarlos o quitarlos allí.`
                     : `Cada día una opción, por turnos, con fruta todos los días. Al usar este menú añadimos a la lista de la compra lo que necesitan para ${peopleCount === 1 ? "una persona" : `${peopleCount} personas`} (${importedMenu.planExtras.items.length} productos); podrás cambiarlos o quitarlos allí.`}
                 </p>

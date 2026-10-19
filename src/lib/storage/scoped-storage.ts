@@ -18,7 +18,9 @@ export type ScopedEntity =
   // it is in the week's shopping list (as items added by hand).
   | "plan-extras"
   // The breakfasts, mid-mornings and snacks of a week, day by day (copy of week_daily_meals).
-  | "daily-meals";
+  | "daily-meals"
+  // The daily options of the user's nutritionist plan (copy of nutrition_plans).
+  | "nutrition-plan";
 
 export const STORAGE_FORMAT_VERSION = 1;
 

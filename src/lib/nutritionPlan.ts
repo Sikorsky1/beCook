@@ -12,9 +12,8 @@ import type { SupermarketCategory } from "@/lib/shoppingList";
 // - generatePlanWeek picks seven lunches and dinners that keep the rules, from the plan's examples,
 //   the catalogue (src/data/nutritionist-recipes.json, first and by exact title, so the week's card
 //   shows its recipe) and similar ideas below;
-// - planDailyMeals spreads the options over the week so a day repeats as few foods as it can across
-//   its breakfast, mid-morning and snack (formerly option 1 on Monday, 2 on Tuesday, 3 on
-//   Wednesday, 1 again on Thursday…) and planShoppingItems adds up what they need for the week.
+// - planDailyMeals gives each day its options by a fixed weekly rotation (weekRotation) and
+//   planShoppingItems adds up what they need for the week.
 // Pure: no network, no storage.
 
 export type PlanProtein = "red_meat" | "white_meat" | "blue_fish" | "white_fish" | "egg";
@@ -60,6 +59,8 @@ export type PlanShoppingItem = { name: string; quantity: number; unit: "g" | "ml
 export type PlanExtras = {
   days: { dayName: ImportedMenuDay["dayName"]; meals: PlanDailyMeal[] }[];
   items: PlanShoppingItem[];
+  // From a nutritionist's plan (amounts for one person) or beCook's own options (for everyone).
+  fromPlan?: boolean;
 };
 
 const dayNames: ImportedMenuDay["dayName"][] = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
@@ -537,115 +538,41 @@ export function generatePlanWeek(plan: NutritionPlan, seed: number, profile: Res
 
 // --- Breakfast, mid-morning, snack and bedtime ---------------------------------------------------
 
-// Main foods of an option, to keep a day from repeating them across its meals («pieza de fruta» at
-// breakfast, mid-morning and snack). Different foods of a kind (jamón, pavo) count apart. Milk is
-// left out and yogurt weighs little: up to three dairy a day is the recommendation (AESAN 2022),
-// and plans put it everywhere.
-const dailyFoods: [string, RegExp][] = [
-  ["fruta", /\b(fruta|platano|manzana|naranja|pera|kiwi|fresas?|mandarina)\b/],
-  ["yogur", /\byogur/],
-  ["pan", /\b(pan|tostadas?|s[a]ndwich|bocadillo)\b/],
-  ["tortitas", /\btortitas\b/],
-  ["cereales", /\b(copos|cereales|avena|muesli)\b/],
-  ["jamon", /\bjamon\b/],
-  ["pavo", /\bpavo\b/],
-  ["lomo", /\blomo\b/],
-  ["lacon", /\blacon\b/],
-  ["frutos secos", /\b(frutos secos|frutos ecos|nueces|almendras|avellanas|pistachos|anacardos)\b/],
-  ["huevo", /\bhuevos?\b/],
-  ["queso", /\bqueso\b(?! batido)/],
-  ["pescado", /\b(atun|salmon)\b/],
-];
-
-function foodsOf(text: string) {
-  const value = normalizePlanText(text);
-  return new Set(dailyFoods.filter(([, words]) => words.test(value)).map(([food]) => food));
-}
+// Which option each day takes (Monday first), as Sergio set it with his nutritionist's plan on
+// 2026-10-19 so a day does not repeat the same option number at every meal: breakfast 1 2 3 1 2 3 2,
+// mid-morning 2 1 1 3 1 1 1, snack 2 3 1 3 2 1 2 (snack: its base, «Yogur proteico +», and the
+// chosen option). A meal with fewer options wraps around; bedtime has one.
+const weekRotation: Record<PlanDailyMealKey, number[]> = {
+  breakfast: [1, 2, 3, 1, 2, 3, 2],
+  midMorning: [2, 1, 1, 3, 1, 1, 1],
+  snack: [2, 3, 1, 3, 2, 1, 2],
+  bedtime: [1, 2, 3, 1, 2, 3, 1],
+};
 
 const dailyMealKeys: PlanDailyMealKey[] = ["breakfast", "midMorning", "snack", "bedtime"];
 
-// Which option each day takes, per meal: day by day, the combination that repeats the fewest foods
-// across that day's meals, then the one that does not repeat yesterday's option and uses the
-// options evenly. Deterministic (the same plan always gives the same week).
-function weekOptions(plan: NutritionPlan): Record<PlanDailyMealKey, number[]> {
-  const meals = dailyMealKeys.filter((meal) => plan[meal].length);
-  // The filling an option takes the next time it is eaten («sándwich (jamón y tomate)»).
-  const fillingFoods = (meal: PlanDailyMealKey, index: number) => {
-    const fillings = plan[meal][index].fillings;
-    return fillings.length ? foodsOf(fillings[used[meal][index] % fillings.length]) : new Set<string>();
-  };
-  // A food every option of a meal has («Yogur proteico + …» at snack time) cannot be avoided there:
-  // it is left out of that meal's comparison.
-  const foods = Object.fromEntries(
-    meals.map((meal) => {
-      const all = plan[meal].map((option) => foodsOf(option.text));
-      const common = [...all[0]].filter((food) => all.every((set) => set.has(food)));
-      return [meal, all.map((set) => new Set([...set].filter((food) => plan[meal].length === 1 || !common.includes(food))))];
-    }),
-  ) as Record<PlanDailyMealKey, Set<string>[]>;
-  const chosen = Object.fromEntries(dailyMealKeys.map((meal) => [meal, [] as number[]])) as Record<PlanDailyMealKey, number[]>;
-  const used = Object.fromEntries(meals.map((meal) => [meal, plan[meal].map(() => 0)])) as Record<PlanDailyMealKey, number[]>;
-  // Every combination of one option per meal (at most a few dozen).
-  let combos: number[][] = [[]];
-  for (const meal of meals) combos = combos.flatMap((combo) => plan[meal].map((_, index) => [...combo, index]));
-  const fruitAvailable = meals.some((meal) => plan[meal].some((option) => foodsOf(option.text).has("fruta")));
-  for (let day = 0; day < 7; day++) {
-    let best: number[] = combos[0];
-    let bestCost = Infinity;
-    for (const combo of combos) {
-      let cost = 0;
-      for (let first = 0; first < meals.length; first++) {
-        for (let second = first + 1; second < meals.length; second++) {
-          if (plan[meals[first]].length === 1 || plan[meals[second]].length === 1) continue;
-          const firstFoods = new Set([...foods[meals[first]][combo[first]], ...fillingFoods(meals[first], combo[first])]);
-          const secondFoods = new Set([...foods[meals[second]][combo[second]], ...fillingFoods(meals[second], combo[second])]);
-          for (const food of firstFoods) if (secondFoods.has(food)) cost += food === "yogur" ? 5 : 100;
-        }
-      }
-      // A day with fruit (AESAN 2022: 2–3 a day, with lunch and dinner), when an option has it.
-      if (fruitAvailable && !combo.some((index, position) => foodsOf(plan[meals[position]][index].text).has("fruta"))) cost += 50;
-      combo.forEach((index, position) => {
-        const meal = meals[position];
-        if (chosen[meal][day - 1] === index && plan[meal].length > 1) cost += 3;
-        cost += 3 * used[meal][index];
-      });
-      if (cost < bestCost) {
-        best = combo;
-        bestCost = cost;
-      }
-    }
-    best.forEach((index, position) => {
-      chosen[meals[position]].push(index);
-      used[meals[position]][index] += 1;
-    });
-  }
-  return chosen;
+export function planOptionIndex(meal: PlanDailyMealKey, dayIndex: number, optionCount: number) {
+  return (weekRotation[meal][dayIndex % 7] - 1) % optionCount;
 }
 
-const weekOptionsCache = new WeakMap<NutritionPlan, Record<PlanDailyMealKey, number[]>>();
-
-// The options of one day (0 = Monday), as weekOptions chose them.
+// The options of one day (0 = Monday), following weekRotation.
 export function planDailyMeals(plan: NutritionPlan, dayIndex: number): PlanDailyMeal[] {
-  let week = weekOptionsCache.get(plan);
-  if (!week) {
-    week = weekOptions(plan);
-    weekOptionsCache.set(plan, week);
-  }
-  const chosen = week;
   return dailyMealKeys.flatMap((meal) => {
     const options = plan[meal];
     if (!options.length) return [];
-    const index = chosen[meal][dayIndex % 7] ?? dayIndex % options.length;
+    const index = planOptionIndex(meal, dayIndex, options.length);
     const option = options[index];
     // A sandwich «Podrá ser de: pavo y queso, jamón y tomate…» changes its filling each time it is eaten.
-    const round = chosen[meal].slice(0, dayIndex % 7).filter((earlier) => earlier === index).length;
+    let round = 0;
+    for (let earlier = 0; earlier < dayIndex % 7; earlier++) if (planOptionIndex(meal, earlier, options.length) === index) round++;
     const filling = option.fillings.length ? option.fillings[round % option.fillings.length] : null;
     const parts = option.text.split(/\s+\+\s+/);
     if (filling) {
       const sandwich = parts.findIndex((part) => /s[aá]ndwich|bocadillo|tostada/i.test(part));
       parts[sandwich >= 0 ? sandwich : parts.length - 1] += ` (${filling})`;
     }
-    return [{ meal, option: index + 1, options: options.length, text: parts.join(" + ") }];
+    // «frutos ecos»: a typo of the PDF, shown as meant.
+    return [{ meal, option: index + 1, options: options.length, text: parts.join(" + ").replace(/\bfrutos ecos\b/gi, "frutos secos") }];
   });
 }
 
@@ -781,6 +708,7 @@ export function planExtras(plan: NutritionPlan): PlanExtras {
   return {
     days: dayNames.map((dayName, index) => ({ dayName, meals: planDailyMeals(plan, index) })),
     items: planShoppingItems(plan),
+    fromPlan: true,
   };
 }
 
