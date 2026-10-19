@@ -233,12 +233,16 @@ test("N10: the week summary is positive, cites its source and suggests what is m
  assert.equal(weekSummary(["Lentejas estofadas"], profile), null, "too few dishes to say anything");
 });
 
-test("N09: optional breakfasts and snacks: fruit at least twice a day, nuts 3+ days, scaled and safe", () => {
+test("N09: optional breakfasts and snacks: fruit every day but once, nuts 3+ days, scaled and safe", () => {
  const {dailyExtras} = require("../src/lib/menu-generation/daily-extras.ts");
  const {checkDish, blocksAutomaticProposal} = require("../src/lib/recipes/restriction-check.ts");
  const two = dailyExtras(readMenuProfile({}), 2);
  assert.equal(two.days.length, 7);
- for (const day of two.days) assert.ok(day.meals.map(m => m.text).join(" + ").split("pieza de fruta").length - 1 >= 2, day.dayName);
+ for (const day of two.days) {
+  const texts = day.meals.map(m => m.text);
+  assert.equal(texts.join(" + ").split("pieza de fruta").length - 1, 1, `${day.dayName}: ${texts.join(" | ")}`);
+  for (const food of [/pan integral/, /yogur/, /tortitas/, /nueces|almendras/]) assert.ok(texts.filter(t => food.test(t)).length <= 1, `${day.dayName}: ${food}`);
+ }
  assert.ok(two.days.filter(day => /nueces|almendras/.test(day.meals.map(m => m.text).join(" "))).length >= 3);
  const one = dailyExtras(readMenuProfile({}), 1);
  assert.equal(two.items.find(i => i.name === "fruta").quantity, one.items.find(i => i.name === "fruta").quantity * 2);
