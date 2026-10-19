@@ -839,6 +839,14 @@ Informe: `analisis/analisis-nutricional-becook.md` (biblioteca del proyecto). Te
 | Validación | Unitarias 581/581, `test:db` 449/449, build, recorrido local con cuentas de prueba, 63 checks del Preview contra becook-preview, CI (application, database, e2e, Vercel) |
 | Pendiente | N08: revisión de las fichas por una dietista-nutricionista (profesional externa). N13: raciones por adultos y niños (solo está el objetivo «Comer con niños», que evita las especies con mercurio). N18: cantidades y caducidad en la despensa. Las dos últimas necesitan columnas nuevas |
 
+## Desayunos de hoy en Semana ✅ (2026-10-19, en producción)
+| Elemento | Resultado |
+|---|---|
+| Cambio | La tarjeta de hoy en Semana muestra «Resto del día» (desayuno, media mañana, merienda) bajo la comida y la cena; los demás días solo comida y cena. En la compra, esos productos dicen «Para desayunos y tentempiés» (`item_key` `manual|extras|…`) |
+| Migración | `20261019090000_week_daily_meals` (tabla nueva con RLS) en preview y producción |
+| PR | [#30](https://github.com/Sikorsky1/beCook/pull/30), merge `e6f4491`. E2E de la compra por filas (los productos dependen de las recetas) |
+| Pendiente | Las listas de semanas aplicadas antes de este cambio siguen mostrando «Añadido por ti» en esos productos |
+
 ## Pasos del roadmap
 | Paso | Iter. | Estado | Nota |
 |---|---|---|---|
@@ -900,6 +908,7 @@ Informe: `analisis/analisis-nutricional-becook.md` (biblioteca del proyecto). Te
 | ai_usage_keep_on_account_delete (`20261015090000`) | ✅ | ✅ 20261012021426 | ✅ 20261012060819 (tras backup completo en ~/Backups/becook/2026-10-12-ola8) |
 | pantry_oils_into_basics (`20261016090000`) | ✅ | ✅ 20261012114830 | ✅ 20261012120026 (tras backup completo en ~/Backups/becook/2026-10-12-ola9 y copia `backup_20261012`) |
 | profiles_allergens_habit_goals (`20261017090000`) | ✅ | ✅ 20261017105717 | ✅ 20261017112439 (tras backup completo en ~/Backups/becook/2026-10-17-nutricion-fase1) |
+| week_daily_meals (`20261019090000`) | ✅ | ✅ 20261019101358 | ✅ 20261019102725 (tras backup completo en ~/Backups/becook/2026-10-19-desayunos) |
 
 ## Decisiones
 | # | Decisión | Fecha |

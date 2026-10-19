@@ -2,23 +2,25 @@ import { planExtras, type NutritionPlan, type PlanExtras, type PlanOption } from
 import { blocksAutomaticProposal, checkDish, mentionsDislikedFood, type RestrictionProfile } from "@/lib/recipes/restriction-check";
 
 // Breakfasts, fruit and snacks for a created menu (N09, optional in Crear menú). AESAN 2022: fruit
-// 2–3 times a day, dairy up to 3, nuts at least 3 times a week, wholegrain cereals. Simple options
+// 2–3 times a day (here one, with lunch and dinner the rest), dairy up to 3, nuts at least 3 times a week, wholegrain cereals. Simple options
 // that rotate day by day, the same way as a nutritionist's plan (planDailyMeals), and what they need
 // for the week, for every person at home. Options that break the profile are left out.
 
 const option = (text: string): PlanOption => ({ text, fillings: [] });
 
+// Fruit, nuts and bread in some options only, so a day does not repeat them (planDailyMeals keeps
+// each food to one meal of the day).
 const breakfasts = [
   "tostada de pan integral con tomate + pieza de fruta",
-  "200g de yogur natural + pieza de fruta + 20g de nueces",
+  "200g de yogur natural + 20g de nueces",
   "40g de copos de avena + 200ml de leche + pieza de fruta",
-  "tostada de pan integral con queso fresco + pieza de fruta",
-  "tostada de pan integral con aguacate + pieza de fruta",
-  "2 huevos (revueltos, con tomate) + pieza de fruta",
+  "tostada de pan integral con queso fresco",
+  "tostada de pan integral con aguacate",
+  "2 huevos (revueltos, con tomate)",
   "4 tortitas de arroz o maíz + pieza de fruta",
 ];
-const midMornings = ["pieza de fruta", "pieza de fruta + 20g de almendras"];
-const snacks = ["200g de yogur natural + pieza de fruta", "pieza de fruta + 20g de nueces", "tostada de pan integral con tomate + pieza de fruta"];
+const midMornings = ["pieza de fruta", "20g de almendras", "200g de yogur natural"];
+const snacks = ["200g de yogur natural + pieza de fruta", "pieza de fruta + 20g de nueces", "tostada de pan integral con tomate", "4 tortitas de arroz o maíz + 20g de almendras"];
 
 function fits(text: string, profile: RestrictionProfile) {
   const check = checkDish({ title: text, card: null }, profile, { automatic: true });

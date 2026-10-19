@@ -169,6 +169,14 @@
       "sha256": "835aafb21c838d407801017d5c8b3c8522de7e32efea1ddb0191d9b650aa9f30",
       "appliedAt": "2026-10-17",
       "notes": "Tras backup completo en ~/Backups/becook/2026-10-17-nutricion-fase1. Conector, sin comentarios. Solo amplía dos CHECK (sin filas modificadas: no hace falta copia interna). Definiciones idénticas a local y preview, validadas; 4 perfiles antes y después, todos dentro de los CHECK nuevos."
+    },
+    {
+      "version": "20261019102725",
+      "name": "week_daily_meals",
+      "source": "supabase/migrations/20261019090000_week_daily_meals.sql",
+      "sha256": "13f2598eaf5789c74faeb07d44aac4a63b0306013bc0d2dfd9580cec675bdfe0",
+      "appliedAt": "2026-10-19",
+      "notes": "Tras backup completo en ~/Backups/becook/2026-10-19-desayunos. Conector, sin comentarios. Tabla nueva (ninguna fila existente modificada): RLS, 3 políticas propias, anon sin permisos, authenticated SELECT/INSERT/UPDATE; igual que becook-preview."
     }
   ]
 }

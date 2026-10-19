@@ -105,33 +105,42 @@ test("with the profile, the week leaves out dishes that show its allergies, diet
  }
 });
 
-test("breakfast, mid-morning and snack rotate option 1, 2, 3, 1… from Monday; the sandwich filling changes", () => {
+test("breakfast, mid-morning and snack never repeat a food within a day (fruit, bread, tortitas, cold meats); the sandwich filling changes", () => {
  const extras = np.planExtras(plan);
  const options = (meal) => extras.days.map((day) => day.meals.find((entry) => entry.meal === meal).option);
- assert.deepEqual(options("breakfast"), [1, 2, 3, 1, 2, 3, 1]);
- assert.deepEqual(options("midMorning"), [1, 2, 3, 1, 2, 3, 1]);
- assert.deepEqual(options("snack"), [1, 2, 3, 1, 2, 3, 1]);
+ // Same plan, same week; every breakfast and mid-morning option is used.
+ assert.deepEqual(np.planExtras(plan), extras);
+ for (const meal of ["breakfast", "midMorning"]) assert.deepEqual([...new Set(options(meal))].sort(), [1, 2, 3], meal);
  assert.deepEqual(options("bedtime"), [1, 1, 1, 1, 1, 1, 1]);
- const midMorning = (index) => extras.days[index].meals.find((entry) => entry.meal === "midMorning").text;
- assert.equal(midMorning(1), "sándwich de pan integral (pavo y queso) + yogur desnatado");
- assert.equal(midMorning(4), "sándwich de pan integral (jamón y tomate) + yogur desnatado");
+ const foods = [/fruta|naranja|platano|manzana/, /\bpan\b|tostada|sandwich/, /tortitas/, /jamon/, /pavo/, /frutos [se]?ecos/];
+ for (const day of extras.days) {
+  const texts = day.meals.filter((meal) => meal.meal !== "bedtime").map((meal) => np.normalizePlanText(meal.text));
+  for (const food of foods) assert.ok(texts.filter((text) => food.test(text)).length <= 1, `${day.dayName}: ${food} in ${texts.join(" | ")}`);
+  assert.ok(texts.some((text) => /fruta|naranja/.test(text)), `${day.dayName}: fruit once`);
+ }
+ // No option on consecutive days at breakfast.
+ assert.ok(options("breakfast").every((option, index, all) => index === 0 || option !== all[index - 1]));
+ const sandwiches = extras.days.flatMap((day) => day.meals.filter((meal) => /sándwich/.test(meal.text)).map((meal) => meal.text));
+ assert.ok(sandwiches.length >= 2 && new Set(sandwiches).size >= 2, "the filling changes");
 });
 
 test("the week's shopping for those meals is added up from the plan's amounts (one person)", () => {
  const items = Object.fromEntries(np.planShoppingItems(plan).map((entry) => [entry.name, entry]));
- // Bedtime every day (7 × 250 ml) and breakfast 1 on Monday, Thursday and Sunday (3 × 250 ml).
- assert.deepEqual(items["leche desnatada"], {name: "leche desnatada", quantity: 2500, unit: "ml", category: "lácteos"});
+ const extras = np.planExtras(plan);
+ const times = (meal, option) => extras.days.filter((day) => day.meals.some((entry) => entry.meal === meal && entry.option === option)).length;
+ // Bedtime every day (7 × 250 ml) and breakfast 1 (250 ml each time).
+ assert.deepEqual(items["leche desnatada"], {name: "leche desnatada", quantity: 250 * (7 + times("breakfast", 1)), unit: "ml", category: "lácteos"});
  assert.deepEqual(items["proteína whey"], {name: "proteína whey", quantity: 140, unit: "g", category: "despensa"});
- assert.deepEqual(items["copos de maíz"], {name: "copos de maíz", quantity: 120, unit: "g", category: "despensa"});
- // Breakfast 2 (×2) and every snack (×7).
- assert.equal(items["yogur proteico"].quantity, 9);
- assert.equal(items["yogur desnatado"].quantity, 5);
- // A piece of fruit (200 g ×3), 300 g mid-morning (×3), 250 g snack (×3).
- assert.deepEqual([items.fruta.quantity, items.fruta.unit, items.fruta.category], [2250, "g", "frutería"]);
- assert.equal(items["tortitas de arroz o maíz"].quantity, 12);
- assert.equal(items["kéfir"].quantity, 300);
- assert.equal(items["frutos secos"].quantity, 30, "«frutos ecos» read as frutos secos");
- assert.equal(items.naranja.quantity, 2);
+ assert.equal(items["copos de maíz"].quantity, 40 * times("breakfast", 1));
+ // Breakfast 2 and every snack.
+ assert.equal(items["yogur proteico"].quantity, times("breakfast", 2) + 7);
+ assert.equal(items["yogur desnatado"].quantity, times("midMorning", 1) + times("midMorning", 2));
+ // A piece of fruit (200 g), 300 g mid-morning, 250 g snack.
+ assert.deepEqual([items.fruta.quantity, items.fruta.unit, items.fruta.category], [200 * times("breakfast", 1) + 300 * times("midMorning", 1) + 250 * times("snack", 1), "g", "frutería"]);
+ assert.equal(items["tortitas de arroz o maíz"].quantity, 4 * times("breakfast", 2) + 2 * times("midMorning", 3));
+ assert.equal(items["kéfir"].quantity, 150 * times("breakfast", 3));
+ assert.equal(items["frutos secos"].quantity, 15 * times("snack", 2), "«frutos ecos» read as frutos secos");
+ assert.equal(items.naranja.quantity, times("midMorning", 3));
  assert.equal(items["jamón cocido"].category, "carnicería");
  assert.ok(Object.values(items).every((entry) => entry.quantity > 0 && ["g", "ml", "ud"].includes(entry.unit)));
 });
