@@ -1,5 +1,6 @@
 import catalog from "@/data/nutritionist-recipes.json";
 import type { ImportedMenuDay } from "@/lib/importMenu";
+import { isStarchyDish } from "@/lib/menu-generation/carbs";
 import { catalogCardForCheck } from "@/lib/recipes/catalogChecks";
 import { blocksAutomaticProposal, checkDish, mentionsDislikedFood, type RestrictionProfile } from "@/lib/recipes/restriction-check";
 import type { SupermarketCategory } from "@/lib/shoppingList";
@@ -367,7 +368,7 @@ const ideas: { title: string; meals: ("lunch" | "dinner")[] }[] = [
   { title: "Pavo a la plancha con champiñones salteados", meals: ["dinner"] },
 ];
 
-type Candidate = { title: string; protein: PlanProtein | null; carb: PlanCarb | null; source: "plan" | "catalog" | "idea" };
+type Candidate = { title: string; protein: PlanProtein | null; carb: PlanCarb | null; starchy: boolean; source: "plan" | "catalog" | "idea" };
 
 // The user's diets, allergies and disliked foods, as far as the title and its catalogue recipe show
 // them (an unreviewed draft: a dish that passes still gets the usual per-dish warnings).
@@ -388,7 +389,7 @@ function candidates(meal: "lunch" | "dinner", plan: NutritionPlan, profile: Rest
     const key = normalizePlanText(title);
     if (seen.has(key) || /^libre\.?$/.test(key) || avoidedWords.test(key) || !fitsProfile(title, profile)) return [];
     seen.add(key);
-    return [{ title, protein: dishProtein(title), carb: dishCarb(title), source }];
+    return [{ title, protein: dishProtein(title), carb: dishCarb(title), starchy: isStarchyDish(title, catalogCardForCheck(title)?.ingredients ?? null), source }];
   });
 }
 
@@ -426,7 +427,9 @@ type Slot = { protein: PlanProtein | null; carb: PlanCarb | null; free: boolean 
 // own. Days no rule covers are free at dinner (the plan's «Libre», the weekly social meal: always
 // Saturday) and
 // «carne o pescado» at lunch.
-function slotsFor(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random): Slot[] {
+// trainingDays (1 = Monday … 7 = Sunday, Perfil): the plan's rice, pasta and potato go on those
+// days first and its legume on the others (carbs.ts); the plan keeps its number of each.
+function slotsFor(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random, trainingDays: number[] = []): Slot[] {
   const proteins = plan[meal].rules.flatMap((rule) => (rule.protein && !rule.carb ? Array(rule.days).fill(rule.protein) : []));
   const carbs = shuffle(plan[meal].rules.flatMap((rule) => (rule.carb ? Array(rule.days).fill(rule.carb) : [])), random);
   const planned = shuffle(proteins.slice(0, 7), random);
@@ -446,7 +449,15 @@ function slotsFor(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random)
     }
   }
   const open = shuffle(slots.map((slot, day) => (slot.free ? -1 : day)).filter((day) => day >= 0), random);
-  carbs.slice(0, open.length).forEach((carb, index) => (slots[open[index]].carb = carb));
+  const training = open.filter((day) => trainingDays.includes(day + 1));
+  const rest = open.filter((day) => !trainingDays.includes(day + 1));
+  const taken = new Set<number>();
+  for (const carb of carbs) {
+    const day = (carb === "legume" ? [...rest, ...training] : [...training, ...rest]).find((candidate) => !taken.has(candidate));
+    if (day === undefined) break;
+    taken.add(day);
+    slots[day].carb = carb;
+  }
   return slots;
 }
 
@@ -488,7 +499,7 @@ function withSide(title: string, side: string) {
 }
 
 // used: titles already in the week (a dish fits lunch and dinner; it is never eaten twice).
-function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random, used: Set<string>, profile: RestrictionProfile | null) {
+function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random, used: Set<string>, profile: RestrictionProfile | null, trainingDays: number[]) {
   const pool = candidates(meal, plan, profile).filter(
     (dish) =>
       !(meal === "dinner" && plan.noRedMeatAtDinner && dish.protein === "red_meat") &&
@@ -500,7 +511,7 @@ function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Ran
   // A few arrangements of the slots; the one where most days have a real dish wins.
   let best: { slots: Slot[]; score: number } | null = null;
   for (let attempt = 0; attempt < 40; attempt++) {
-    const slots = slotsFor(meal, plan, random);
+    const slots = slotsFor(meal, plan, random, trainingDays);
     const score = slots.filter(
       (slot) => slot.free || pool.some((dish) => dish.carb === slot.carb && (slot.protein ? dish.protein === slot.protein : dish.protein && dish.protein !== "egg" && dish.protein !== "red_meat")),
     ).length;
@@ -510,12 +521,16 @@ function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Ran
 
   return best!.slots.map((slot): string | null => {
     if (slot.free) return null;
-    const matches = pool.filter(
+    const fitting = pool.filter(
       (dish) =>
         !used.has(dish.title) &&
         dish.carb === slot.carb &&
         (slot.protein ? dish.protein === slot.protein : dish.protein !== null && dish.protein !== "egg" && dish.protein !== "red_meat"),
     );
+    // A slot without rice, pasta or potato (a legume or none) takes no other starch either (bread,
+    // wraps, quinoa…) when the pool allows it: the plan's carbohydrates stay on their days.
+    const plain = slot.carb && slot.carb !== "legume" ? fitting : fitting.filter((dish) => !dish.starchy);
+    const matches = plain.length ? plain : fitting;
     // Catalogue recipes first, by their exact title (the week's card then shows their recipe), then
     // the plan's own examples and the ideas, which take the plan's vegetable side.
     const fromCatalog = matches.filter((dish) => dish.source === "catalog");
@@ -537,12 +552,13 @@ function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Ran
 }
 
 // Seven lunches and dinners (Monday to Sunday) that keep the plan's rules. With a profile, the
-// examples, catalogue recipes and ideas whose title conflicts with it are left out.
-export function generatePlanWeek(plan: NutritionPlan, seed: number, profile: RestrictionProfile | null = null): ImportedMenuDay[] {
+// examples, catalogue recipes and ideas whose title conflicts with it are left out. trainingDays
+// (1 = Monday … 7 = Sunday): the days the plan's starchy carbohydrates go first.
+export function generatePlanWeek(plan: NutritionPlan, seed: number, profile: RestrictionProfile | null = null, trainingDays: number[] = []): ImportedMenuDay[] {
   const random = seededRandom(seed);
   const used = new Set<string>();
-  const lunches = chooseDishes("lunch", plan, random, used, profile);
-  const dinners = chooseDishes("dinner", plan, random, used, profile);
+  const lunches = chooseDishes("lunch", plan, random, used, profile, trainingDays);
+  const dinners = chooseDishes("dinner", plan, random, used, profile, trainingDays);
   const slot = (title: string | null) => (title ? { status: "planned" as const, dishName: title } : { status: "free" as const, dishName: "" });
   return dayNames.map((dayName, index) => ({ dayName, lunch: slot(lunches[index]), dinner: slot(dinners[index]) }));
 }

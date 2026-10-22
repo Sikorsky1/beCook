@@ -84,6 +84,25 @@ test("every generated week keeps the plan's rules: lunch proteins and carbohydra
  assert.notDeepEqual(np.generatePlanWeek(plan, 7), np.generatePlanWeek(plan, 8));
 });
 
+test("with training days, the plan's rice, pasta and potato go on those days and no other starch on the rest", () => {
+ const {isStarchyDish} = require("../src/lib/menu-generation/carbs.ts");
+ const {catalogCardForCheck} = require("../src/lib/recipes/catalogChecks.ts");
+ const starchy = (title) => isStarchyDish(title, catalogCardForCheck(title)?.ingredients ?? null);
+ for (const [trainingDays, starchyOnRest] of [[[1, 3, 5], 0], [[1, 2, 3, 4, 5], 0], [[2, 4], 1]]) {
+  for (let seed = 1; seed <= 40; seed++) {
+   const days = np.generatePlanWeek(plan, seed, null, trainingDays);
+   const lunches = days.map((day) => day.lunch.dishName);
+   assert.deepEqual(count(lunches.map(np.dishCarb).filter(Boolean)), {legume: 1, rice: 1, pasta: 1, potato: 1}, `seed ${seed}: the plan keeps its carbohydrates`);
+   const onTraining = lunches.filter((title, index) => trainingDays.includes(index + 1) && starchy(title)).length;
+   const onRest = lunches.filter((title, index) => !trainingDays.includes(index + 1) && starchy(title)).length;
+   assert.equal(onTraining, Math.min(3, trainingDays.length), `seed ${seed} ${trainingDays}: ${lunches.join(" / ")}`);
+   assert.equal(onRest, starchyOnRest, `seed ${seed} ${trainingDays}: ${lunches.join(" / ")}`);
+   assert.ok(lunches.every((title, index) => np.dishCarb(title) !== "legume" || !trainingDays.includes(index + 1) || trainingDays.length === 7), "the legume on a rest day");
+   assert.ok(days.every((day) => day.dinner.status === "free" || !starchy(day.dinner.dishName)), `seed ${seed}: dinners without starch`);
+  }
+ }
+});
+
 test("the plan's week takes catalogue recipes by their exact title, so every card shows its recipe", () => {
  const {recipeTitleKey} = require("../src/lib/recipes/card.ts");
  const catalogTitles = new Set(require("../src/data/nutritionist-recipes.json").recipes.map((recipe) => recipeTitleKey(recipe.name)));

@@ -735,13 +735,14 @@ function CreateMenuPageContent() {
       setSavedPlanEntry({ key: savedPlanKey, options });
       void saveDailyPlanOptions({ scope: identity.scope, userId: identity.userId }, options).catch(() => undefined);
       // Allergies, diets and disliked foods of the profile leave out the dishes that show them.
-      const days = generatePlanWeek(plan, Math.floor(Math.random() * 2 ** 31), profileReady ? importWarningProfile(profile) : null);
+      const trainingDays = profile ? trainingWeekdaysOf(profile) : [];
+      const days = generatePlanWeek(plan, Math.floor(Math.random() * 2 ** 31), profileReady ? importWarningProfile(profile) : null, trainingDays);
       setUseWeekStatus("idle");
       setUseWeekMessage("");
       setUseWeekMenu(null);
       setGenerationRequestId(null);
       showNewProposal(
-        { ...localMenuResponse(days, planWarnings(plan, days)), week: "Plan nutricional", planExtras: planExtras(plan, profile ? trainingWeekdaysOf(profile) : []) },
+        { ...localMenuResponse(days, planWarnings(plan, days)), week: "Plan nutricional", planExtras: planExtras(plan, trainingDays) },
         null,
         targetIsoWeek ?? getCurrentIsoWeek(),
         "import",
