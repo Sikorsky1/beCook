@@ -1,5 +1,5 @@
 import type { ImportedMenuResponse } from "@/lib/importMenu";
-import { seededRandom } from "@/lib/nutritionPlan";
+import { dishProtein, seededRandom } from "@/lib/nutritionPlan";
 import { catalogCardForCheck } from "@/lib/recipes/catalogChecks";
 import { catalogTags } from "@/lib/recipes/catalogTags";
 import { selectedCatalogRecipes } from "@/lib/recipes/selectedCatalog";
@@ -84,6 +84,9 @@ export type CatalogMenuRequest = {
   // «Cocinar una vez para dos comidas» (N17): up to two lunches cooked double, eaten again the
   // next day at dinner.
   batch?: boolean;
+  // A nutritionist's plan that says «En cenas: carne roja» under «Evitar» (plan-week.ts): no red
+  // meat at dinner, as the plan counts it (lomo de cerdo and cordero are its «carne blanca»).
+  noRedMeatAtDinner?: boolean;
 };
 
 type Candidate = CatalogRecipe & {
@@ -129,6 +132,10 @@ function candidatesFor(meal: "lunch" | "dinner", request: CatalogMenuRequest, re
       (goals.has("cook_home") && breadDish.test(key) ? 3 : 0) +
       (pantry.length && (card?.ingredients ?? []).some((ingredient) => !ingredient.optional && pantry.some((item) => ` ${normalizeFood(ingredient.name)} `.includes(` ${item} `))) ? 1 : 0);
     const groups = dishGroups(recipe.name, card?.ingredients ?? null);
+    if (meal === "dinner" && request.noRedMeatAtDinner) {
+      const planProtein = dishProtein(recipe.name);
+      if (planProtein === "red_meat" || (groups.includes("red_meat") && planProtein !== "white_meat")) return [];
+    }
     // «kind»: the first word of the title («ensalada», «tortilla», «lentejas»), so a week is not
     // seven salads.
     const tags = catalogTags(recipe.name);

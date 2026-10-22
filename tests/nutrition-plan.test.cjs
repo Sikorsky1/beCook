@@ -151,7 +151,7 @@ test("the plan's week: recipes outside the plan's rules come up as often as the 
  const profile = readMenuProfile({trainingWeekdays: [1, 3, 5], weeklyTrainingDays: 3});
  let menuOut = 0, menuDinners = 0;
  for (let seed = 1; seed <= weeks; seed++) {
-  for (const day of catalogMenu({profile, styles: [], seed: seed * 7919}).days.slice(0, 7)) {
+  for (const day of catalogMenu({profile, styles: [], seed: seed * 7919, noRedMeatAtDinner: true}).days.slice(0, 7)) {
    menuDinners++;
    if (outOfRules("dinner", day.dinner.dishName)) menuOut++;
   }
@@ -159,6 +159,25 @@ test("the plan's week: recipes outside the plan's rules come up as often as the 
  assert.ok(weeksWithBlueDinner / weeks >= 0.5, `blue fish dinners in ${weeksWithBlueDinner}/${weeks} weeks`);
  assert.ok(dinnersOut / dinners >= 0.15, `${dinnersOut}/${dinners}`);
  assert.ok(Math.abs(dinnersOut / dinners - menuOut / menuDinners) <= 0.05, `${dinnersOut}/${dinners} vs Crear menú ${menuOut}/${menuDinners}`);
+});
+
+test("the plan's week: «En cenas: carne roja» under «Evitar» keeps red meat off the dinners; fried dishes stay", () => {
+ const {dishGroups} = require("../src/lib/menu-generation/food-groups.ts");
+ const {catalogCardForCheck} = require("../src/lib/recipes/catalogChecks.ts");
+ const redMeat = (title) => np.dishProtein(title) === "red_meat" || (dishGroups(title, catalogCardForCheck(title)?.ingredients ?? null).includes("red_meat") && np.dishProtein(title) !== "white_meat");
+ const redDinners = (rules) => {
+  let count = 0;
+  for (let seed = 1; seed <= 300; seed++) for (const day of generatePlanWeek(rules, seed, null, [1, 3, 5])) if (day.dinner.status === "planned" && redMeat(day.dinner.dishName)) count++;
+  return count;
+ };
+ assert.equal(plan.noRedMeatAtDinner, true);
+ assert.equal(redDinners(plan), 0);
+ assert.ok(redDinners({...plan, noRedMeatAtDinner: false}) > 0, "without the rule, red meat dinners come up");
+ // Fried and processed dishes are not filtered (Sergio, 2026-10-22).
+ const fried = /\b(frit\w*|rebozad[oa]s?|empanad[oa]s?)\b/;
+ let friedDishes = 0;
+ for (let seed = 1; seed <= 300; seed++) for (const day of generatePlanWeek(plan, seed, null, [1, 3, 5])) for (const slot of [day.lunch, day.dinner]) if (slot.status === "planned" && fried.test(np.normalizePlanText(slot.dishName))) friedDishes++;
+ assert.ok(friedDishes > 0);
 });
 
 test("the plan's week: a starch at lunch and dinner on the training days only", () => {
