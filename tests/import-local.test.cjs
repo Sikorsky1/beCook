@@ -251,7 +251,7 @@ let restoreDevice;
 beforeEach(() => { restoreDevice = useDevice(createDevice()); });
 afterEach(() => restoreDevice());
 
-const draft = {mode: "import", menuText: "Lunes\tLentejas\tLIBRE", freeTextPrompt: "", peopleCount: 3, menuStyles: ["mediterranean"], elaborationLevel: 2};
+const draft = {mode: "import", menuText: "Lunes\tLentejas\tLIBRE", freeTextPrompt: "", peopleCount: 3, menuStyles: ["mediterranean"]};
 
 test("the form draft is kept on this device per identity and week: another account, a guest or another week never see it", () => {
  const {readMenuFormDraft, writeMenuFormDraft, clearMenuFormDraft} = require("../src/lib/createMenuDraft.ts");

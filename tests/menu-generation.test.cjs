@@ -96,16 +96,16 @@ test("HTTP route rejects invalid input before billing and invalid output without
  }
 });
 
-const {catalogMenu, catalogRecipes, elaborationForLevel, readCatalogMenuStyles} = require("../src/lib/menu-generation/catalog-menu.ts");
+const {catalogMenu, catalogRecipes, readCatalogMenuStyles} = require("../src/lib/menu-generation/catalog-menu.ts");
 const {normalizeFood} = require("../src/lib/menu-generation/validation.ts");
 const {dishGroups, mainProtein} = require("../src/lib/menu-generation/food-groups.ts");
 const weekOf = menu => menu.days.flatMap(d => [d.lunch.dishName, d.dinner.dishName]);
 // A title may be in the catalogue twice (once per meal), with its own types.
 const hasStyle = (name, style) => catalogRecipes.some(r => r.name === name && r.menuStyles.includes(style));
 
-test("catalogue week: 14 different catalogue recipes in their meal, of the chosen type and level", () => {
+test("catalogue week: 14 different catalogue recipes in their meal, of the chosen type", () => {
  for (const seed of [1, 2, 3, 4, 5]) {
-  const menu = catalogMenu({profile, styles: ["mediterranean"], elaboration: "simple", seed});
+  const menu = catalogMenu({profile, styles: ["mediterranean"], seed});
   assert.ok(isImportedMenuResponse(menu));
   const dishes = weekOf(menu);
   assert.equal(new Set(dishes.map(normalizeFood)).size, 14);
@@ -115,25 +115,90 @@ test("catalogue week: 14 different catalogue recipes in their meal, of the chose
   });
   // N05: the AESAN frequencies come before the type, so a legume or a fish of another type may fill a gap.
   assert.ok(dishes.filter(n => hasStyle(n, "mediterranean")).length >= 12, "nearly every dish of the chosen type");
-  assert.ok(dishes.filter(n => catalogRecipes.some(r => r.name === n && r.elaboration === "simple")).length >= 12, "nearly all of the chosen level");
   const protein = n => mainProtein(dishGroups(n));
   assert.ok(menu.days.filter(d => protein(d.lunch.dishName) && protein(d.lunch.dishName) === protein(d.dinner.dishName)).length <= 1, "lunch and dinner proteins differ");
  }
- assert.notDeepEqual(weekOf(catalogMenu({profile, styles: ["quick_simple"], elaboration: "balanced", seed: 1})), weekOf(catalogMenu({profile, styles: ["quick_simple"], elaboration: "balanced", seed: 2})), "another seed, another week");
- assert.equal(elaborationForLevel(2), "simple");
- assert.equal(elaborationForLevel(4), "balanced");
- assert.equal(elaborationForLevel(6), "elaborate");
+ assert.notDeepEqual(weekOf(catalogMenu({profile, styles: ["quick_simple"], seed: 1})), weekOf(catalogMenu({profile, styles: ["quick_simple"], seed: 2})), "another seed, another week");
  assert.deepEqual(readCatalogMenuStyles(["quick_simple", "nope"]), ["quick_simple"]);
  // N06: the body-composition types are no longer offered; a request with them reads as the default.
  assert.deepEqual(readCatalogMenuStyles(["high_protein", "fat_loss", "muscle_gain"]), ["healthy_balanced"]);
  assert.deepEqual(readCatalogMenuStyles(undefined), ["healthy_balanced"]);
 });
 
+// 2026-10-22: beCook proposes only the recipes Sergio marked (recipe-selection.json); the full
+// catalogue stays for the recipe cards of older weeks.
+test("only marked recipes: Crear menú, «Otra idea» and the AI's examples", () => {
+ const fs = require("node:fs");
+ const path = require("node:path");
+ const full = require("../src/data/nutritionist-recipes.json").recipes;
+ const selection = require("../src/data/recipe-selection.json").recipes.map(r => r.id);
+ const markedIds = new Set(selection);
+ assert.equal(markedIds.size, selection.length);
+ assert.ok(full.length > markedIds.size, "the full catalogue is kept whole");
+ assert.deepEqual(new Set(catalogRecipes.map(r => r.id)), markedIds);
+ const markedTitle = (name, slot) => full.some(r => markedIds.has(r.id) && r.name === name && (!slot || r.slot === slot));
+ for (let seed = 1; seed <= 100; seed++) {
+  const menu = catalogMenu({profile, styles: ["healthy_balanced"], seed, batch: seed % 2 === 0});
+  menu.days.forEach(d => {
+   assert.ok(markedTitle(d.lunch.dishName, "lunch"), d.lunch.dishName);
+   // A batch dinner is the lunch of the day before, eaten again.
+   const leftover = /^(.+?) \(sobras del [^)]+\)$/.exec(d.dinner.dishName);
+   assert.ok(leftover ? markedTitle(leftover[1], "lunch") : markedTitle(d.dinner.dishName, "dinner"), d.dinner.dishName);
+  });
+ }
+ const {catalogAlternative} = require("../src/lib/menu-generation/substitution.ts");
+ const rejected = [];
+ for (let i = 0; i < 10; i++) {
+  const idea = catalogAlternative({day: "Lunes", meal: "dinner", currentDish: "Lentejas estofadas", otherDishes: [], rejected: [...rejected]}, profile);
+  assert.ok(idea && markedIds.has(idea.recipeId), JSON.stringify(idea));
+  rejected.push(idea.dish);
+ }
+ const examples = JSON.parse(buildMenuInput({peopleCount: 2, freeTextPrompt: "pescado", menuStyle: ["healthy_balanced"]}, profile).userPrompt).nutritionistExamples;
+ assert.ok(examples.length && examples.every(name => markedTitle(name)), examples.filter(name => !markedTitle(name)).join(" / "));
+ // One access point: no generator reads the full catalogue directly.
+ for (const file of ["src/lib/menu-generation/catalog-menu.ts", "src/lib/menu-generation/substitution.ts", "src/lib/nutritionPlan.ts", "src/lib/menu-generation/plan-week.ts"]) {
+  assert.ok(!fs.readFileSync(path.join(__dirname, "..", file), "utf8").includes("nutritionist-recipes.json\""), file);
+ }
+});
+
+test("the level of elaboration is gone: no selector, no score; older requests that send it are ignored", async () => {
+ const fs = require("node:fs");
+ const path = require("node:path");
+ const page = fs.readFileSync(path.join(__dirname, "../src/components/pages/CreateMenuPage.tsx"), "utf8");
+ assert.ok(!/Nivel de elaboración|elaborationLevel|Sencillo|Elaborado/.test(page));
+ assert.ok(catalogRecipes.every(r => !("elaboration" in r)));
+ // The same week whatever an older page sends.
+ const plain = weekOf(catalogMenu({profile, styles: ["mediterranean"], seed: 11}));
+ assert.deepEqual(weekOf(catalogMenu({profile, styles: ["mediterranean"], seed: 11, elaboration: "simple"})), plain);
+ assert.deepEqual(weekOf(catalogMenu({profile, styles: ["mediterranean"], seed: 11, elaboration: "elaborate"})), plain);
+ // The AI gets no difficulty.
+ const now = new Date("2026-10-22T10:00:00Z");
+ const easy = buildMenuInput({peopleCount: 2, freeTextPrompt: "pescado", menuStyle: ["mediterranean"], elaborationLevel: 2}, profile, now);
+ const hard = buildMenuInput({peopleCount: 2, freeTextPrompt: "pescado", menuStyle: ["mediterranean"], elaborationLevel: 6}, profile, now);
+ const none = buildMenuInput({peopleCount: 2, freeTextPrompt: "pescado", menuStyle: ["mediterranean"]}, profile, now);
+ assert.equal(easy.userPrompt, none.userPrompt);
+ assert.equal(hard.userPrompt, none.userPrompt);
+ assert.ok(!("difficulty" in JSON.parse(none.userPrompt)));
+ const {menuSystemPrompt} = require("../src/lib/menu-generation/prompt.ts");
+ assert.ok(!/dificultad/.test(menuSystemPrompt));
+ // The route answers an older request with the level as any other.
+ const fakes = installFakeBackends(() => { throw new Error("OpenAI must not be called"); });
+ try {
+  const {POST} = require("../src/app/api/generate-menu/route.ts");
+  for (const elaborationLevel of [2, 6, "x"]) {
+   const response = await POST(aiRequest("generate-menu", {peopleCount: 2, menuStyle: ["healthy_balanced"], elaborationLevel}));
+   assert.equal(response.status, 200);
+  }
+ } finally {
+  fakes.restore();
+ }
+});
+
 test("catalogue week: allergies, diets, disliked foods and recent dishes leave recipes out", () => {
- for (const [key, value] of [["allergies","gluten"],["allergies","lactose"],["allergies","egg"],["allergies","nuts"],["allergies","shellfish"],["dietaryRestrictions","vegan"],["dietaryRestrictions","vegetarian"],["dietaryRestrictions","pescatarian"],["dietaryRestrictions","no_pork"]]) {
+ for (const [key, value] of [["allergies","gluten"],["allergies","lactose"],["allergies","egg"],["allergies","nuts"],["allergies","shellfish"],["dietaryRestrictions","vegetarian"],["dietaryRestrictions","pescatarian"],["dietaryRestrictions","no_pork"]]) {
   const restricted = readMenuProfile({[key]: [value]});
   for (const seed of [7, 8]) {
-   const menu = catalogMenu({profile: restricted, styles: ["healthy_balanced"], elaboration: "balanced", seed});
+   const menu = catalogMenu({profile: restricted, styles: ["healthy_balanced"], seed});
    assert.ok(menu, `${value}: the catalogue fills the week`);
    for (const dish of weekOf(menu)) assert.equal(visibleFoodConflict(dish, restricted), false, `${value}: ${dish}`);
   }
@@ -142,14 +207,17 @@ test("catalogue week: allergies, diets, disliked foods and recent dishes leave r
  const gluten = readMenuProfile({allergies: ["gluten"]});
  for (const dish of ["Albóndigas de pollo y champiñón salteado", "Noodles salteados con brócoli y pollo", "Ensalada de fusilli con mozzarella, atún y tomate cherry", "Hamburguesas de atún fresco"]) assert.ok(visibleFoodConflict(dish, gluten), dish);
  const dislikes = readMenuProfile({dislikedFoods: ["garbanzos", "salmón"]});
- assert.ok(weekOf(catalogMenu({profile: dislikes, styles: ["healthy_balanced"], elaboration: "simple", seed: 3})).every(d => !/garbanzo|salm[oó]n/i.test(d)));
- const first = weekOf(catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed: 9}));
- const next = weekOf(catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", recentDishes: first, seed: 9}));
+ assert.ok(weekOf(catalogMenu({profile: dislikes, styles: ["healthy_balanced"], seed: 3})).every(d => !/garbanzo|salm[oó]n/i.test(d)));
+ const first = weekOf(catalogMenu({profile, styles: ["healthy_balanced"], seed: 9}));
+ const next = weekOf(catalogMenu({profile, styles: ["healthy_balanced"], recentDishes: first, seed: 9}));
  assert.ok(next.every(d => !first.includes(d)), "recent weeks are not repeated");
- // Nothing left for a meal: no catalogue week (the AI decides).
+ // Nothing left for a meal: no catalogue week (the AI decides). The marked recipes (2026-10-22)
+ // have only four vegan lunches and dinners, so a vegan week always goes to the AI.
  const vegan = readMenuProfile({dietaryRestrictions: ["vegan"]});
- const veganDinners = catalogRecipes.filter(r => r.slot === "dinner" && !visibleFoodConflict(r.name, vegan)).map(r => r.name);
- assert.equal(catalogMenu({profile: vegan, styles: ["healthy_balanced"], elaboration: "balanced", recentDishes: veganDinners, seed: 1}), null);
+ assert.equal(catalogMenu({profile: vegan, styles: ["healthy_balanced"], seed: 1}), null);
+ const vegetarian = readMenuProfile({dietaryRestrictions: ["vegetarian"]});
+ const vegetarianDinners = catalogRecipes.filter(r => r.slot === "dinner" && !visibleFoodConflict(r.name, vegetarian)).map(r => r.name);
+ assert.equal(catalogMenu({profile: vegetarian, styles: ["healthy_balanced"], recentDishes: vegetarianDinners, seed: 1}), null);
 });
 
 test("HTTP route: without a weekly request the catalogue answers, without OpenAI, quota or cost", async () => {

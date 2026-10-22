@@ -187,7 +187,7 @@ test("expired session: login returns to the same page and week, and the create-m
   assert.equal(loginReturn.currentReturnPath({pathname: "/login", search: "?next=%2Fweek"}), null);
   assert.equal(loginReturn.loginHrefForCurrentPage({pathname: "/login", search: ""}), "/login?next=%2Fweek");
 
-  const draft = {mode: "generate", menuText: "", freeTextPrompt: "sin gluten esta semana", peopleCount: 3, menuStyles: ["rapido"], elaborationLevel: 2};
+  const draft = {mode: "generate", menuText: "", freeTextPrompt: "sin gluten esta semana", peopleCount: 3, menuStyles: ["rapido"]};
   const calls = [];
   const unregisterBroken = loginReturn.registerBeforeLoginSaver(() => { calls.push("broken"); throw new Error("boom"); });
   const unregister = loginReturn.registerBeforeLoginSaver(() => { calls.push("draft"); saveCreateMenuDraft(draft); });

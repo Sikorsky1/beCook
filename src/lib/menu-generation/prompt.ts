@@ -1,4 +1,4 @@
-import { catalogExamples, elaborationForLevel, readCatalogMenuStyles } from "./catalog-menu";
+import { catalogExamples, readCatalogMenuStyles } from "./catalog-menu";
 import type { SubstitutionRequest } from "./substitution";
 import { shortText, stringList } from "./profile-input";
 import { weekQuotas } from "./quotas";
@@ -11,7 +11,7 @@ La petición semanal prevalece sobre alimentos que no gustan y objetivos general
 
 Elige recetas conocidas o variantes domésticas razonables, con identidad propia. Mantén su combinación habitual de ingredientes y técnica. No compongas platos sumando proteína + cereal + legumbre + verdura ni añadas categorías para cumplir cuotas. Un principal con una guarnición natural es válido. Si no encaja una receta, elige otra completa.
 Da nombres concretos, con especie de pescado, salsa y componentes principales de la guarnición cuando proceda. Si dices verduras, especifica cuáles: «Arroz con pollo, pimiento y judías verdes», «Lentejas con zanahoria y puerro», «Paella de alcachofas y judías verdes». Nombra siempre la salsa («salsa de tomate», «salsa verde»); nunca «salsa especial», «de la casa» ni «con salsa» sin decir cuál. Evita nombres vagos, listas largas y platos duplicados. No devuelvas recetas, ingredientes separados, calorías ni consejos médicos.
-Base española y mediterránea, abierta a otra cocina si se pide. Ingredientes de supermercado y cocina doméstica. Ajusta técnicas y duración a la dificultad. Cenas generalmente más ligeras; una sopa, tortilla o ensalada reconocible puede bastar.
+Base española y mediterránea, abierta a otra cocina si se pide. Ingredientes de supermercado y cocina doméstica. Cenas generalmente más ligeras; una sopa, tortilla o ensalada reconocible puede bastar.
 Cumple las frecuencias semanales de weeklyFrequencies (AESAN 2022) contando los 14 platos: legumbre al menos legumeMin, pescado o marisco entre fishMin y fishMax (al menos blueFishMin de pescado azul), carne como máximo meatMax (roja como máximo redMeatMax, procesada como máximo processedMeatMax) y huevo como protagonista como máximo eggMax; el resto, platos de verdura. Un plato puede contar en dos grupos («Garbanzos con bacalao»). Solo una petición semanal explícita puede cambiarlas, y nunca para pasar los máximos de carne. Busca variedad de verduras y cereales sin obligación de completar cada plato. Alterna técnicas y fuentes proteicas; evita la misma fuente principal en comida y cena del mismo día salvo petición expresa. Despensa e historial son ayudas secundarias.
 Días de entrenamiento: si preferences.trainingDays tiene días, la comida y la cena de esos días llevan un hidrato feculento reconocible (pasta, arroz, patata, pan, cuscús, quinoa…); los demás días, platos sin hidrato feculento o con muy poco (las legumbres siguen contando como legumbre). Sin trainingDays no apliques esta regla.
 Los ejemplos son referencias culinarias, no un menú obligatorio ni una garantía de ausencia de alérgenos. Puedes elegir otras recetas conocidas. Con alergias elige recetas naturalmente compatibles; evita salsas, rellenos y preparados de composición incierta y también ingredientes incompatibles aunque no aparezcan en el nombre. No intentes salvar una receta incompatible con una sustitución dudosa.
@@ -42,13 +42,12 @@ const trainingDayNames = (profile: MenuProfile) =>
 export function buildMenuInput(body: Record<string, unknown>, profile: MenuProfile, now = new Date()) {
   const peopleCount = Number(body.peopleCount);
   if (!Number.isInteger(peopleCount) || peopleCount < 1 || peopleCount > 6) throw new Error("invalid_people_count");
-  const level = Number(body.elaborationLevel);
-  const difficulty = Number.isInteger(level) ? Math.max(1, Math.min(7, level)) : 4;
   const selectedStyles = stringList(Array.isArray(body.menuStyle) ? body.menuStyle : [body.menuStyle], 6)
     .map(style => styles[style] ?? (Object.values(styles).includes(style) ? style : "")).filter(Boolean);
   const weeklyRequest = shortText(body.freeTextPrompt);
-  // A sample of the catalogue (chosen types and level, compatible with the profile), not all of it.
-  const examples = catalogExamples({profile, styles: readCatalogMenuStyles(body.menuStyle), elaboration: elaborationForLevel(level), seed: now.getTime()});
+  // A sample of the catalogue (chosen types, compatible with the profile), not all of it. No level
+  // of elaboration: body.elaborationLevel (older pages) is ignored.
+  const examples = catalogExamples({profile, styles: readCatalogMenuStyles(body.menuStyle), seed: now.getTime()});
   return {profile, peopleCount, weeklyRequest, userPrompt: JSON.stringify({
     peopleCount,
     mandatory: {dietaryRestrictions: profile.dietaryRestrictions, allergies: profile.allergies, otherAllergies: profile.otherAllergies},
@@ -56,7 +55,6 @@ export function buildMenuInput(body: Record<string, unknown>, profile: MenuProfi
     preferences: {dislikedFoods: profile.dislikedFoods, goals: goalTexts(profile.goals), otherGoal: profile.otherGoal, weeklyTrainingDays: profile.weeklyTrainingDays, trainingDays: trainingDayNames(profile), trainingTypes: profile.trainingTypes},
     weeklyFrequencies: weekQuotas(profile),
     menuStyles: selectedStyles.length ? selectedStyles : [styles.healthy_balanced],
-    difficulty: difficulty <= 2 ? "Fácil: menos de 20 min; conservas cocidas permitidas; sin guisos largos" : difficulty <= 5 ? "Media: 20–45 min, pasos domésticos sencillos" : "Elaborada: puede superar 45 min; cocina doméstica",
     monthInSpain: new Intl.DateTimeFormat("es-ES", {month: "long", timeZone: "Europe/Madrid"}).format(now),
     pantry: stringList(body.pantryItems, 80, 80),
     recentDishes: stringList(body.recentDishes),

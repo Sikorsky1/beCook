@@ -1,8 +1,8 @@
-import catalog from "@/data/nutritionist-recipes.json";
 import type { ImportedMenuResponse } from "@/lib/importMenu";
 import { seededRandom } from "@/lib/nutritionPlan";
 import { catalogCardForCheck } from "@/lib/recipes/catalogChecks";
 import { catalogTags } from "@/lib/recipes/catalogTags";
+import { selectedCatalogRecipes } from "@/lib/recipes/selectedCatalog";
 import { checkDish, blocksAutomaticProposal, mentionsDislikedFood, type RestrictionProfile } from "@/lib/recipes/restriction-check";
 import { culinaryIssue } from "./culinary-rules";
 import { dishGroups, highMercury, isFish, mainProtein, type DishGroup } from "./food-groups";
@@ -11,10 +11,11 @@ import { batchFriendly, leftoverTitle } from "./leftovers";
 import { isStarchyDish, prefersStarch } from "./carbs";
 import { dayNames, isGenericDish, normalizeFood, selectionToMenu, type MenuProfile } from "./validation";
 
-// Weekly menu from the recipe catalogue (src/data/nutritionist-recipes.json), without the AI.
-// Each recipe says its meal (lunch or dinner), the menu types it fits (Saludable, Mediterráneo…)
-// and how elaborate it is (Sencillo, Equilibrado, Elaborado). The week takes the recipes that fit
-// the chosen types and level, leaves out every recipe whose title conflicts with the profile
+// Weekly menu from the recipe catalogue (src/data/nutritionist-recipes.json), without the AI, and
+// only from the recipes Sergio marked (selectedCatalog.ts). Each recipe says its meal (lunch or
+// dinner) and the menu types it fits (Saludable, Mediterráneo…); the level of elaboration of the
+// catalogue is no longer used (2026-10-22). The week takes the recipes that fit the chosen types,
+// leaves out every recipe whose title conflicts with the profile
 // (diets, allergies, «otras alergias» and foods the user does not like) and the dishes of recent
 // weeks, puts the starchy dishes on the training days of the profile (carbs.ts), keeps the weekly frequencies of AESAN 2022 (quotas.ts, N05) and spreads the main proteins. Each recipe is checked with its title and its recipe
 // (catalog-checks.json); the recipes are unreviewed drafts, so passing the check never certifies
@@ -28,14 +29,11 @@ export type CatalogMenuStyle =
   | "mediterranean"
   | "quick_simple";
 
-export type CatalogElaboration = "simple" | "balanced" | "elaborate";
-
 export type CatalogRecipe = {
   id: string;
   name: string;
   slot: "lunch" | "dinner";
   menuStyles: CatalogMenuStyle[];
-  elaboration: CatalogElaboration;
 };
 
 export const catalogMenuStyles: CatalogMenuStyle[] = [
@@ -47,24 +45,14 @@ export const catalogMenuStyles: CatalogMenuStyle[] = [
   "quick_simple",
 ];
 
-const elaborations: CatalogElaboration[] = ["simple", "balanced", "elaborate"];
-
-export const catalogRecipes: CatalogRecipe[] = catalog.recipes.map((recipe) => ({
+export const catalogRecipes: CatalogRecipe[] = selectedCatalogRecipes.map((recipe) => ({
   id: recipe.id,
   name: recipe.name,
   slot: recipe.slot === "dinner" ? "dinner" : "lunch",
   menuStyles: ((recipe as { menuStyles?: string[] }).menuStyles ?? []).filter((style): style is CatalogMenuStyle =>
     (catalogMenuStyles as string[]).includes(style),
   ),
-  elaboration: elaborations.find((level) => level === (recipe as { elaboration?: string }).elaboration) ?? "balanced",
 }));
-
-// The page sends 2 (Sencillo), 4 (Equilibrado) or 6 (Elaborado); the old 1–7 scale still works.
-export function elaborationForLevel(level: unknown): CatalogElaboration {
-  const value = Number(level);
-  if (!Number.isFinite(value)) return "balanced";
-  return value <= 2 ? "simple" : value <= 5 ? "balanced" : "elaborate";
-}
 
 // Types Crear menú offers (N06): the catalogue keeps its body-composition tags, but a request with
 // them reads as the default.
@@ -85,8 +73,8 @@ export function catalogRecipeFits(name: string, profile: RestrictionProfile) {
 
 export type CatalogMenuRequest = {
   profile: MenuProfile;
+  // No types (the plan's week): every recipe scores the same.
   styles: CatalogMenuStyle[];
-  elaboration: CatalogElaboration;
   recentDishes?: string[];
   seed: number;
   // Month of the week (1–12, Spain), for recipes in season (N16). Without it, no preference.
@@ -115,11 +103,6 @@ type Candidate = CatalogRecipe & {
   score: number;
 };
 
-// Closer level first: the chosen one, then the neighbour (Equilibrado for both ends).
-function elaborationDistance(a: CatalogElaboration, b: CatalogElaboration) {
-  return Math.abs(elaborations.indexOf(a) - elaborations.indexOf(b));
-}
-
 // Sandwiches, wraps and toasts: the ultra-processed bread of the catalogue («Cocinar más en casa»).
 const breadDish = /^(sandwich|sandwiches|wrap|wraps|bocadillo|bocadillos|tosta|tostas|tostada|tostadas|burrito|burritos|quesadillas?|pizza|pizzas|hamburguesa de)\b/;
 
@@ -138,11 +121,10 @@ function candidatesFor(meal: "lunch" | "dinner", request: CatalogMenuRequest, re
     // «Comer con niños»: no species AESAN advises against under 10 (mercury, N13).
     if (goals.has("with_kids") && [recipe.name, ...(card?.ingredients ?? []).map((item) => item.name)].some((text) => highMercury.test(normalizeFood(text)))) return [];
     const styleMatches = request.styles.filter((style) => recipe.menuStyles.includes(style)).length;
-    // Tiers: every chosen type and the chosen level first; a recipe of another type comes last.
+    // Tiers: every chosen type first; a recipe of another type comes last.
     // The goals add a little: quick recipes for «Ahorrar tiempo», less bread for «Cocinar más en casa».
     const score =
       (styleMatches ? 10 + styleMatches * 2 : 0) +
-      (recipe.elaboration === request.elaboration ? 4 : elaborationDistance(recipe.elaboration, request.elaboration) === 1 ? 1 : 0) +
       (goals.has("save_time") && card?.totalMinutes != null && card.totalMinutes <= 30 ? 2 : 0) -
       (goals.has("cook_home") && breadDish.test(key) ? 3 : 0) +
       (pantry.length && (card?.ingredients ?? []).some((ingredient) => !ingredient.optional && pantry.some((item) => ` ${normalizeFood(ingredient.name)} `.includes(` ${item} `))) ? 1 : 0);

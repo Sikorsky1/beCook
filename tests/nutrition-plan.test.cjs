@@ -16,6 +16,7 @@ const repos = require("../src/lib/data/repositories.ts");
 const shopping = require("../src/lib/data/shopping.ts");
 const planExtrasData = require("../src/lib/data/planExtras.ts");
 const np = require("../src/lib/nutritionPlan.ts");
+const {generatePlanWeek} = require("../src/lib/menu-generation/plan-week.ts");
 const {menuFileLimits} = require("../src/lib/menuFile.ts");
 const {parseMenuTextLocally} = require("../src/lib/importMenu.ts");
 const {withWeekDates} = require("../src/lib/weekStorage.ts");
@@ -64,9 +65,11 @@ test("a weekly menu is not a plan, and the plan is not something the menu parser
  assert.equal(np.isNutritionPlanText(pdfText), true);
 });
 
-test("every generated week keeps the plan's rules: lunch proteins and carbohydrates, dinners, one free dinner on Saturday", () => {
+// generatePlanRulesWeek is the last resort of the plan's week (when the marked recipes cannot fill
+// it): it keeps the plan's rules with the plan's examples and ideas.
+test("last resort: every rules week keeps the plan's rules: lunch proteins and carbohydrates, dinners, one free dinner on Saturday", () => {
  for (let seed = 1; seed <= 60; seed++) {
-  const days = np.generatePlanWeek(plan, seed);
+  const days = np.generatePlanRulesWeek(plan, seed);
   assert.deepEqual(days.map((day) => day.dayName), ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]);
   const lunches = days.map((day) => day.lunch);
   const dinners = days.map((day) => day.dinner);
@@ -80,17 +83,17 @@ test("every generated week keeps the plan's rules: lunch proteins and carbohydra
   assert.equal(new Set(titles).size, titles.length, "no dish twice in the week");
   assert.ok(titles.every((title) => !/frit|rebozad|hamburguesa/i.test(title)), "no fried dishes and no red meat at dinner");
  }
- assert.deepEqual(np.generatePlanWeek(plan, 7), np.generatePlanWeek(plan, 7), "same seed, same week");
- assert.notDeepEqual(np.generatePlanWeek(plan, 7), np.generatePlanWeek(plan, 8));
+ assert.deepEqual(np.generatePlanRulesWeek(plan, 7), np.generatePlanRulesWeek(plan, 7), "same seed, same week");
+ assert.notDeepEqual(np.generatePlanRulesWeek(plan, 7), np.generatePlanRulesWeek(plan, 8));
 });
 
-test("with training days, the plan's rice, pasta and potato go on those days and no other starch on the rest", () => {
+test("last resort: with training days, the plan's rice, pasta and potato go on those days and no other starch on the rest", () => {
  const {isStarchyDish} = require("../src/lib/menu-generation/carbs.ts");
  const {catalogCardForCheck} = require("../src/lib/recipes/catalogChecks.ts");
  const starchy = (title) => isStarchyDish(title, catalogCardForCheck(title)?.ingredients ?? null);
  for (const [trainingDays, starchyOnRest] of [[[1, 3, 5], 0], [[1, 2, 3, 4, 5], 0], [[2, 4], 1]]) {
   for (let seed = 1; seed <= 40; seed++) {
-   const days = np.generatePlanWeek(plan, seed, null, trainingDays);
+   const days = np.generatePlanRulesWeek(plan, seed, null, trainingDays);
    const lunches = days.map((day) => day.lunch.dishName);
    assert.deepEqual(count(lunches.map(np.dishCarb).filter(Boolean)), {legume: 1, rice: 1, pasta: 1, potato: 1}, `seed ${seed}: the plan keeps its carbohydrates`);
    const onTraining = lunches.filter((title, index) => trainingDays.includes(index + 1) && starchy(title)).length;
@@ -103,20 +106,90 @@ test("with training days, the plan's rice, pasta and potato go on those days and
  }
 });
 
-test("the plan's week takes catalogue recipes by their exact title, so every card shows its recipe", () => {
- const {recipeTitleKey} = require("../src/lib/recipes/card.ts");
- const catalogTitles = new Set(require("../src/data/nutritionist-recipes.json").recipes.map((recipe) => recipeTitleKey(recipe.name)));
- for (let seed = 1; seed <= 30; seed++) {
-  const titles = np.generatePlanWeek(plan, seed).flatMap((day) => [day.lunch, day.dinner]).filter((slot) => slot.status === "planned").map((slot) => slot.dishName);
-  assert.ok(titles.every((title) => catalogTitles.has(recipeTitleKey(title))), `seed ${seed}: ${titles.filter((title) => !catalogTitles.has(recipeTitleKey(title))).join(" / ")}`);
+// Since 2026-10-22 the plan's lunches and dinners are a Crear menú week of the marked recipes
+// (plan-week.ts); the plan keeps its free dinner and gives the rest of the day.
+const marked = (meal) => new Set(require("../src/data/nutritionist-recipes.json").recipes
+ .filter((recipe) => recipe.slot === meal && require("../src/data/recipe-selection.json").recipes.some((chosen) => chosen.id === recipe.id))
+ .map((recipe) => recipe.name));
+
+test("the plan's week: only marked recipes, by exact title and in their meal; free dinner on Saturday; no dish twice", () => {
+ const lunches = marked("lunch");
+ const dinners = marked("dinner");
+ for (let seed = 1; seed <= 40; seed++) {
+  const days = generatePlanWeek(plan, seed, null, [1, 3, 5]);
+  assert.deepEqual(days.map((day) => day.dayName), ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]);
+  assert.ok(days.every((day) => day.lunch.status === "planned" && lunches.has(day.lunch.dishName)), `seed ${seed}: ${days.map((day) => day.lunch.dishName).join(" / ")}`);
+  assert.deepEqual(days.map((day) => day.dinner.status), ["planned", "planned", "planned", "planned", "planned", "free", "planned"], "the free dinner is always Saturday");
+  assert.ok(days.every((day) => day.dinner.status === "free" || dinners.has(day.dinner.dishName)), `seed ${seed}: dinners`);
+  const titles = days.flatMap((day) => [day.lunch, day.dinner]).filter((slot) => slot.status === "planned").map((slot) => slot.dishName);
+  assert.equal(new Set(titles).size, titles.length, "no dish twice in the week");
  }
+ assert.deepEqual(generatePlanWeek(plan, 7), generatePlanWeek(plan, 7), "same seed, same week");
+ assert.notDeepEqual(generatePlanWeek(plan, 7), generatePlanWeek(plan, 8));
+});
+
+test("the plan's week: recipes outside the plan's rules come up as often as the others (e.g. a blue fish dinner)", () => {
+ // Out of the rules of this plan: blue fish or red meat at dinner, a fried or processed dish.
+ const outOfRules = (meal, title) =>
+  /\b(frit\w*|rebozad[oa]s?|empanad[oa]s?|croquetas?|hamburguesas?|salchichas?|chorizo|bacon)\b/.test(np.normalizePlanText(title)) ||
+  (meal === "dinner" && ["blue_fish", "red_meat"].includes(np.dishProtein(title)));
+ let weeksWithBlueDinner = 0, dinnersOut = 0, dinners = 0;
+ const weeks = 300;
+ for (let seed = 1; seed <= weeks; seed++) {
+  const days = generatePlanWeek(plan, seed * 7919, null, [1, 3, 5]);
+  if (days.some((day) => day.dinner.status === "planned" && np.dishProtein(day.dinner.dishName) === "blue_fish")) weeksWithBlueDinner++;
+  for (const day of days) if (day.dinner.status === "planned") {
+   dinners++;
+   if (outOfRules("dinner", day.dinner.dishName)) dinnersOut++;
+  }
+ }
+ // The same chance as in a Crear menú week of the same profile: the plan's rules weigh nothing.
+ // Only the weekly frequencies (AESAN: 4 fish dishes a week at most…) and the training days shape
+ // both.
+ const {catalogMenu} = require("../src/lib/menu-generation/catalog-menu.ts");
+ const {readMenuProfile} = require("../src/lib/menu-generation/profile-input.ts");
+ const profile = readMenuProfile({trainingWeekdays: [1, 3, 5], weeklyTrainingDays: 3});
+ let menuOut = 0, menuDinners = 0;
+ for (let seed = 1; seed <= weeks; seed++) {
+  for (const day of catalogMenu({profile, styles: [], seed: seed * 7919}).days.slice(0, 7)) {
+   menuDinners++;
+   if (outOfRules("dinner", day.dinner.dishName)) menuOut++;
+  }
+ }
+ assert.ok(weeksWithBlueDinner / weeks >= 0.5, `blue fish dinners in ${weeksWithBlueDinner}/${weeks} weeks`);
+ assert.ok(dinnersOut / dinners >= 0.15, `${dinnersOut}/${dinners}`);
+ assert.ok(Math.abs(dinnersOut / dinners - menuOut / menuDinners) <= 0.05, `${dinnersOut}/${dinners} vs Crear menú ${menuOut}/${menuDinners}`);
+});
+
+test("the plan's week: a starch at lunch and dinner on the training days only", () => {
+ const {isStarchyDish} = require("../src/lib/menu-generation/carbs.ts");
+ const {catalogCardForCheck} = require("../src/lib/recipes/catalogChecks.ts");
+ const starchy = (title) => isStarchyDish(title, catalogCardForCheck(title)?.ingredients ?? null);
+ for (const trainingDays of [[1, 3, 5], [2, 4, 6, 7]]) {
+  let kept = 0, total = 0;
+  for (let seed = 1; seed <= 200; seed++) {
+   generatePlanWeek(plan, seed, null, trainingDays).forEach((day, index) => {
+    for (const slot of [day.lunch, day.dinner]) if (slot.status === "planned") {
+     total++;
+     if (starchy(slot.dishName) === trainingDays.includes(index + 1)) kept++;
+    }
+   });
+  }
+  // A preference, never above the weekly legume minimum: a legume salad may close a training day.
+  assert.ok(kept / total >= 0.98, `${trainingDays}: ${kept}/${total}`);
+ }
+});
+
+test("the plan's week: without enough marked recipes for the profile, the plan's rules decide (last resort)", () => {
+ const vegan = {dietaryRestrictions: ["vegan"], allergies: [], otherAllergies: "", dislikedFoods: []};
+ assert.deepEqual(generatePlanWeek(plan, 5, vegan, [1, 3, 5]), np.generatePlanRulesWeek(plan, 5, vegan, [1, 3, 5]));
 });
 
 test("with the profile, the week leaves out dishes that show its allergies, diets and disliked foods", () => {
  const {checkDish, blocksAutomaticProposal, mentionsDislikedFood} = require("../src/lib/recipes/restriction-check.ts");
  const profile = {dietaryRestrictions: [], allergies: ["shellfish", "nuts"], otherAllergies: "", dislikedFoods: ["salmón", "garbanzos"]};
  for (let seed = 1; seed <= 30; seed++) {
-  const titles = np.generatePlanWeek(plan, seed, profile).flatMap((day) => [day.lunch, day.dinner]).filter((slot) => slot.status === "planned").map((slot) => slot.dishName);
+  const titles = [...generatePlanWeek(plan, seed, profile), ...np.generatePlanRulesWeek(plan, seed, profile)].flatMap((day) => [day.lunch, day.dinner]).filter((slot) => slot.status === "planned").map((slot) => slot.dishName);
   for (const title of titles) {
    const check = checkDish({title, card: null}, profile, {automatic: true});
    assert.ok(!blocksAutomaticProposal(check) && !mentionsDislikedFood(check), `seed ${seed}: ${title}`);
