@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { GeneratedMenuApiResponse, OpenAIMenuGenerationTelemetry } from "@/lib/importMenu";
 import { estimateOpenAICostUsd } from "@/lib/openai/cost";
 import { menuProfileFromContext, verifiedFoodContext, type VerifiedFoodContext } from "@/lib/menu-generation/food-context";
-import { catalogMenu, elaborationForLevel, readCatalogMenuStyles } from "@/lib/menu-generation/catalog-menu";
+import { catalogMenu, readCatalogMenuStyles } from "@/lib/menu-generation/catalog-menu";
 import { buildMenuInput, stringList } from "@/lib/menu-generation/prompt";
 import { weekFrequencies } from "@/lib/menu-generation/quotas";
 import { selectionToMenu } from "@/lib/menu-generation/validation";
@@ -36,11 +36,11 @@ export async function POST(request: Request) {
   const foodContext: VerifiedFoodContext = verifiedFoodContext(context.value, input.peopleCount);
   // Without a weekly request, the week comes from the recipe catalogue: no AI, no cost, no quota.
   // A weekly request in words, or a profile the catalogue cannot serve, goes to the AI.
+  // elaborationLevel, sent by pages older than 2026-10-22, is ignored.
   if (!input.weeklyRequest) {
     const fromCatalog = catalogMenu({
       profile: input.profile,
       styles: readCatalogMenuStyles(guard.body.menuStyle),
-      elaboration: elaborationForLevel(guard.body.elaborationLevel),
       recentDishes: stringList(guard.body.recentDishes),
       pantry: stringList(guard.body.pantryItems, 80, 80),
       batch: guard.body.batchCooking === true,

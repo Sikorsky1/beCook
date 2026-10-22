@@ -12,7 +12,6 @@ export type CreateMenuDraft = {
   freeTextPrompt: string;
   peopleCount: number;
   menuStyles: string[];
-  elaborationLevel: number;
 };
 
 export function saveCreateMenuDraft(draft: CreateMenuDraft) {
@@ -35,7 +34,6 @@ function parseCreateMenuDraft(value: unknown): CreateMenuDraft | null {
     menuStyles: Array.isArray(draft.menuStyles)
       ? draft.menuStyles.filter((style): style is string => typeof style === "string")
       : [],
-    elaborationLevel: typeof draft.elaborationLevel === "number" ? draft.elaborationLevel : 4,
   };
 }
 

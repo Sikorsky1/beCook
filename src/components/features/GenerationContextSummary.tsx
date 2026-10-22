@@ -16,7 +16,6 @@ type GenerationContextSummaryProps =
       profile: UserProfile | null;
       peopleCount: number;
       styleLabels: string[];
-      elaborationLabel: string;
       pantryCount: number;
       generating: boolean;
     }
@@ -69,7 +68,7 @@ export function GenerationContextSummary(props: GenerationContextSummaryProps) {
     );
   }
 
-  const { profile, peopleCount, styleLabels, elaborationLabel, pantryCount, generating } = props;
+  const { profile, peopleCount, styleLabels, pantryCount, generating } = props;
   const rows = [
     { term: "Personas", value: String(peopleCount) },
     ...(profile
@@ -78,7 +77,7 @@ export function GenerationContextSummary(props: GenerationContextSummaryProps) {
           { term: "Restricciones", value: "Sin perfil" },
           { term: "Alergias", value: "Sin perfil" },
         ]),
-    { term: "Estilo", value: `${styleLabels.join(", ")} · ${elaborationLabel.toLowerCase()}` },
+    { term: "Estilo", value: styleLabels.join(", ") },
     {
       term: "Despensa",
       value: pantryCount ? `${pantryCount} ${pantryCount === 1 ? "producto" : "productos"} que tienes` : "Sin productos marcados",

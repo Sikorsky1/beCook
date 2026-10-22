@@ -1,0 +1,759 @@
+{
+  "source": "Selección de Sergio en la página Recetas prioritarias (2026-10-22)",
+  "updatedAt": "2026-10-22T19:29:14.904Z",
+  "count": 188,
+  "recipes": [
+    {
+      "id": "nutri-c22",
+      "name": "Pollo asado con batata"
+    },
+    {
+      "id": "nutri-c23",
+      "name": "Pollo al limón"
+    },
+    {
+      "id": "nutri-c34",
+      "name": "Lentejas estofadas"
+    },
+    {
+      "id": "nutri-c36",
+      "name": "Espaguetis a la boloñesa"
+    },
+    {
+      "id": "nutri-c37",
+      "name": "Espaguetis con gambas y chirlas"
+    },
+    {
+      "id": "nutri-c39",
+      "name": "Espaguetis al pesto"
+    },
+    {
+      "id": "nutri-c52",
+      "name": "Judias verdes con patata y huevo duro"
+    },
+    {
+      "id": "nutri-e12",
+      "name": "Tosta de Jamón y aguacate"
+    },
+    {
+      "id": "nutri-e13",
+      "name": "Tosta de Salmón ahumado"
+    },
+    {
+      "id": "nutri-e15",
+      "name": "Tosta de Ventresca con tomate"
+    },
+    {
+      "id": "nutri-e18",
+      "name": "Salmón a la plancha"
+    },
+    {
+      "id": "nutri-e21",
+      "name": "Bacalao plancha con ajos fritos"
+    },
+    {
+      "id": "nutri-e22",
+      "name": "Merluza plancha con ajos fritos"
+    },
+    {
+      "id": "nutri-e24",
+      "name": "Pata de pulpo a la plancha con puré de patata"
+    },
+    {
+      "id": "nutri-e27",
+      "name": "Ensalada de tomates, zanahoria, aguacate y anchoas"
+    },
+    {
+      "id": "nutri-e32",
+      "name": "Ensalada de tomate y queso fresco"
+    },
+    {
+      "id": "nutri-e33",
+      "name": "Alcachofas con jamón"
+    },
+    {
+      "id": "nutri-e41",
+      "name": "Tortilla de patata"
+    },
+    {
+      "id": "nutri-e5",
+      "name": "Filete de pollo plancha y ensalada (canónigos y tomate)"
+    },
+    {
+      "id": "nutri-e6",
+      "name": "Filete de pavo plancha y ensalada (canónigos y tomate)"
+    },
+    {
+      "id": "web-anillas-de-calamar-salteadas-al-limon-con-brocoli",
+      "name": "Anillas de calamar salteadas al limón con brócoli"
+    },
+    {
+      "id": "web-arroz-chino-con-pollo-y-guisantes",
+      "name": "Arroz chino con pollo y guisantes"
+    },
+    {
+      "id": "web-arroz-con-gambas-al-curry",
+      "name": "Arroz con gambas al curry"
+    },
+    {
+      "id": "web-arroz-con-huevo-jamon-y-queso-de-aprovechamiento",
+      "name": "Arroz con huevo, jamón y queso de aprovechamiento"
+    },
+    {
+      "id": "web-arroz-con-merluza-al-curry",
+      "name": "Arroz con merluza al curry"
+    },
+    {
+      "id": "web-arroz-con-pollo-y-pimiento-rojo",
+      "name": "Arroz con pollo y pimiento rojo"
+    },
+    {
+      "id": "web-arroz-frito-con-pollo-huevo-y-guisantes",
+      "name": "Arroz frito con pollo, huevo y guisantes"
+    },
+    {
+      "id": "web-arroz-moruno-de-pollo-y-pimientos-con-ras-el-hanout",
+      "name": "Arroz moruno de pollo y pimientos con ras el hanout"
+    },
+    {
+      "id": "web-arroz-tres-delicias-con-gambas-jamon-y-tortilla",
+      "name": "Arroz tres delicias con gambas, jamón y tortilla"
+    },
+    {
+      "id": "web-bocadillo-de-lomo-de-ternera-con-vegetales",
+      "name": "Bocadillo de lomo de ternera con vegetales"
+    },
+    {
+      "id": "web-boniato-relleno-de-pollo-queso-feta-y-verduras",
+      "name": "Boniato relleno de pollo, queso feta y verduras"
+    },
+    {
+      "id": "web-brochetas-de-pavo-y-tomate-cherry-al-yogur",
+      "name": "Brochetas de pavo y tomate cherry al yogur"
+    },
+    {
+      "id": "web-brochetas-de-pollo-al-pimenton-con-verduras",
+      "name": "Brochetas de pollo al pimentón con verduras"
+    },
+    {
+      "id": "web-burritos-de-carne-picada-de-ternera-con-pico-de-gallo",
+      "name": "Burritos de carne picada de ternera con pico de gallo"
+    },
+    {
+      "id": "web-calabacines-rellenos-de-atun-y-tomate",
+      "name": "Calabacines rellenos de atún y tomate"
+    },
+    {
+      "id": "web-calamares-a-la-plancha-con-ajo-y-perejil",
+      "name": "Calamares a la plancha con ajo y perejil"
+    },
+    {
+      "id": "web-campero-malagueno-de-pollo-jamon-york-y-queso",
+      "name": "Campero malagueño de pollo, jamón york y queso"
+    },
+    {
+      "id": "web-caponata-siciliana-de-berenjena",
+      "name": "Caponata siciliana de berenjena"
+    },
+    {
+      "id": "web-chili-noodles",
+      "name": "Chili noodles"
+    },
+    {
+      "id": "web-contramuslos-de-pollo-al-horno-con-cebolleta",
+      "name": "Contramuslos de pollo al horno con cebolleta"
+    },
+    {
+      "id": "web-contramuslos-de-pollo-al-yogur-con-arroz-integral-especiado",
+      "name": "Contramuslos de pollo al yogur con arroz integral especiado"
+    },
+    {
+      "id": "web-crema-de-calabaza-zanahoria-y-apio",
+      "name": "Crema de calabaza, zanahoria y apio"
+    },
+    {
+      "id": "web-curry-de-pollo-y-garbanzos-con-pimientos",
+      "name": "Curry de pollo y garbanzos con pimientos"
+    },
+    {
+      "id": "web-cuscus-con-garbanzos-verduras-y-anacardos",
+      "name": "Cuscús con garbanzos, verduras y anacardos"
+    },
+    {
+      "id": "web-dorada-a-la-sal",
+      "name": "Dorada a la sal"
+    },
+    {
+      "id": "web-dorada-abierta-al-horno-con-pimientos",
+      "name": "Dorada abierta al horno con pimientos"
+    },
+    {
+      "id": "web-dorada-al-horno-con-salsa-de-limon-y-patatas",
+      "name": "Dorada al horno con salsa de limón y patatas"
+    },
+    {
+      "id": "web-doradas-asadas-con-tomatitos-en-rama",
+      "name": "Doradas asadas con tomatitos en rama"
+    },
+    {
+      "id": "web-ensalada-agridulce-de-garbanzos-con-zanahoria-y-pasas",
+      "name": "Ensalada agridulce de garbanzos con zanahoria y pasas"
+    },
+    {
+      "id": "web-ensalada-arabe-de-cuscus-con-pollo-pasas-y-orejones",
+      "name": "Ensalada árabe de cuscús con pollo, pasas y orejones"
+    },
+    {
+      "id": "web-ensalada-burrito-de-pollo-alubias-y-aguacate",
+      "name": "Ensalada burrito de pollo, alubias y aguacate"
+    },
+    {
+      "id": "web-ensalada-de-alubias-blancas-y-atun",
+      "name": "Ensalada de alubias blancas y atún"
+    },
+    {
+      "id": "web-ensalada-de-arroz-con-salmon-guisantes-y-pimiento-asado",
+      "name": "Ensalada de arroz con salmón, guisantes y pimiento asado"
+    },
+    {
+      "id": "web-ensalada-de-arroz-garbanzos-atun-y-huevo",
+      "name": "Ensalada de arroz, garbanzos, atún y huevo"
+    },
+    {
+      "id": "web-ensalada-de-burrata-tomates-y-albahaca",
+      "name": "Ensalada de burrata, tomates y albahaca"
+    },
+    {
+      "id": "web-ensalada-de-cuscus-con-pollo-tomate-y-pinones",
+      "name": "Ensalada de cuscús con pollo, tomate y piñones"
+    },
+    {
+      "id": "web-ensalada-de-cuscus-con-tomates-asados-queso-feta-y-albahaca",
+      "name": "Ensalada de cuscús con tomates asados, queso feta y albahaca"
+    },
+    {
+      "id": "web-ensalada-de-cuscus-con-ventresca-de-atun",
+      "name": "Ensalada de cuscús con ventresca de atún"
+    },
+    {
+      "id": "web-ensalada-de-fusilli-con-mozzarella-atun-y-tomate-cherry",
+      "name": "Ensalada de fusilli con mozzarella, atún y tomate cherry"
+    },
+    {
+      "id": "web-ensalada-de-gambas-mango-y-aguacate-con-vinagreta-de-mostaza",
+      "name": "Ensalada de gambas, mango y aguacate con vinagreta de mostaza"
+    },
+    {
+      "id": "web-ensalada-de-garbanzos-aguacate-tomate-y-huevo",
+      "name": "Ensalada de garbanzos, aguacate, tomate y huevo"
+    },
+    {
+      "id": "web-ensalada-de-garbanzos-aguacate-y-queso-feta",
+      "name": "Ensalada de garbanzos, aguacate y queso feta"
+    },
+    {
+      "id": "web-ensalada-de-garbanzos-al-balsamico-con-canonigos-y-queso-de",
+      "name": "Ensalada de garbanzos al balsámico con canónigos y queso de cabra"
+    },
+    {
+      "id": "web-ensalada-de-garbanzos-atun-y-huevo",
+      "name": "Ensalada de garbanzos, atún y huevo"
+    },
+    {
+      "id": "web-ensalada-de-garbanzos-con-aceitunas-tomate-y-queso",
+      "name": "Ensalada de garbanzos con aceitunas, tomate y queso"
+    },
+    {
+      "id": "web-ensalada-de-garbanzos-con-tomate-y-ventresca-de-atun",
+      "name": "Ensalada de garbanzos con tomate y ventresca de atún"
+    },
+    {
+      "id": "web-ensalada-de-hummus-con-garbanzos-y-queso-feta",
+      "name": "Ensalada de hummus con garbanzos y queso feta"
+    },
+    {
+      "id": "web-ensalada-de-judias-blancas-con-anchoas",
+      "name": "Ensalada de judías blancas con anchoas"
+    },
+    {
+      "id": "web-ensalada-de-mejillones-en-escabeche-con-queso-feta-y-pimient",
+      "name": "Ensalada de mejillones en escabeche con queso feta y pimientos"
+    },
+    {
+      "id": "web-ensalada-de-melon-con-gambas-y-rucula",
+      "name": "Ensalada de melón con gambas y rúcula"
+    },
+    {
+      "id": "web-ensalada-de-pasta-con-atun-maiz-y-tomate-cherry",
+      "name": "Ensalada de pasta con atún, maíz y tomate cherry"
+    },
+    {
+      "id": "web-ensalada-de-pasta-con-pollo-mozzarella-y-tomate-seco",
+      "name": "Ensalada de pasta con pollo, mozzarella y tomate seco"
+    },
+    {
+      "id": "web-ensalada-de-patata-tomate-y-atun-con-huevo",
+      "name": "Ensalada de patata, tomate y atún con huevo"
+    },
+    {
+      "id": "web-ensalada-de-patata-y-bonito",
+      "name": "Ensalada de patata y bonito"
+    },
+    {
+      "id": "web-ensalada-de-patata-y-langostinos-con-vinagreta-de-lima",
+      "name": "Ensalada de patata y langostinos con vinagreta de lima"
+    },
+    {
+      "id": "web-ensalada-de-pollo-asado-con-frambuesas-y-queso-de-cabra",
+      "name": "Ensalada de pollo asado con frambuesas y queso de cabra"
+    },
+    {
+      "id": "web-ensalada-de-pollo-y-aguacate",
+      "name": "Ensalada de pollo y aguacate"
+    },
+    {
+      "id": "web-ensalada-de-pulpo-con-rucula-y-pimiento-rojo",
+      "name": "Ensalada de pulpo con rúcula y pimiento rojo"
+    },
+    {
+      "id": "web-ensalada-de-quinoa-aguacate-y-huevo-escalfado",
+      "name": "Ensalada de quinoa, aguacate y huevo escalfado"
+    },
+    {
+      "id": "web-ensalada-de-quinoa-con-ternera-y-aguacate",
+      "name": "Ensalada de quinoa con ternera y aguacate"
+    },
+    {
+      "id": "web-ensalada-de-quinoa-con-ternera-y-aguacate-dinner",
+      "name": "Ensalada de quinoa con ternera y aguacate"
+    },
+    {
+      "id": "web-ensalada-de-salmon-ahumado-con-vinagreta-de-eneldo",
+      "name": "Ensalada de salmón ahumado con vinagreta de eneldo"
+    },
+    {
+      "id": "web-ensalada-de-sandia-mozzarella-y-anchoas",
+      "name": "Ensalada de sandía, mozzarella y anchoas"
+    },
+    {
+      "id": "web-ensalada-de-sardinas-en-lata-con-tomate-y-queso-feta",
+      "name": "Ensalada de sardinas en lata con tomate y queso feta"
+    },
+    {
+      "id": "web-ensalada-de-tomate-lentejas-y-huevo",
+      "name": "Ensalada de tomate, lentejas y huevo"
+    },
+    {
+      "id": "web-ensalada-fresca-de-alubias-con-tomate-cebolleta-y-pimiento-v",
+      "name": "Ensalada fresca de alubias con tomate, cebolleta y pimiento verde"
+    },
+    {
+      "id": "web-ensalada-italiana-de-tomate-mozzarella-pepino-y-aceitunas",
+      "name": "Ensalada italiana de tomate, mozzarella, pepino y aceitunas"
+    },
+    {
+      "id": "web-ensalada-murciana-de-tomate-atun-huevo-y-aceitunas",
+      "name": "Ensalada murciana de tomate, atún, huevo y aceitunas"
+    },
+    {
+      "id": "web-ensalada-tailandesa-de-ternera-con-pimientos-y-rabanitos",
+      "name": "Ensalada tailandesa de ternera con pimientos y rabanitos"
+    },
+    {
+      "id": "web-ensalada-templada-de-garbanzos-con-pollo",
+      "name": "Ensalada templada de garbanzos con pollo"
+    },
+    {
+      "id": "web-ensalada-templada-de-salmon-y-langostinos",
+      "name": "Ensalada templada de salmón y langostinos"
+    },
+    {
+      "id": "web-ensalada-templada-de-salmon-y-patata-con-hierbas-frescas",
+      "name": "Ensalada templada de salmón y patata con hierbas frescas"
+    },
+    {
+      "id": "web-ensaladilla-de-patata-con-atun-y-aguacate",
+      "name": "Ensaladilla de patata con atún y aguacate"
+    },
+    {
+      "id": "web-espaguetis-a-la-carbonara-con-guanciale-y-pecorino",
+      "name": "Espaguetis a la carbonara con guanciale y pecorino"
+    },
+    {
+      "id": "web-espaguetis-con-atun-tomate-y-aceitunas",
+      "name": "Espaguetis con atún, tomate y aceitunas"
+    },
+    {
+      "id": "web-espaguetis-con-salsa-cremosa-de-tomate-seco-y-alcaparras",
+      "name": "Espaguetis con salsa cremosa de tomate seco y alcaparras"
+    },
+    {
+      "id": "web-fajitas-de-pollo-con-pimientos-y-cebolla",
+      "name": "Fajitas de pollo con pimientos y cebolla"
+    },
+    {
+      "id": "web-fajitas-de-salmon-ahumado-y-queso-fresco",
+      "name": "Fajitas de salmón ahumado y queso fresco"
+    },
+    {
+      "id": "web-farfalle-con-aceitunas-tomate-y-anchoas",
+      "name": "Farfalle con aceitunas, tomate y anchoas"
+    },
+    {
+      "id": "web-fideos-udon-salteados-con-ternera-pimientos-y-shiitake",
+      "name": "Fideos udon salteados con ternera, pimientos y shiitake"
+    },
+    {
+      "id": "web-garbanzos-a-la-carbonara-con-bacon-y-parmesano",
+      "name": "Garbanzos a la carbonara con bacon y parmesano"
+    },
+    {
+      "id": "web-garbanzos-a-la-vinagreta",
+      "name": "Garbanzos a la vinagreta"
+    },
+    {
+      "id": "web-garbanzos-crujientes-con-maiz-y-huevo-a-la-plancha-dinner",
+      "name": "Garbanzos crujientes con maíz y huevo a la plancha"
+    },
+    {
+      "id": "web-garbanzos-en-vinagreta-con-pulpo",
+      "name": "Garbanzos en vinagreta con pulpo"
+    },
+    {
+      "id": "web-hamburguesas-de-pollo-caseras",
+      "name": "Hamburguesas de pollo caseras"
+    },
+    {
+      "id": "web-lenguado-al-horno",
+      "name": "Lenguado al horno"
+    },
+    {
+      "id": "web-lomo-de-salmon-al-grill-con-ensalada-de-rucula-feta-y-aceitu",
+      "name": "Lomo de salmón al grill con ensalada de rúcula, feta y aceitunas"
+    },
+    {
+      "id": "web-lomos-de-lubina-a-la-sal",
+      "name": "Lomos de lubina a la sal"
+    },
+    {
+      "id": "web-lubina-al-horno-con-verduras",
+      "name": "Lubina al horno con verduras"
+    },
+    {
+      "id": "web-macarrones-con-chorizo",
+      "name": "Macarrones con chorizo"
+    },
+    {
+      "id": "web-mejillones-a-la-marinera-con-tomate",
+      "name": "Mejillones a la marinera con tomate"
+    },
+    {
+      "id": "web-mejillones-al-vino-blanco",
+      "name": "Mejillones al vino blanco"
+    },
+    {
+      "id": "web-merluza-al-horno-con-ajada-al-limon",
+      "name": "Merluza al horno con ajada al limón"
+    },
+    {
+      "id": "web-merluza-al-horno-con-patata-cebolla-y-naranja",
+      "name": "Merluza al horno con patata, cebolla y naranja"
+    },
+    {
+      "id": "web-merluza-al-horno-con-patatas-cebolla-y-naranja",
+      "name": "Merluza al horno con patatas, cebolla y naranja"
+    },
+    {
+      "id": "web-merluza-al-horno-con-patatas-nuevas-y-tomates-cherry",
+      "name": "Merluza al horno con patatas nuevas y tomates cherry"
+    },
+    {
+      "id": "web-muslos-de-pavo-al-horno-con-patatas",
+      "name": "Muslos de pavo al horno con patatas"
+    },
+    {
+      "id": "web-muslos-de-pollo-al-horno-con-patatas-y-vino-blanco",
+      "name": "Muslos de pollo al horno con patatas y vino blanco"
+    },
+    {
+      "id": "web-noodles-salteados-con-brocoli-y-pollo",
+      "name": "Noodles salteados con brócoli y pollo"
+    },
+    {
+      "id": "web-pasta-aglio-e-olio",
+      "name": "Pasta aglio e olio"
+    },
+    {
+      "id": "web-pasta-con-atun-en-salsa-de-tomate-picante",
+      "name": "Pasta con atún en salsa de tomate picante"
+    },
+    {
+      "id": "web-pasta-con-salsa-cremosa-de-limon-y-calabacin",
+      "name": "Pasta con salsa cremosa de limón y calabacín"
+    },
+    {
+      "id": "web-pasta-corta-con-atun-tomate-pimiento-y-cebolla",
+      "name": "Pasta corta con atún, tomate, pimiento y cebolla"
+    },
+    {
+      "id": "web-pavo-al-curry-con-yogur-al-microondas-y-arroz-blanco",
+      "name": "Pavo al curry con yogur al microondas y arroz blanco"
+    },
+    {
+      "id": "web-pechuga-de-pollo-a-la-parrilla-con-salsa-de-ajo-y-perejil",
+      "name": "Pechuga de pollo a la parrilla con salsa de ajo y perejil"
+    },
+    {
+      "id": "web-pechuga-de-pollo-al-horno-con-especias",
+      "name": "Pechuga de pollo al horno con especias"
+    },
+    {
+      "id": "web-pechuga-de-pollo-asada-con-patata-y-zanahoria-al-limon",
+      "name": "Pechuga de pollo asada con patata y zanahoria al limón"
+    },
+    {
+      "id": "web-pechuga-de-pollo-braseada-con-calabacin-brocoli-y-zanahoria",
+      "name": "Pechuga de pollo braseada con calabacín, brócoli y zanahoria"
+    },
+    {
+      "id": "web-pechugas-de-pollo-al-balsamico-con-cebolla",
+      "name": "Pechugas de pollo al balsámico con cebolla"
+    },
+    {
+      "id": "web-pechugas-de-pollo-al-curry-con-leche-de-coco",
+      "name": "Pechugas de pollo al curry con leche de coco"
+    },
+    {
+      "id": "web-penne-al-baffo-con-nata-tomate-y-jamon",
+      "name": "Penne al baffo con nata, tomate y jamón"
+    },
+    {
+      "id": "web-penne-all-arrabbiata",
+      "name": "Penne all'arrabbiata"
+    },
+    {
+      "id": "web-pinchos-de-pollo-al-curry-con-quinoa",
+      "name": "Pinchos de pollo al curry con quinoa"
+    },
+    {
+      "id": "web-pisto-manchego",
+      "name": "Pisto manchego"
+    },
+    {
+      "id": "web-poke-bowl-de-arroz-salmon-marinado-y-aguacate",
+      "name": "Poke bowl de arroz, salmón marinado y aguacate"
+    },
+    {
+      "id": "web-poke-bowl-de-salmon-con-edamame",
+      "name": "Poke bowl de salmón con edamame"
+    },
+    {
+      "id": "web-poke-de-atun-con-algas-y-aguacate",
+      "name": "Poke de atún con algas y aguacate"
+    },
+    {
+      "id": "web-pollo-a-las-hierbas-con-tallo-de-brocoli-salteado",
+      "name": "Pollo a las hierbas con tallo de brócoli salteado"
+    },
+    {
+      "id": "web-pollo-al-curry-expres",
+      "name": "Pollo al curry exprés"
+    },
+    {
+      "id": "web-pollo-al-estilo-mediterraneo-con-aceitunas-y-alcaparras",
+      "name": "Pollo al estilo mediterráneo con aceitunas y alcaparras"
+    },
+    {
+      "id": "web-pollo-al-horno-con-naranja-calabaza-y-zanahorias",
+      "name": "Pollo al horno con naranja, calabaza y zanahorias"
+    },
+    {
+      "id": "web-pollo-al-ras-el-hanout-con-cuscus-maiz-y-guisantes",
+      "name": "Pollo al ras el hanout con cuscús, maíz y guisantes"
+    },
+    {
+      "id": "web-revuelto-de-ajetes-con-gambas",
+      "name": "Revuelto de ajetes con gambas"
+    },
+    {
+      "id": "web-revuelto-de-boletus",
+      "name": "Revuelto de boletus"
+    },
+    {
+      "id": "web-rollitos-de-salmon-ahumado-con-gulas",
+      "name": "Rollitos de salmón ahumado con gulas"
+    },
+    {
+      "id": "web-salchichas-al-horno-con-uvas-y-romero",
+      "name": "Salchichas al horno con uvas y romero"
+    },
+    {
+      "id": "web-salmon-al-horno-con-costra-de-frutos-secos",
+      "name": "Salmón al horno con costra de frutos secos"
+    },
+    {
+      "id": "web-salmon-al-horno-con-limon-y-mostaza",
+      "name": "Salmón al horno con limón y mostaza"
+    },
+    {
+      "id": "web-salmon-al-horno-con-noodles-y-salsa-de-mirin",
+      "name": "Salmón al horno con noodles y salsa de mirin"
+    },
+    {
+      "id": "web-salmon-al-horno-con-patatas-y-eneldo",
+      "name": "Salmón al horno con patatas y eneldo"
+    },
+    {
+      "id": "web-salmon-al-horno-expres",
+      "name": "Salmón al horno exprés"
+    },
+    {
+      "id": "web-salmon-al-vapor-con-arroz-y-anacardos",
+      "name": "Salmón al vapor con arroz y anacardos"
+    },
+    {
+      "id": "web-salmon-en-freidora-de-aire",
+      "name": "Salmón en freidora de aire"
+    },
+    {
+      "id": "web-salmonetes-al-horno",
+      "name": "Salmonetes al horno"
+    },
+    {
+      "id": "web-salteado-de-pollo-al-pimenton-con-calabaza",
+      "name": "Salteado de pollo al pimentón con calabaza"
+    },
+    {
+      "id": "web-salteado-de-pollo-con-zanahoria-y-arroz-salvaje",
+      "name": "Salteado de pollo con zanahoria y arroz salvaje"
+    },
+    {
+      "id": "web-salteado-de-pollo-oriental-con-verduras",
+      "name": "Salteado de pollo oriental con verduras"
+    },
+    {
+      "id": "web-salteado-de-pollo-y-pimiento-con-arroz-y-almendras",
+      "name": "Salteado de pollo y pimiento con arroz y almendras"
+    },
+    {
+      "id": "web-sandwich-de-atun-con-pimiento-rojo-y-alcaparras",
+      "name": "Sándwich de atún con pimiento rojo y alcaparras"
+    },
+    {
+      "id": "web-sandwich-de-atun-huevo-duro-tomate-y-esparragos",
+      "name": "Sándwich de atún, huevo duro, tomate y espárragos"
+    },
+    {
+      "id": "web-sandwich-de-ensalada-de-pollo-y-aguacate",
+      "name": "Sándwich de ensalada de pollo y aguacate"
+    },
+    {
+      "id": "web-sandwich-de-pollo-con-queso-crema-y-verduras",
+      "name": "Sándwich de pollo con queso crema y verduras"
+    },
+    {
+      "id": "web-sandwich-de-pollo-y-canonigos",
+      "name": "Sándwich de pollo y canónigos"
+    },
+    {
+      "id": "web-sandwich-mixto-de-jamon-y-queso",
+      "name": "Sándwich mixto de jamón y queso"
+    },
+    {
+      "id": "web-sandwiches-de-pollo-al-curry-con-pan-integral",
+      "name": "Sándwiches de pollo al curry con pan integral"
+    },
+    {
+      "id": "web-solomillo-de-cerdo-con-fritada-de-pimiento-y-cebolla",
+      "name": "Solomillo de cerdo con fritada de pimiento y cebolla"
+    },
+    {
+      "id": "web-tacos-de-lechuga-con-ternera-salteada",
+      "name": "Tacos de lechuga con ternera salteada"
+    },
+    {
+      "id": "web-tartar-de-salmon-y-aguacate",
+      "name": "Tartar de salmón y aguacate"
+    },
+    {
+      "id": "web-ternera-salteada-con-champinones-al-balsamico",
+      "name": "Ternera salteada con champiñones al balsámico"
+    },
+    {
+      "id": "web-ternera-salteada-con-champinones-al-balsamico-lunch",
+      "name": "Ternera salteada con champiñones al balsámico"
+    },
+    {
+      "id": "web-tortilla-a-las-finas-hierbas-con-aguacate-tomate-y-berros",
+      "name": "Tortilla a las finas hierbas con aguacate, tomate y berros"
+    },
+    {
+      "id": "web-tortilla-de-atun",
+      "name": "Tortilla de atún"
+    },
+    {
+      "id": "web-tortilla-de-atun-y-verduras",
+      "name": "Tortilla de atún y verduras"
+    },
+    {
+      "id": "web-tortilla-de-berenjena-pimiento-rojo-y-calabaza",
+      "name": "Tortilla de berenjena, pimiento rojo y calabaza"
+    },
+    {
+      "id": "web-tortilla-de-brocoli-con-claras-de-huevo",
+      "name": "Tortilla de brócoli con claras de huevo"
+    },
+    {
+      "id": "web-tortilla-de-esparragos-trigueros",
+      "name": "Tortilla de espárragos trigueros"
+    },
+    {
+      "id": "web-tortilla-de-espinacas",
+      "name": "Tortilla de espinacas"
+    },
+    {
+      "id": "web-tortitas-de-verduras-y-queso-cottage",
+      "name": "Tortitas de verduras y queso cottage"
+    },
+    {
+      "id": "web-tosta-de-aguacate-y-anchoas",
+      "name": "Tosta de aguacate y anchoas"
+    },
+    {
+      "id": "web-tostada-de-hummus-aguacate-y-tomate",
+      "name": "Tostada de hummus, aguacate y tomate"
+    },
+    {
+      "id": "web-tostas-de-aguacate-atun-y-mango-en-pan-de-centeno",
+      "name": "Tostas de aguacate, atún y mango en pan de centeno"
+    },
+    {
+      "id": "web-tuna-melt-sandwich-caliente-de-atun-y-cheddar",
+      "name": "Tuna melt: sándwich caliente de atún y cheddar"
+    },
+    {
+      "id": "web-ventresca-de-atun-encebollada",
+      "name": "Ventresca de atún encebollada"
+    },
+    {
+      "id": "web-wok-de-noodles-con-gambas-y-verduras",
+      "name": "Wok de noodles con gambas y verduras"
+    },
+    {
+      "id": "web-wrap-de-pavo-aguacate-y-tomate",
+      "name": "Wrap de pavo, aguacate y tomate"
+    },
+    {
+      "id": "web-wrap-de-pollo-con-lechuga-tomate-y-col",
+      "name": "Wrap de pollo con lechuga, tomate y col"
+    },
+    {
+      "id": "web-wraps-de-atun-aguacate-y-tomate",
+      "name": "Wraps de atún, aguacate y tomate"
+    },
+    {
+      "id": "web-wraps-de-atun-aguacate-y-tomate-lunch",
+      "name": "Wraps de atún, aguacate y tomate"
+    }
+  ]
+}

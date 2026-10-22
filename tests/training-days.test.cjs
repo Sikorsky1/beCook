@@ -53,7 +53,7 @@ test("Crear menú: starchy lunches and dinners on the training days, without sta
  let matched = 0;
  let total = 0;
  for (const seed of [1, 2, 3, 4, 5]) {
-  const menu = catalogMenu({profile, styles: ["healthy_balanced"], elaboration: "balanced", seed});
+  const menu = catalogMenu({profile, styles: ["healthy_balanced"], seed});
   assert.ok(menu);
   menu.days.forEach((day, index) => {
    for (const meal of [day.lunch, day.dinner]) {

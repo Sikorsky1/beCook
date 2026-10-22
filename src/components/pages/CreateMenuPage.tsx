@@ -99,7 +99,7 @@ import {
 } from "@/lib/data/nutritionPlanStore";
 import { applyPendingPlanExtras, writePendingPlanExtras } from "@/lib/data/planExtras";
 import { dailyExtras } from "@/lib/menu-generation/daily-extras";
-import { generatePlanWeek, parseNutritionPlan, planDailyMealLabels, planExtras, planWarnings } from "@/lib/nutritionPlan";
+import { parseNutritionPlan, planDailyMealLabels, planExtras, planWarnings } from "@/lib/nutritionPlan";
 import { getAccessToken } from "@/lib/supabase/auth";
 import { buildWeekHref, resolveWeekSelection } from "@/lib/weekSelection";
 import type { UserProfile } from "@/lib/supabase/profiles";
@@ -151,13 +151,6 @@ const defaultMenuStyles: MenuStyle[] = ["healthy_balanced"];
 function isMenuStyle(value: string): value is MenuStyle {
   return menuStyleOptions.some((option) => option.id === value);
 }
-const defaultElaborationLevel = 4;
-// Etiquetas visibles mapeadas al valor 1-7 que espera /api/generate-menu.
-const elaborationOptions = [
-  { value: 2, label: "Sencillo" },
-  { value: 4, label: "Equilibrado" },
-  { value: 6, label: "Elaborado" },
-] as const;
 const useWeekSuccessDelayMs = 900;
 // Longest wait of each AI route (its maxDuration): shown as the honest upper bound (step 27).
 const maxWaitSeconds = { generate: 45, import: 60 } as const;
@@ -188,11 +181,9 @@ function getMenuStylesForGeneration(menuStyles: MenuStyle[]) {
   return menuStyles.length > 0 ? menuStyles : defaultMenuStyles;
 }
 
-function serializeMenuGenerationContext(
-  menuStyles: MenuStyle[],
-  elaborationLevel: number,
-) {
-  return `${getMenuStylesForGeneration(menuStyles).join(",")}|elaboration_level=${elaborationLevel}`;
+// Without the level of elaboration since 2026-10-22: the week only takes the menu types.
+function serializeMenuGenerationContext(menuStyles: MenuStyle[]) {
+  return getMenuStylesForGeneration(menuStyles).join(",");
 }
 
 // C6 review: a change of identity without a reload (sign-in, sign-out in another tab) starts the
@@ -223,9 +214,6 @@ function CreateMenuPageContent() {
     useState<MenuStyle[]>(defaultMenuStyles);
   const [withDailyExtras, setWithDailyExtras] = useState(false);
   const [batchCooking, setBatchCooking] = useState(false);
-  const [elaborationLevel, setElaborationLevel] = useState(
-    defaultElaborationLevel,
-  );
   // «¿Qué te apetece esta semana?» was removed (2026-10-15): the week always comes from the recipe
   // catalogue. Drafts and runs keep the field, always empty.
   const freeTextPrompt = "";
@@ -379,7 +367,6 @@ function CreateMenuPageContent() {
       draftPeopleScopeRef.current = dataIdentity.scope;
       const restoredStyles = draft.menuStyles.filter(isMenuStyle);
       setMenuStyles(restoredStyles.length ? restoredStyles : defaultMenuStyles);
-      setElaborationLevel(draft.elaborationLevel);
     } else if (modeParam === "import") {
       setMode("import");
     }
@@ -442,7 +429,6 @@ function CreateMenuPageContent() {
       freeTextPrompt,
       peopleCount,
       menuStyles,
-      elaborationLevel,
     });
   }, [
     identity.status,
@@ -454,7 +440,6 @@ function CreateMenuPageContent() {
     freeTextPrompt,
     peopleCount,
     menuStyles,
-    elaborationLevel,
   ]);
 
   useEffect(
@@ -613,7 +598,6 @@ function CreateMenuPageContent() {
       freeTextPrompt,
       peopleCount,
       menuStyles,
-      elaborationLevel,
     });
   };
 
@@ -627,10 +611,9 @@ function CreateMenuPageContent() {
           freeTextPrompt,
           peopleCount,
           menuStyles,
-          elaborationLevel,
         }),
       ),
-    [mode, menuText, freeTextPrompt, peopleCount, menuStyles, elaborationLevel],
+    [mode, menuText, freeTextPrompt, peopleCount, menuStyles],
   );
 
   // D3, step 27: every AI request of this page is a run that can be cancelled, survives moving to
@@ -639,7 +622,7 @@ function CreateMenuPageContent() {
     const weekForRun = targetIsoWeek ?? getCurrentIsoWeek();
     const started = startGenerationRun(
       { scope: identity.scope, week: getIsoWeekStorageId(weekForRun), mode: runMode, startedAt: Date.now() },
-      { mode: runMode, menuText, freeTextPrompt, peopleCount, menuStyles, elaborationLevel },
+      { mode: runMode, menuText, freeTextPrompt, peopleCount, menuStyles },
     );
     runRef.current = started.run;
     setRunView({ mode: runMode, startedAt: started.run.startedAt });
@@ -735,13 +718,16 @@ function CreateMenuPageContent() {
       setSavedPlanEntry({ key: savedPlanKey, options });
       void saveDailyPlanOptions({ scope: identity.scope, userId: identity.userId }, options).catch(() => undefined);
       // Allergies, diets and disliked foods of the profile leave out the dishes that show them.
-      const days = generatePlanWeek(plan, Math.floor(Math.random() * 2 ** 31), profileReady ? importWarningProfile(profile) : null);
+      const trainingDays = profile ? trainingWeekdaysOf(profile) : [];
+      // The week's lunches and dinners come from the marked recipes (plan-week.ts), loaded on demand.
+      const { generatePlanWeek } = await import("@/lib/menu-generation/plan-week");
+      const days = generatePlanWeek(plan, Math.floor(Math.random() * 2 ** 31), profileReady ? importWarningProfile(profile) : null, trainingDays);
       setUseWeekStatus("idle");
       setUseWeekMessage("");
       setUseWeekMenu(null);
       setGenerationRequestId(null);
       showNewProposal(
-        { ...localMenuResponse(days, planWarnings(plan, days)), week: "Plan nutricional", planExtras: planExtras(plan, profile ? trainingWeekdaysOf(profile) : []) },
+        { ...localMenuResponse(days, planWarnings(plan, days)), week: "Plan nutricional", planExtras: planExtras(plan, trainingDays) },
         null,
         targetIsoWeek ?? getCurrentIsoWeek(),
         "import",
@@ -931,10 +917,7 @@ function CreateMenuPageContent() {
           profileId: profileForGeneration?.id ?? null,
           userId: currentUser?.id,
           peopleCount,
-          menuStyle: serializeMenuGenerationContext(
-            menuStylesForGeneration,
-            elaborationLevel,
-          ),
+          menuStyle: serializeMenuGenerationContext(menuStylesForGeneration),
           freeTextPrompt: trimmedFreeTextPrompt,
         });
         // Linked to the proposal only once it exists (a cancelled run must not take over the
@@ -952,7 +935,6 @@ function CreateMenuPageContent() {
         pantryItems: pantryItemsForGeneration,
         peopleCount,
         menuStyle: menuStylesForGeneration,
-        elaborationLevel,
         recentDishes,
         freeTextPrompt: trimmedFreeTextPrompt,
         batchCooking,
@@ -1557,37 +1539,6 @@ function CreateMenuPageContent() {
             </div>
           </fieldset>
 
-          <fieldset className="space-y-2">
-            <legend className="t-body-strong text-[color:var(--color-foreground)]">
-              Nivel de elaboración deseado
-            </legend>
-            <div className="grid grid-cols-3 gap-1 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1 sm:gap-1.5 sm:p-1.5">
-              {elaborationOptions.map((option) => {
-                const isSelected = elaborationLevel === option.value;
-
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    disabled={isLoading}
-                    onClick={() => {
-                      touchForm();
-                      setElaborationLevel(option.value);
-                    }}
-                    aria-pressed={isSelected}
-                    className={`flex min-h-11 min-w-0 items-center justify-center rounded-[var(--radius-input)] px-1 text-[0.8125rem] font-semibold transition-colors sm:px-2 sm:text-sm ${
-                      isSelected
-                        ? "bg-[color:var(--color-accent-strong)] text-white"
-                        : "bg-[color:var(--color-surface-muted)] text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-accent-soft)] hover:text-[color:var(--color-foreground)]"
-                    } disabled:cursor-not-allowed disabled:opacity-60`}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
-
           {/* N09: breakfasts, fruit and snacks, rotating day by day, added to the shopping list. */}
           <label className="flex min-h-11 cursor-pointer items-start gap-3">
             <input
@@ -1646,9 +1597,6 @@ function CreateMenuPageContent() {
             styleLabels={getMenuStylesForGeneration(menuStyles).map(
               (style) => menuStyleOptions.find((option) => option.id === style)?.label ?? style,
             )}
-            elaborationLabel={
-              elaborationOptions.find((option) => option.value === elaborationLevel)?.label ?? "Equilibrado"
-            }
             pantryCount={activePantryItemNames.length}
             generating={isLoading && loadingMode === "generate"}
           />

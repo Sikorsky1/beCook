@@ -1,6 +1,6 @@
-import catalog from "@/data/nutritionist-recipes.json";
 import type { MealKey, WeekDay } from "@/data/mockWeek";
 import { catalogCardForCheck } from "@/lib/recipes/catalogChecks";
+import { selectedCatalogRecipes } from "@/lib/recipes/selectedCatalog";
 import { checkDish, mentionsDislikedFood, blocksAutomaticProposal, type DishCardForCheck } from "@/lib/recipes/restriction-check";
 import { culinaryIssue } from "./culinary-rules";
 import { dishGroups, mainProtein, type DishGroup } from "./food-groups";
@@ -71,7 +71,7 @@ function slotRank(slot: SubstitutionSlot, recipeId: string) {
 
 const groupsOf = (title: string): DishGroup[] => dishGroups(title, catalogCardForCheck(title)?.ingredients ?? null);
 
-// Next catalogue recipe compatible with the profile and the rest of the week. Recipes for the same
+// Next recipe of those Sergio marked (selectedCatalog.ts) compatible with the profile and the rest of the week. Recipes for the same
 // meal come first, then those of the same food group as the current dish (N05: a legume for a
 // legume); none that takes the week past a maximum of meat, fish or eggs (quotas.ts). Null when the catalogue has nothing left.
 export function catalogAlternative(
@@ -98,7 +98,7 @@ export function catalogAlternative(
   };
   const fitsWeek = (title: string) => withinMaximums(addGroups(others, groupsOf(title)), limits);
   const sameGroup = (title: string) => Number(current !== null && mainProtein(groupsOf(title)) === current);
-  const candidates = catalog.recipes
+  const candidates = selectedCatalogRecipes
     .filter((recipe) => !taken.has(normalizeFood(recipe.name)))
     .filter((recipe) => checkReplacement(recipe.name, rest, profile, reviewedCard(recipe.name)) === null)
     .filter((recipe) => fitsWeek(recipe.name))

@@ -1,6 +1,7 @@
-import catalog from "@/data/nutritionist-recipes.json";
 import type { ImportedMenuDay } from "@/lib/importMenu";
+import { isStarchyDish } from "@/lib/menu-generation/carbs";
 import { catalogCardForCheck } from "@/lib/recipes/catalogChecks";
+import { selectedCatalogRecipes } from "@/lib/recipes/selectedCatalog";
 import { blocksAutomaticProposal, checkDish, mentionsDislikedFood, type RestrictionProfile } from "@/lib/recipes/restriction-check";
 import type { SupermarketCategory } from "@/lib/shoppingList";
 
@@ -9,9 +10,11 @@ import type { SupermarketCategory } from "@/lib/shoppingList";
 // a la semana: arroz + carne o pescado», «Dos días a la semana: pescado azul (atún, sardinas…)»)
 // with a few examples. Read on the device, without the AI:
 // - parseNutritionPlan turns the text (as the PDF reader or a paste gives it) into the plan;
-// - generatePlanWeek picks seven lunches and dinners that keep the rules, from the plan's examples,
-//   the catalogue (src/data/nutritionist-recipes.json, first and by exact title, so the week's card
-//   shows its recipe) and similar ideas below;
+// - the week's lunches and dinners come from the recipes Sergio marked, as in Crear menú
+//   (menu-generation/plan-week.ts, since 2026-10-22); the plan keeps its free dinner. Only when
+//   those recipes cannot fill the week, generatePlanRulesWeek picks seven lunches and dinners that
+//   keep the plan's rules, from the marked recipes (first and by exact title, so the week's card
+//   shows its recipe), the plan's examples and similar ideas below;
 // - planDailyMeals gives each day its options by a fixed weekly rotation (weekRotation) and
 //   planShoppingItems adds up what they need for the week.
 // Pure: no network, no storage.
@@ -329,7 +332,8 @@ export function dishCarb(title: string): PlanCarb | null {
 
 const hasVegetable = (title: string) => vegetableWords.test(normalizePlanText(title));
 
-// Similar ideas to the plan's examples, for weeks where the examples and the catalogue fall short.
+// Similar ideas to the plan's examples, for weeks where the examples and the marked recipes fall
+// short (generatePlanRulesWeek, the last resort).
 const ideas: { title: string; meals: ("lunch" | "dinner")[] }[] = [
   { title: "Lentejas estofadas con pollo y verduras", meals: ["lunch"] },
   { title: "Garbanzos con bacalao y espinacas", meals: ["lunch"] },
@@ -367,7 +371,7 @@ const ideas: { title: string; meals: ("lunch" | "dinner")[] }[] = [
   { title: "Pavo a la plancha con champiñones salteados", meals: ["dinner"] },
 ];
 
-type Candidate = { title: string; protein: PlanProtein | null; carb: PlanCarb | null; source: "plan" | "catalog" | "idea" };
+type Candidate = { title: string; protein: PlanProtein | null; carb: PlanCarb | null; starchy: boolean; source: "plan" | "catalog" | "idea" };
 
 // The user's diets, allergies and disliked foods, as far as the title and its catalogue recipe show
 // them (an unreviewed draft: a dish that passes still gets the usual per-dish warnings).
@@ -380,7 +384,7 @@ function fitsProfile(title: string, profile: RestrictionProfile | null) {
 function candidates(meal: "lunch" | "dinner", plan: NutritionPlan, profile: RestrictionProfile | null): Candidate[] {
   const titles: [string, Candidate["source"]][] = [
     ...plan[meal].examples.map((title): [string, Candidate["source"]] => [title, "plan"]),
-    ...catalog.recipes.filter((recipe) => recipe.slot === meal).map((recipe): [string, Candidate["source"]] => [recipe.name, "catalog"]),
+    ...selectedCatalogRecipes.filter((recipe) => recipe.slot === meal).map((recipe): [string, Candidate["source"]] => [recipe.name, "catalog"]),
     ...ideas.filter((idea) => idea.meals.includes(meal)).map((idea): [string, Candidate["source"]] => [idea.title, "idea"]),
   ];
   const seen = new Set<string>();
@@ -388,7 +392,7 @@ function candidates(meal: "lunch" | "dinner", plan: NutritionPlan, profile: Rest
     const key = normalizePlanText(title);
     if (seen.has(key) || /^libre\.?$/.test(key) || avoidedWords.test(key) || !fitsProfile(title, profile)) return [];
     seen.add(key);
-    return [{ title, protein: dishProtein(title), carb: dishCarb(title), source }];
+    return [{ title, protein: dishProtein(title), carb: dishCarb(title), starchy: isStarchyDish(title, catalogCardForCheck(title)?.ingredients ?? null), source }];
   });
 }
 
@@ -426,27 +430,34 @@ type Slot = { protein: PlanProtein | null; carb: PlanCarb | null; free: boolean 
 // own. Days no rule covers are free at dinner (the plan's «Libre», the weekly social meal: always
 // Saturday) and
 // «carne o pescado» at lunch.
-function slotsFor(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random): Slot[] {
+// trainingDays (1 = Monday … 7 = Sunday, Perfil): the plan's rice, pasta and potato go on those
+// days first and its legume on the others (carbs.ts); the plan keeps its number of each.
+function slotsFor(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random, trainingDays: number[] = []): Slot[] {
   const proteins = plan[meal].rules.flatMap((rule) => (rule.protein && !rule.carb ? Array(rule.days).fill(rule.protein) : []));
   const carbs = shuffle(plan[meal].rules.flatMap((rule) => (rule.carb ? Array(rule.days).fill(rule.carb) : [])), random);
   const planned = shuffle(proteins.slice(0, 7), random);
-  const freeCount = meal === "dinner" ? Math.max(0, 7 - Math.max(planned.length, carbs.length)) : 0;
+  const freeDinners = meal === "dinner" ? planFreeDinners(plan) : [];
 
   const slots: Slot[] = Array.from({ length: 7 }, (_, index) => ({ protein: planned[index] ?? null, carb: null, free: false }));
-  // The free dinner is always on Saturday (Sergio's choice), then Sunday, Friday… if there are more.
-  if (freeCount) {
-    const freeDays = [5, 6, 4, 3, 2, 1, 0];
-    const used = slots.filter((slot) => slot.protein).length;
+  if (freeDinners.length) {
     // Proteins move off the free days so that every rule keeps its days.
     const proteinsLeft = slots.map((slot) => slot.protein).filter(Boolean) as PlanProtein[];
-    const free = new Set(freeDays.slice(0, Math.min(freeCount, 7 - used)));
+    const free = new Set(freeDinners);
     let next = 0;
     for (let day = 0; day < 7; day++) {
       slots[day] = free.has(day) ? { protein: null, carb: null, free: true } : { protein: proteinsLeft[next++] ?? null, carb: null, free: false };
     }
   }
   const open = shuffle(slots.map((slot, day) => (slot.free ? -1 : day)).filter((day) => day >= 0), random);
-  carbs.slice(0, open.length).forEach((carb, index) => (slots[open[index]].carb = carb));
+  const training = open.filter((day) => trainingDays.includes(day + 1));
+  const rest = open.filter((day) => !trainingDays.includes(day + 1));
+  const taken = new Set<number>();
+  for (const carb of carbs) {
+    const day = (carb === "legume" ? [...rest, ...training] : [...training, ...rest]).find((candidate) => !taken.has(candidate));
+    if (day === undefined) break;
+    taken.add(day);
+    slots[day].carb = carb;
+  }
   return slots;
 }
 
@@ -488,7 +499,7 @@ function withSide(title: string, side: string) {
 }
 
 // used: titles already in the week (a dish fits lunch and dinner; it is never eaten twice).
-function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random, used: Set<string>, profile: RestrictionProfile | null) {
+function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Random, used: Set<string>, profile: RestrictionProfile | null, trainingDays: number[]) {
   const pool = candidates(meal, plan, profile).filter(
     (dish) =>
       !(meal === "dinner" && plan.noRedMeatAtDinner && dish.protein === "red_meat") &&
@@ -500,7 +511,7 @@ function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Ran
   // A few arrangements of the slots; the one where most days have a real dish wins.
   let best: { slots: Slot[]; score: number } | null = null;
   for (let attempt = 0; attempt < 40; attempt++) {
-    const slots = slotsFor(meal, plan, random);
+    const slots = slotsFor(meal, plan, random, trainingDays);
     const score = slots.filter(
       (slot) => slot.free || pool.some((dish) => dish.carb === slot.carb && (slot.protein ? dish.protein === slot.protein : dish.protein && dish.protein !== "egg" && dish.protein !== "red_meat")),
     ).length;
@@ -510,12 +521,16 @@ function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Ran
 
   return best!.slots.map((slot): string | null => {
     if (slot.free) return null;
-    const matches = pool.filter(
+    const fitting = pool.filter(
       (dish) =>
         !used.has(dish.title) &&
         dish.carb === slot.carb &&
         (slot.protein ? dish.protein === slot.protein : dish.protein !== null && dish.protein !== "egg" && dish.protein !== "red_meat"),
     );
+    // A slot without rice, pasta or potato (a legume or none) takes no other starch either (bread,
+    // wraps, quinoa…) when the pool allows it: the plan's carbohydrates stay on their days.
+    const plain = slot.carb && slot.carb !== "legume" ? fitting : fitting.filter((dish) => !dish.starchy);
+    const matches = plain.length ? plain : fitting;
     // Catalogue recipes first, by their exact title (the week's card then shows their recipe), then
     // the plan's own examples and the ideas, which take the plan's vegetable side.
     const fromCatalog = matches.filter((dish) => dish.source === "catalog");
@@ -536,13 +551,25 @@ function chooseDishes(meal: "lunch" | "dinner", plan: NutritionPlan, random: Ran
   });
 }
 
-// Seven lunches and dinners (Monday to Sunday) that keep the plan's rules. With a profile, the
-// examples, catalogue recipes and ideas whose title conflicts with it are left out.
-export function generatePlanWeek(plan: NutritionPlan, seed: number, profile: RestrictionProfile | null = null): ImportedMenuDay[] {
+// The plan's free dinners (0 = Monday … 6 = Sunday): the days its dinner rules leave uncovered (the
+// plan's «Libre», the weekly social meal), always Saturday first (Sergio's choice), then Sunday,
+// Friday… if there are more.
+export function planFreeDinners(plan: NutritionPlan): number[] {
+  const proteins = Math.min(7, plan.dinner.rules.reduce((total, rule) => total + (rule.protein && !rule.carb ? rule.days : 0), 0));
+  const carbs = plan.dinner.rules.reduce((total, rule) => total + (rule.carb ? rule.days : 0), 0);
+  const count = Math.max(0, 7 - Math.max(proteins, carbs));
+  return [5, 6, 4, 3, 2, 1, 0].slice(0, count);
+}
+
+// The last resort of the plan's week (plan-week.ts), when the marked recipes cannot fill it: seven
+// lunches and dinners (Monday to Sunday) that keep the plan's rules. With a profile, the examples,
+// marked recipes and ideas whose title conflicts with it are left out. trainingDays (1 = Monday …
+// 7 = Sunday): the days the plan's starchy carbohydrates go first.
+export function generatePlanRulesWeek(plan: NutritionPlan, seed: number, profile: RestrictionProfile | null = null, trainingDays: number[] = []): ImportedMenuDay[] {
   const random = seededRandom(seed);
   const used = new Set<string>();
-  const lunches = chooseDishes("lunch", plan, random, used, profile);
-  const dinners = chooseDishes("dinner", plan, random, used, profile);
+  const lunches = chooseDishes("lunch", plan, random, used, profile, trainingDays);
+  const dinners = chooseDishes("dinner", plan, random, used, profile, trainingDays);
   const slot = (title: string | null) => (title ? { status: "planned" as const, dishName: title } : { status: "free" as const, dishName: "" });
   return dayNames.map((dayName, index) => ({ dayName, lunch: slot(lunches[index]), dinner: slot(dinners[index]) }));
 }
@@ -760,7 +787,7 @@ export function isPlanExtras(value: unknown): value is PlanExtras {
 export function planWarnings(plan: NutritionPlan, days: ImportedMenuDay[]) {
   const free = days.filter((day) => day.dinner.status === "free").map((day) => day.dayName.toLowerCase());
   return [
-    "Es un plan nutricional: hemos elegido las comidas y las cenas siguiendo sus reglas y ejemplos. Cambia con «Otra idea» lo que no te encaje.",
+    "Es un plan nutricional: del plan salen los desayunos, las medias mañanas, las meriendas y la compra; las comidas y las cenas, del recetario de beCook, con hidratos los días que entrenas. Cambia con «Otra idea» lo que no te encaje.",
     ...(free.length ? [`Cena libre el ${free.join(" y el ")}: la comida social de la semana del plan.`] : []),
   ];
 }

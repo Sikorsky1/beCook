@@ -240,7 +240,7 @@ function freshDraftModule() {
  return require(file);
 }
 
-const form = {mode: "generate", menuText: "", freeTextPrompt: "cenas ligeras", peopleCount: 3, menuStyles: ["mediterranean"], elaborationLevel: 2};
+const form = {mode: "generate", menuText: "", freeTextPrompt: "cenas ligeras", peopleCount: 3, menuStyles: ["mediterranean"]};
 
 test("a running generation is found again by the same identity and week only, with its form; finishing clears it", async () => {
  const draft = freshDraftModule();
