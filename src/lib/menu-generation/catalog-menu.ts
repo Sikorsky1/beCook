@@ -9,6 +9,7 @@ import { dishGroups, highMercury, isFish, mainProtein, type DishGroup } from "./
 import { addGroups, countGroups, missingMinimums, weekQuotas, withinMaximums, type WeekCounts, type WeekQuotas } from "./quotas";
 import { batchFriendly, leftoverTitle } from "./leftovers";
 import { isStarchyDish, prefersStarch } from "./carbs";
+import { defaultMenuRules, minimumViolations, redMeatDays, ruleDish, ruleViolations, type MenuRules, type RuleDish } from "./menu-rules";
 import { dayNames, isGenericDish, normalizeFood, selectionToMenu, type MenuProfile } from "./validation";
 
 // Weekly menu from the recipe catalogue (src/data/nutritionist-recipes.json), without the AI, and
@@ -17,7 +18,11 @@ import { dayNames, isGenericDish, normalizeFood, selectionToMenu, type MenuProfi
 // catalogue is no longer used (2026-10-22). The week takes the recipes that fit the chosen types,
 // leaves out every recipe whose title conflicts with the profile
 // (diets, allergies, «otras alergias» and foods the user does not like) and the dishes of recent
-// weeks, puts the starchy dishes on the training days of the profile (carbs.ts), keeps the weekly frequencies of AESAN 2022 (quotas.ts, N05) and spreads the main proteins. Each recipe is checked with its title and its recipe
+// weeks, keeps the weekly rules of lunches and dinners with the carbohydrates on the training days
+// of the profile (menu-rules.ts, 2026-10-24; the week that breaks the fewest when not all fit) and
+// spreads the main proteins. Vegetarian and vegan profiles, which those rules do not fit, keep the
+// weekly frequencies of AESAN 2022 (quotas.ts, N05) with the starchy dishes on the training days
+// (carbs.ts). Each recipe is checked with its title and its recipe
 // (catalog-checks.json); the recipes are unreviewed drafts, so passing the check never certifies
 // the absence of allergens or traces (the same rule as the AI menus).
 
@@ -87,6 +92,10 @@ export type CatalogMenuRequest = {
   // A nutritionist's plan that says «En cenas: carne roja» under «Evitar» (plan-week.ts): no red
   // meat at dinner, as the plan counts it (lomo de cerdo and cordero are its «carne blanca»).
   noRedMeatAtDinner?: boolean;
+  // The weekly rules (menu-rules.ts): a nutritionist's plan brings its own; default, Sergio's.
+  rules?: MenuRules;
+  // Dinners the plan leaves free (0 = Monday … 6 = Sunday): they count for no rule.
+  freeDinners?: number[];
 };
 
 type Candidate = CatalogRecipe & {
@@ -103,6 +112,8 @@ type Candidate = CatalogRecipe & {
   species: string | null;
   // Pasta, rice, potato, bread… (carbs.ts), for the training days of the profile.
   starchy: boolean;
+  // What the weekly rules read of it (menu-rules.ts).
+  rule: RuleDish;
   score: number;
 };
 
@@ -130,6 +141,8 @@ function candidatesFor(meal: "lunch" | "dinner", request: CatalogMenuRequest, re
       (styleMatches ? 10 + styleMatches * 2 : 0) +
       (goals.has("save_time") && card?.totalMinutes != null && card.totalMinutes <= 30 ? 2 : 0) -
       (goals.has("cook_home") && breadDish.test(key) ? 3 : 0) +
+      // «Más verdura y legumbre» within the weekly rules: legume dishes score a little more.
+      (goals.has("more_plants") && dishGroups(recipe.name, card?.ingredients ?? null).includes("legume") ? 2 : 0) +
       (pantry.length && (card?.ingredients ?? []).some((ingredient) => !ingredient.optional && pantry.some((item) => ` ${normalizeFood(ingredient.name)} `.includes(` ${item} `))) ? 1 : 0);
     const groups = dishGroups(recipe.name, card?.ingredients ?? null);
     if (meal === "dinner" && request.noRedMeatAtDinner) {
@@ -151,6 +164,7 @@ function candidatesFor(meal: "lunch" | "dinner", request: CatalogMenuRequest, re
       cost: tags?.cost ?? 2,
       species: tags?.species ?? null,
       starchy: isStarchyDish(recipe.name, card?.ingredients ?? null),
+      rule: ruleDish(recipe.name, card?.ingredients ?? null),
       score,
     }];
   });
@@ -166,10 +180,54 @@ const minimumScore = (candidates: Candidate[]) => {
 type Pools = { lunch: Candidate[]; dinner: Candidate[] };
 type Week = { lunch: Candidate[]; dinner: Candidate[]; counts: WeekCounts };
 
+// The weekly rules of the request, or null for the profiles they do not fit (vegetarian, vegan).
+function rulesOf(request: CatalogMenuRequest): MenuRules | null {
+  const diets = new Set(request.profile.dietaryRestrictions);
+  if (diets.has("vegetarian") || diets.has("vegan")) return null;
+  return request.rules ?? defaultMenuRules;
+}
+
+// With the rules, the AESAN minimums and meat and fish maximums give way to them; processed meat,
+// eggs and red meat (counted as the rules count it, ruleCaps) keep their maximums.
+const ruleQuotas = (quotas: WeekQuotas): WeekQuotas => ({ ...quotas, legumeMin: 0, fishMin: 0, blueFishMin: 0, fishMax: 14, meatMax: 14, redMeatMax: 14 });
+
+const ruleWeekOf = (week: { lunch: { rule: RuleDish }[]; dinner: { rule: RuleDish }[] }, freeDinners: number[]) => ({
+  lunch: week.lunch.map((pick) => pick.rule),
+  dinner: week.dinner.map((pick, day) => (freeDinners.includes(day) ? null : pick.rule)),
+});
+
 // One week: fourteen picks, lunch then dinner, day by day. The maximums of the quotas are hard
-// (a recipe that would pass one is never picked); the minimums push: a recipe of a missing group is
-// preferred more as the week runs out, and required when the slots left are just enough.
+// (a recipe that would pass one is never picked). With the weekly rules, each pick is one of the
+// recipes that keep the most rules still open (ruleGain); without them, the AESAN minimums push: a
+// recipe of a missing group is preferred more as the week runs out, and required when the slots
+// left are just enough.
 function pickWeek(pools: Pools, request: CatalogMenuRequest, quotas: WeekQuotas, available: { legume: number; fish: number; blueFish: number }, random: () => number): Week | null {
+  const rules = rulesOf(request);
+  const trainingWeekdays = request.profile.trainingWeekdays ?? [];
+  const freeDinners = request.freeDinners ?? [];
+  const redMeatMax = rules ? Math.max(1, redMeatDays(rules)) : Infinity;
+  const ruleCount = { lunch: new Map<string, number>(), dinner: new Map<string, number>() };
+  let redMeat = 0;
+  // What a pick adds to the rules: +1 for each protein or carbohydrate rule still missing days, -1
+  // for a carbohydrate on a day without training or a lunch without vegetables. A carbohydrate on a
+  // rest day counts only when the training days left cannot take the days it still needs.
+  const ruleGain = (candidate: Candidate, meal: "lunch" | "dinner", day: number) => {
+    if (!rules || (meal === "dinner" && freeDinners.includes(day))) return 0;
+    const { protein, carb, meatOrFish, hydrate, vegetable } = candidate.rule;
+    const mealRules = rules[meal];
+    const counts = ruleCount[meal];
+    const training = !trainingWeekdays.length || trainingWeekdays.includes(day + 1);
+    let gain = 0;
+    if (protein && (mealRules.proteins[protein] ?? 0) > (counts.get(protein) ?? 0)) gain++;
+    if (carb && meatOrFish && (mealRules.carbs[carb] ?? 0) > (counts.get(carb) ?? 0)) {
+      const carbsLeft = Object.entries(mealRules.carbs).reduce((total, [key, days]) => total + Math.max(0, (days ?? 0) - (counts.get(key) ?? 0)), 0);
+      const trainingLeft = trainingWeekdays.filter((weekday) => weekday > day + 1).length;
+      if (training || carbsLeft > trainingLeft) gain++;
+    }
+    if (!training && hydrate) gain--;
+    if (meal === "lunch" && mealRules.vegetableSide && !vegetable) gain--;
+    return gain;
+  };
   const goals = new Set(request.profile.goals);
   const kindMax = goals.has("varied") ? 1 : 2;
   const speciesCount = new Map<string, number>();
@@ -187,7 +245,12 @@ function pickWeek(pools: Pools, request: CatalogMenuRequest, quotas: WeekQuotas,
     const starch = prefersStarch(request.profile.trainingWeekdays ?? [], day);
     for (const meal of ["lunch", "dinner"] as const) {
       const slotsLeft = 14 - (day * 2 + (meal === "dinner" ? 1 : 0));
-      const withinMax = pools[meal].filter((candidate) => !used.has(candidate.key) && withinMaximums(addGroups(week.counts, candidate.groups), quotas));
+      const withinMax = pools[meal].filter(
+        (candidate) =>
+          !used.has(candidate.key) &&
+          withinMaximums(addGroups(week.counts, candidate.groups), quotas) &&
+          (candidate.rule.protein !== "red_meat" || redMeat < redMeatMax),
+      );
       if (!withinMax.length) return null;
       // N14: one dish with ultra-processed ingredients a week at most, unless nothing else is left.
       const lowUpf = withinMax.filter((candidate) => !candidate.upf || upfCount < 1);
@@ -195,21 +258,24 @@ function pickWeek(pools: Pools, request: CatalogMenuRequest, quotas: WeekQuotas,
       // N19, «Ahorrar tiempo»: 30 minutes at most from Monday to Friday, unless nothing else is left.
       const quick = day < 5 && goals.has("save_time") ? lowUpfOrAll.filter((candidate) => candidate.minutes !== null && candidate.minutes <= 30) : lowUpfOrAll;
       const capped = quick.length ? quick : lowUpfOrAll;
+      // The weekly rules first: only the recipes that keep the most.
+      const bestGain = Math.max(...capped.map((candidate) => ruleGain(candidate, meal, day)));
+      const keeping = rules ? capped.filter((candidate) => ruleGain(candidate, meal, day) === bestGain) : capped;
       const missing = missingMinimums(week.counts, quotas, available);
       const need = missing.legume + Math.max(missing.fish, missing.blueFish);
       const helps = (candidate: Candidate) =>
         (missing.legume > 0 && candidate.groups.includes("legume")) ||
         (missing.fish > 0 && candidate.groups.some(isFish)) ||
         (missing.blueFish > 0 && candidate.groups.includes("blue_fish"));
-      const helping = capped.filter(helps);
-      const open = helping.length && (need >= slotsLeft || random() < need / slotsLeft) ? helping : capped;
+      const helping = rules ? [] : keeping.filter(helps);
+      const open = helping.length && (need >= slotsLeft || random() < need / slotsLeft) ? helping : keeping;
       // Preferences, loosened from the last when nothing is left: the best tier, a protein other
       // than the lunch's (fish counts as one), the same species at most twice a week and never on
       // consecutive days (N20), in season (N16), no kind of dish and no protein more than twice a
       // week per meal, and cheap recipes for «Gastar menos» (N19).
       // The training days go first (the last preference to be dropped), then the rest.
       const filters: ((candidate: Candidate) => boolean)[] = [
-        (candidate) => starch === null || candidate.starchy === starch,
+        (candidate) => starch === null || (rules ? candidate.rule.hydrate : candidate.starchy) === starch,
         (candidate) => candidate.score >= floors[meal],
         (candidate) => !(meal === "dinner" && candidate.protein && candidate.protein === lunchProtein),
         (candidate) =>
@@ -234,6 +300,12 @@ function pickWeek(pools: Pools, request: CatalogMenuRequest, quotas: WeekQuotas,
       week[meal].push(pick);
       week.counts = addGroups(week.counts, pick.groups);
       if (pick.upf) upfCount++;
+      if (pick.rule.protein === "red_meat") redMeat++;
+      if (!(meal === "dinner" && freeDinners.includes(day))) {
+        const counts = ruleCount[meal];
+        if (pick.rule.protein) counts.set(pick.rule.protein, (counts.get(pick.rule.protein) ?? 0) + 1);
+        if (pick.rule.carb && pick.rule.meatOrFish) counts.set(pick.rule.carb, (counts.get(pick.rule.carb) ?? 0) + 1);
+      }
       if (pick.species) {
         speciesCount.set(pick.species, (speciesCount.get(pick.species) ?? 0) + 1);
         speciesDay.set(pick.species, day);
@@ -246,7 +318,25 @@ function pickWeek(pools: Pools, request: CatalogMenuRequest, quotas: WeekQuotas,
   return week;
 }
 
+// The preferences of variety a week of the rules may give up: a species more than twice or on
+// consecutive days (N20) and the same main protein at lunch and dinner.
+function weekRepeats(week: Week) {
+  const days = new Map<string, number[]>();
+  let repeats = 0;
+  week.lunch.forEach((lunch, day) => {
+    const dinner = week.dinner[day];
+    if (lunch.protein && lunch.protein === dinner.protein) repeats++;
+    for (const pick of [lunch, dinner]) if (pick.species) days.set(pick.species, [...(days.get(pick.species) ?? []), day]);
+  });
+  for (const list of days.values()) {
+    repeats += Math.max(0, list.length - 2);
+    repeats += list.filter((day, index) => index > 0 && day - list[index - 1] <= 1).length;
+  }
+  return repeats;
+}
+
 const weekAttempts = 15;
+const ruleAttempts = 30;
 
 // Seven lunches and seven dinners from the catalogue, or null when the catalogue has fewer than
 // seven compatible recipes for a meal, or no week within the maximums (then the AI decides).
@@ -258,7 +348,10 @@ export function catalogMenu(request: CatalogMenuRequest): ImportedMenuResponse |
     dinner: candidatesFor("dinner", request, recent),
   };
   if (pools.lunch.length < 7 || pools.dinner.length < 7) return null;
-  const quotas = weekQuotas(request.profile);
+  const rules = rulesOf(request);
+  const trainingWeekdays = request.profile.trainingWeekdays ?? [];
+  const freeDinners = request.freeDinners ?? [];
+  const quotas = rules ? ruleQuotas(weekQuotas(request.profile)) : weekQuotas(request.profile);
   const all = [...pools.lunch, ...pools.dinner];
   const available = {
     legume: all.filter((candidate) => candidate.groups.includes("legume")).length,
@@ -266,18 +359,23 @@ export function catalogMenu(request: CatalogMenuRequest): ImportedMenuResponse |
     blueFish: all.filter((candidate) => candidate.groups.includes("blue_fish")).length,
   };
 
-  // A few tries with the same seed: the first week that keeps every frequency, else the one that
-  // misses the fewest dishes.
+  // A few tries with the same seed: the first week that keeps every rule (or frequency), else the
+  // one that breaks the fewest rules (misses the fewest dishes).
+  const floor = rules ? minimumViolations(rules, trainingWeekdays) : 0;
   let best: Week | null = null;
   let bestMissing = Infinity;
-  for (let attempt = 0; attempt < weekAttempts && bestMissing > 0; attempt++) {
+  let bestRepeats = Infinity;
+  for (let attempt = 0; attempt < (rules ? ruleAttempts : weekAttempts) && (bestMissing > floor || (rules && bestRepeats > 0)); attempt++) {
     const week = pickWeek(pools, request, quotas, available, random);
     if (!week) continue;
     const missing = missingMinimums(week.counts, quotas, available);
-    const total = missing.legume + missing.fish + missing.blueFish;
-    if (total < bestMissing) {
+    const total = rules ? ruleViolations(rules, ruleWeekOf(week, freeDinners), trainingWeekdays) : missing.legume + missing.fish + missing.blueFish;
+    // With the rules, a tie goes to the week with fewer repeats (species, the lunch's protein at dinner).
+    const repeats = rules ? weekRepeats(week) : 0;
+    if (total < bestMissing || (total === bestMissing && repeats < bestRepeats)) {
       best = week;
       bestMissing = total;
+      bestRepeats = repeats;
     }
   }
   if (!best) return null;
@@ -290,6 +388,8 @@ export function catalogMenu(request: CatalogMenuRequest): ImportedMenuResponse |
     const dinnerGroups = best.dinner.map((pick) => pick.groups);
     const lunchGroups = best.lunch.map((pick) => pick.groups);
     const fullBefore = missingMinimums(best.counts, quotas, available);
+    const ruleWeek = ruleWeekOf(best, freeDinners);
+    const brokenBefore = rules ? ruleViolations(rules, ruleWeek, trainingWeekdays) : 0;
     let batches = 0;
     for (let day = 0; day < 5 && batches < 2; day++) {
       if (!batchFriendly(lunches[day], lunchGroups[day])) continue;
@@ -301,6 +401,10 @@ export function catalogMenu(request: CatalogMenuRequest): ImportedMenuResponse |
       const counts = countGroups([...lunchGroups, ...swapped]);
       const after = missingMinimums(counts, quotas, available);
       if (!withinMaximums(counts, quotas) || after.legume > fullBefore.legume || after.fish > fullBefore.fish || after.blueFish > fullBefore.blueFish) continue;
+      // With the weekly rules, a leftover dinner never breaks one more.
+      const ruleSwapped = { ...ruleWeek, dinner: ruleWeek.dinner.map((dish, index) => (index === day + 1 && dish ? best!.lunch[day].rule : dish)) };
+      if (rules && ruleViolations(rules, ruleSwapped, trainingWeekdays) > brokenBefore) continue;
+      ruleWeek.dinner = ruleSwapped.dinner;
       dinners[day + 1] = leftoverTitle(lunches[day], dayNames[day]);
       dinnerGroups[day + 1] = lunchGroups[day];
       batches++;
