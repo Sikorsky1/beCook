@@ -7,13 +7,22 @@ import { countGroups, weekQuotas, type QuotaProfile } from "./quotas";
 // What a week has, said in positive (N10): legumes, fish, vegetables… and, when something is
 // missing, a suggestion without judgement. No calories, no «bien/mal». Each line has a short «¿Por
 // qué?» with its source. Created and imported weeks alike; dishes outside the catalogue are read by
-// their title only.
+// their title only. Since 2026-10-24 the weeks keep the weekly rules of lunches and dinners
+// (menu-rules.ts), which ask for fewer legumes and more meat and fish than AESAN: the summary
+// suggests by AESAN only for the vegetarian and vegan profiles, which keep its frequencies.
 
 export type WeekSummary = {
   highlights: string[];
   suggestions: string[];
   reasons: { topic: string; text: string; source: string }[];
 };
+
+const ruleReasons = [
+  { topic: "Comidas", text: "Un día legumbre, uno arroz, uno pasta y uno patata, con carne o pescado; carne roja un día, carne blanca dos, pescado azul dos y pescado blanco dos; siempre con verdura.", source: "Reglas del plan nutricional" },
+  { topic: "Cenas", text: "Pescado blanco dos días, huevo dos y carne blanca dos.", source: "Reglas del plan nutricional" },
+  { topic: "Hidratos", text: "Legumbre, arroz, pasta y patata en los días de entreno.", source: "Reglas del plan nutricional" },
+  { topic: "Verdura y fruta", text: "Al menos 5 raciones al día entre las dos, de temporada cuando se pueda.", source: "AESAN 2022 · OMS" },
+];
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
@@ -37,6 +46,12 @@ export function weekSummary(dishes: string[], profile: QuotaProfile, tagsOf: Tag
     highlights.push(withVeg === planned.length ? "verdura en todas las comidas" : `verdura en ${withVeg} de ${planned.length} comidas`);
     const wholegrain = known.filter((tag) => tag.starch === "wholegrain").length;
     if (wholegrain) highlights.push(plural(wholegrain, "plato integral", "platos integrales"));
+  }
+
+  const diets = new Set(profile.dietaryRestrictions);
+  if (!diets.has("vegetarian") && !diets.has("vegan")) {
+    if (counts.processedMeat > quotas.processedMeatMax) suggestions.push("Puedes cambiar algún plato de carne procesada por carne blanca, huevo o pescado.");
+    return { highlights, suggestions, reasons: ruleReasons };
   }
 
   const scale = planned.length / 14;

@@ -128,37 +128,25 @@ test("the plan's week: only marked recipes, by exact title and in their meal; fr
  assert.notDeepEqual(generatePlanWeek(plan, 7), generatePlanWeek(plan, 8));
 });
 
-test("the plan's week: recipes outside the plan's rules come up as often as the others (e.g. a blue fish dinner)", () => {
- // Out of the rules of this plan: blue fish or red meat at dinner, a fried or processed dish.
- const outOfRules = (meal, title) =>
-  /\b(frit\w*|rebozad[oa]s?|empanad[oa]s?|croquetas?|hamburguesas?|salchichas?|chorizo|bacon)\b/.test(np.normalizePlanText(title)) ||
-  (meal === "dinner" && ["blue_fish", "red_meat"].includes(np.dishProtein(title)));
- let weeksWithBlueDinner = 0, dinnersOut = 0, dinners = 0;
- const weeks = 300;
- for (let seed = 1; seed <= weeks; seed++) {
-  const days = generatePlanWeek(plan, seed * 7919, null, [1, 3, 5]);
-  if (days.some((day) => day.dinner.status === "planned" && np.dishProtein(day.dinner.dishName) === "blue_fish")) weeksWithBlueDinner++;
-  for (const day of days) if (day.dinner.status === "planned") {
-   dinners++;
-   if (outOfRules("dinner", day.dinner.dishName)) dinnersOut++;
+test("the plan's week keeps the plan's rules (Sergio, 2026-10-24): the fewest broken, carbohydrates on the training days", () => {
+ const {ruleBreakdown, rulesFromPlan, defaultMenuRules, minimumViolations, ruleDish} = require("../src/lib/menu-generation/menu-rules.ts");
+ const {catalogCardForCheck} = require("../src/lib/recipes/catalogChecks.ts");
+ const rules = rulesFromPlan(plan);
+ // The PDF's rules are the default ones of every menu.
+ assert.deepEqual(rules, defaultMenuRules);
+ const dish = (slot) => (slot.status === "planned" ? ruleDish(slot.dishName, catalogCardForCheck(slot.dishName)?.ingredients ?? null) : null);
+ for (const trainingDays of [[1, 3, 5], [2, 4, 6, 7], [1, 2, 3, 4, 5]]) {
+  let atMinimum = 0;
+  const weeks = 150;
+  for (let seed = 1; seed <= weeks; seed++) {
+   const days = generatePlanWeek(plan, seed * 7919, null, trainingDays);
+   const broken = ruleBreakdown(rules, {lunch: days.map((day) => dish(day.lunch)), dinner: days.map((day) => dish(day.dinner))}, trainingDays);
+   if (broken.total <= minimumViolations(rules, trainingDays)) atMinimum++;
+   // No blue fish or red meat at dinner: the plan's dinners are white fish, egg and white meat.
+   for (const day of days) if (day.dinner.status === "planned") assert.ok(!["blue_fish", "red_meat"].includes(dish(day.dinner).protein), day.dinner.dishName);
   }
+  assert.ok(atMinimum / weeks >= 0.95, `${trainingDays}: ${atMinimum}/${weeks}`);
  }
- // The same chance as in a Crear menú week of the same profile: the plan's rules weigh nothing.
- // Only the weekly frequencies (AESAN: 4 fish dishes a week at most…) and the training days shape
- // both.
- const {catalogMenu} = require("../src/lib/menu-generation/catalog-menu.ts");
- const {readMenuProfile} = require("../src/lib/menu-generation/profile-input.ts");
- const profile = readMenuProfile({trainingWeekdays: [1, 3, 5], weeklyTrainingDays: 3});
- let menuOut = 0, menuDinners = 0;
- for (let seed = 1; seed <= weeks; seed++) {
-  for (const day of catalogMenu({profile, styles: [], seed: seed * 7919, noRedMeatAtDinner: true}).days.slice(0, 7)) {
-   menuDinners++;
-   if (outOfRules("dinner", day.dinner.dishName)) menuOut++;
-  }
- }
- assert.ok(weeksWithBlueDinner / weeks >= 0.5, `blue fish dinners in ${weeksWithBlueDinner}/${weeks} weeks`);
- assert.ok(dinnersOut / dinners >= 0.15, `${dinnersOut}/${dinners}`);
- assert.ok(Math.abs(dinnersOut / dinners - menuOut / menuDinners) <= 0.05, `${dinnersOut}/${dinners} vs Crear menú ${menuOut}/${menuDinners}`);
 });
 
 test("the plan's week: «En cenas: carne roja» under «Evitar» keeps red meat off the dinners; fried dishes stay", () => {
@@ -180,22 +168,22 @@ test("the plan's week: «En cenas: carne roja» under «Evitar» keeps red meat 
  assert.ok(friedDishes > 0);
 });
 
-test("the plan's week: a starch at lunch and dinner on the training days only", () => {
- const {isStarchyDish} = require("../src/lib/menu-generation/carbs.ts");
+test("the plan's week: no carbohydrate on the days without training; three training days leave one carbohydrate lunch out", () => {
+ const {ruleDish} = require("../src/lib/menu-generation/menu-rules.ts");
  const {catalogCardForCheck} = require("../src/lib/recipes/catalogChecks.ts");
- const starchy = (title) => isStarchyDish(title, catalogCardForCheck(title)?.ingredients ?? null);
+ const hydrate = (title) => ruleDish(title, catalogCardForCheck(title)?.ingredients ?? null).hydrate;
  for (const trainingDays of [[1, 3, 5], [2, 4, 6, 7]]) {
-  let kept = 0, total = 0;
-  for (let seed = 1; seed <= 200; seed++) {
+  let off = 0, carbLunches = 0;
+  const weeks = 200;
+  for (let seed = 1; seed <= weeks; seed++) {
    generatePlanWeek(plan, seed, null, trainingDays).forEach((day, index) => {
-    for (const slot of [day.lunch, day.dinner]) if (slot.status === "planned") {
-     total++;
-     if (starchy(slot.dishName) === trainingDays.includes(index + 1)) kept++;
-    }
+    for (const slot of [day.lunch, day.dinner]) if (slot.status === "planned" && hydrate(slot.dishName) && !trainingDays.includes(index + 1)) off++;
+    if (hydrate(day.lunch.dishName)) carbLunches++;
    });
   }
-  // A preference, never above the weekly legume minimum: a legume salad may close a training day.
-  assert.ok(kept / total >= 0.98, `${trainingDays}: ${kept}/${total}`);
+  // Four carbohydrate lunches a week: with three training days, one is missing or on a rest day.
+  assert.ok(off / weeks <= (trainingDays.length >= 4 ? 0.05 : 1), `${trainingDays}: ${off} off training`);
+  assert.ok(carbLunches / weeks >= Math.min(4, trainingDays.length) - 0.05, `${trainingDays}: ${carbLunches} carbohydrate lunches`);
  }
 });
 

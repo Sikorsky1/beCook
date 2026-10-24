@@ -228,7 +228,8 @@ test("HTTP route: without a weekly request the catalogue answers, without OpenAI
   assert.equal(response.status, 200);
   const data = await response.json();
   assert.equal(data.days.length, 7);
-  assert.ok(weekOf(data).filter(n => hasStyle(n, "quick_simple")).length >= 12);
+  // The weekly rules (2026-10-24) come before the type: most dishes, not all, are of the chosen one.
+  assert.ok(weekOf(data).filter(n => hasStyle(n, "quick_simple")).length >= 9);
   assert.deepEqual({model: data.openaiTelemetry.modelUsed, cost: data.openaiTelemetry.estimatedCostUsd}, {model: "catalog", cost: 0});
   assert.equal(fakes.openAICalls, 0);
   assert.equal(fakes.begin.length, 0, "no usage record: the catalogue is free and outside the AI quota");

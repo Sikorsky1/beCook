@@ -8,7 +8,7 @@ const path = require("node:path");
 const {catalogMenu} = require("../src/lib/menu-generation/catalog-menu.ts");
 const {readMenuProfile} = require("../src/lib/menu-generation/prompt.ts");
 const {dishGroups, mainProtein, highMercury} = require("../src/lib/menu-generation/food-groups.ts");
-const {countGroups, meetsQuotas, weekQuotas, withinMaximums} = require("../src/lib/menu-generation/quotas.ts");
+const {countGroups, meetsQuotas, weekQuotas} = require("../src/lib/menu-generation/quotas.ts");
 const {catalogAlternative} = require("../src/lib/menu-generation/substitution.ts");
 const {catalogCardForCheck} = require("../src/lib/recipes/catalogChecks.ts");
 const {checkDish, blocksAutomaticProposal, allergyLabels} = require("../src/lib/recipes/restriction-check.ts");
@@ -127,21 +127,15 @@ test("N04: AESAN food groups of real catalogue titles", () => {
  assert.ok(catalog.filter(r => !groupsOf(r.name).length).length / catalog.length < 0.1);
 });
 
-test("N05: ≥95 % of weeks keep the AESAN frequencies; the meat maximum never gives way", () => {
+test("N05: the weekly rules (2026-10-24) come before AESAN; processed meat, eggs and red meat keep their maximums; vegetarians keep AESAN", () => {
+ const {ruleDish} = require("../src/lib/menu-generation/menu-rules.ts");
  const profile = readMenuProfile({});
- const quotas = weekQuotas(profile);
- let ok = 0;
- const weeks = 200;
- for (let seed = 1; seed <= weeks; seed++) {
-  const counts = countGroups(weekOf(week(profile, seed)).map(groupsOf));
-  if (meetsQuotas(counts, quotas)) ok++;
-  assert.ok(withinMaximums(counts, quotas), `seed ${seed}`);
- }
- assert.ok(ok / weeks >= 0.95, `${ok}/${weeks}`);
- for (const styles of [["mediterranean"], ["quick_simple"], ["healthy_balanced", "quick_simple"]]) {
+ for (const styles of [["healthy_balanced"], ["mediterranean"], ["quick_simple"], ["healthy_balanced", "quick_simple"]]) {
   for (let seed = 1; seed <= 40; seed++) {
-   const counts = countGroups(weekOf(week(profile, seed, styles, "simple")).map(groupsOf));
-   assert.ok(counts.meat <= 3 && counts.redMeat <= 1 && counts.processedMeat === 0 && counts.egg <= 4, `${styles} ${seed}`);
+   const dishes = weekOf(week(profile, seed, styles));
+   const counts = countGroups(dishes.map(groupsOf));
+   const red = dishes.filter(dish => ruleDish(dish, catalogCardForCheck(dish)?.ingredients ?? null).protein === "red_meat").length;
+   assert.ok(red <= 1 && counts.processedMeat === 0 && counts.egg <= 4, `${styles} ${seed}`);
   }
  }
  const vegetarian = readMenuProfile({dietaryRestrictions: ["vegetarian"]});
@@ -180,9 +174,16 @@ test("N06: habit goals only, and each one changes the week", () => {
    assert.ok(![dish, ...(card?.ingredients ?? []).map(i => i.name)].some(t => highMercury.test(normalizeFood(t))), dish);
   }
  }
- const plants = readMenuProfile({goals: ["more_plants"]});
+ // «Más verdura y legumbre»: within the weekly rules, more legume dishes than without the goal.
+ const legumes = goals => {
+  let total = 0;
+  for (let seed = 1; seed <= 60; seed++) total += countGroups(weekOf(week(readMenuProfile({goals}), seed)).map(groupsOf)).legume;
+  return total;
+ };
+ assert.ok(legumes(["more_plants"]) > legumes([]), "more_plants");
+ const vegetarianPlants = readMenuProfile({dietaryRestrictions: ["vegetarian"], goals: ["more_plants"]});
  let ok = 0;
- for (let seed = 1; seed <= 60; seed++) if (countGroups(weekOf(week(plants, seed)).map(groupsOf)).legume >= 5) ok++;
+ for (let seed = 1; seed <= 60; seed++) if (countGroups(weekOf(week(vegetarianPlants, seed)).map(groupsOf)).legume >= 5) ok++;
  assert.ok(ok / 60 >= 0.95, `more_plants ${ok}/60`);
 });
 
@@ -228,11 +229,18 @@ test("N10: the week summary is positive, cites its source and suggests what is m
  const profile = readMenuProfile({});
  const good = weekSummary(weekOf(week(profile, 3)), profile);
  assert.ok(good.highlights.some(text => /legumbre/.test(text)));
+ // The weekly rules (2026-10-24) ask for more meat and fish than AESAN: no AESAN suggestion.
  assert.deepEqual(good.suggestions, []);
  for (const reason of good.reasons) assert.ok(reason.source.length > 3, reason.topic);
- const meaty = weekSummary(["Muslos de pavo al horno con patatas", "Hamburguesas de pollo caseras", "Bocadillo de lomo de ternera con vegetales", "Pollo al ras el hanout con cuscús, maíz y guisantes", "Alcachofas con jamón", "Tortilla de patata", "Crema de brócoli"], profile);
- assert.ok(meaty.suggestions.some(text => /legumbre/.test(text)));
- const text = normalizeFood(JSON.stringify([good, meaty]));
+ assert.ok(good.reasons.some(reason => /plan nutricional/.test(reason.source)));
+ const meatyWeek = ["Muslos de pavo al horno con patatas", "Hamburguesas de pollo caseras", "Bocadillo de lomo de ternera con vegetales", "Pollo al ras el hanout con cuscús, maíz y guisantes", "Alcachofas con jamón", "Tortilla de patata", "Crema de brócoli"];
+ const meaty = weekSummary(meatyWeek, profile);
+ assert.ok(meaty.suggestions.some(text => /procesada/.test(text)));
+ // Vegetarian and vegan profiles keep the AESAN frequencies, and their suggestions.
+ const vegetarian = readMenuProfile({dietaryRestrictions: ["vegetarian"]});
+ const fewLegumes = weekSummary(["Tortilla de patata", "Crema de brócoli", "Pisto manchego", "Ensalada de tomate", "Espaguetis al pesto", "Crema de calabaza", "Pizza margarita"], vegetarian);
+ assert.ok(fewLegumes.suggestions.some(text => /legumbre/.test(text)));
+ const text = normalizeFood(JSON.stringify([good, meaty, fewLegumes]));
  assert.doesNotMatch(text, /malo|prohibid|culpa|engorda|caloria/);
  assert.equal(weekSummary(["Lentejas estofadas"], profile), null, "too few dishes to say anything");
 });
@@ -335,7 +343,21 @@ test("N18: recipes that use pantry products come first («usa lo que tienes»)",
 test("N17: «Cocinar una vez para dos comidas»: stews eaten again the next day; bought once, double", () => {
  const {parseLeftover} = require("../src/lib/menu-generation/leftovers.ts");
  const build = require("../src/lib/shopping/build.ts");
- const profile = readMenuProfile({});
+ // The weekly rules (2026-10-24) want meat or fish at every lunch, and leftovers are meatless
+ // stews: with them a leftover comes only when it breaks no more rules (rare). Vegetarian weeks
+ // keep AESAN and their leftovers.
+ const profile = readMenuProfile({dietaryRestrictions: ["vegetarian"]});
+ const {ruleDish, ruleViolations, defaultMenuRules} = require("../src/lib/menu-generation/menu-rules.ts");
+ const rulesOf = menu => ({lunch: menu.days.map(d => ruleDish(d.lunch.dishName, catalogCardForCheck(d.lunch.dishName)?.ingredients ?? null)), dinner: menu.days.map(d => {
+  const title = parseLeftover(d.dinner.dishName)?.base ?? d.dinner.dishName;
+  return ruleDish(title, catalogCardForCheck(title)?.ingredients ?? null);
+ })});
+ const omnivore = readMenuProfile({trainingWeekdays: [1, 3, 5], weeklyTrainingDays: 3});
+ for (let seed = 1; seed <= 40; seed++) {
+  const plain = catalogMenu({profile: omnivore, styles: ["healthy_balanced"], seed});
+  const batch = catalogMenu({profile: omnivore, styles: ["healthy_balanced"], seed, batch: true});
+  assert.ok(ruleViolations(defaultMenuRules, rulesOf(batch), [1, 3, 5]) <= ruleViolations(defaultMenuRules, rulesOf(plain), [1, 3, 5]), `seed ${seed}`);
+ }
  let total = 0;
  for (let seed = 1; seed <= 30; seed++) {
   const menu = catalogMenu({profile, styles: ["healthy_balanced"], seed, batch: true});
