@@ -18,7 +18,7 @@ export type WeekSummary = {
 };
 
 const ruleReasons = [
-  { topic: "Comidas", text: "Un día legumbre, uno arroz, uno pasta y uno patata, con carne o pescado; carne roja un día, carne blanca dos, pescado azul dos y pescado blanco dos; siempre con verdura.", source: "Reglas del plan nutricional" },
+  { topic: "Comidas", text: "Un día legumbre, uno arroz, uno pasta y uno patata, con carne; carne roja un día y carne blanca dos; sin pescado y siempre con verdura.", source: "Reglas del plan nutricional" },
   { topic: "Cenas", text: "Pescado blanco dos días, huevo dos y carne blanca dos.", source: "Reglas del plan nutricional" },
   { topic: "Hidratos", text: "Legumbre, arroz, pasta y patata en los días de entreno.", source: "Reglas del plan nutricional" },
   { topic: "Verdura y fruta", text: "Al menos 5 raciones al día entre las dos, de temporada cuando se pueda.", source: "AESAN 2022 · OMS" },
