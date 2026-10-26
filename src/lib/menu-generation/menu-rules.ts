@@ -9,6 +9,9 @@ import { dishGroups, isFish, isMeat, type DishGroup, type DishIngredients } from
 //   fish; every lunch with a vegetable side;
 // - dinners: two days white fish, two egg and two white meat;
 // - the carbohydrates (legume, rice, pasta, potato, bread…) on the training days of the profile.
+// Since 2026-10-24 (Sergio) lunches avoid fish: the four carbohydrate lunches go with meat, the two
+// blue fish and two white fish lunches are gone, and the lunches with no meat rule may be
+// vegetarian. Each fish lunch counts as a broken rule.
 // They come before the AESAN frequencies (quotas.ts) and the menu types. When a week cannot keep
 // them all, the generator keeps the week that breaks the fewest (ruleViolations).
 // The proteins are counted as the plan counts them (dishProtein: «lomo de cerdo» and «cordero»
@@ -17,6 +20,10 @@ import { dishGroups, isFish, isMeat, type DishGroup, type DishIngredients } from
 export type MealRules = {
   proteins: Partial<Record<PlanProtein, number>>;
   carbs: Partial<Record<PlanCarb, number>>;
+  // «arroz + carne o pescado» (meatOrFish) or, since 2026-10-24 at lunch, «arroz + carne» (meat).
+  carbWith: "meat" | "meatOrFish";
+  // No fish at this meal (lunch, since 2026-10-24).
+  avoidFish: boolean;
   vegetableSide: boolean;
 };
 
@@ -24,19 +31,31 @@ export type MenuRules = { lunch: MealRules; dinner: MealRules };
 
 export const defaultMenuRules: MenuRules = {
   lunch: {
-    proteins: { red_meat: 1, white_meat: 2, blue_fish: 2, white_fish: 2 },
+    proteins: { red_meat: 1, white_meat: 2 },
     carbs: { legume: 1, rice: 1, pasta: 1, potato: 1 },
+    carbWith: "meat",
+    avoidFish: true,
     vegetableSide: true,
   },
   dinner: {
     proteins: { white_fish: 2, egg: 2, white_meat: 2 },
     carbs: {},
+    carbWith: "meatOrFish",
+    avoidFish: false,
     vegetableSide: false,
   },
 };
 
+// Sergio's lunches without fish (2026-10-24), over any plan's own lunch rules.
+const withoutFish = (rules: MealRules): MealRules => ({
+  ...rules,
+  proteins: Object.fromEntries(Object.entries(rules.proteins).filter(([protein]) => protein !== "blue_fish" && protein !== "white_fish")),
+  carbWith: "meat",
+  avoidFish: true,
+});
+
 // A nutritionist's plan brings its own rules («Dos días a la semana: pescado azul»); a plan
-// without lunch or dinner rules keeps the default ones for that meal.
+// without lunch or dinner rules keeps the default ones for that meal. Its lunches avoid fish too.
 export function rulesFromPlan(plan: NutritionPlan): MenuRules {
   const meal = (key: "lunch" | "dinner"): MealRules => {
     const rules = plan[key].rules;
@@ -47,17 +66,19 @@ export function rulesFromPlan(plan: NutritionPlan): MenuRules {
       if (rule.carb) carbs[rule.carb] = (carbs[rule.carb] ?? 0) + rule.days;
       else if (rule.protein) proteins[rule.protein] = (proteins[rule.protein] ?? 0) + rule.days;
     }
-    return { proteins, carbs, vegetableSide: key === "lunch" && plan.sides.length > 0 };
+    return { proteins, carbs, carbWith: "meatOrFish", avoidFish: false, vegetableSide: key === "lunch" && plan.sides.length > 0 };
   };
-  return { lunch: meal("lunch"), dinner: meal("dinner") };
+  return { lunch: withoutFish(meal("lunch")), dinner: meal("dinner") };
 }
 
 // What the rules read of a dish.
 export type RuleDish = {
   protein: PlanProtein | null;
   carb: PlanCarb | null;
-  // Meat or fish, for «arroz + carne o pescado».
+  // Meat or fish, for «arroz + carne o pescado»; meat (not processed), for «arroz + carne».
   meatOrFish: boolean;
+  meat: boolean;
+  fish: boolean;
   // Any carbohydrate: the four of the rules, bread, couscous, quinoa… (carbs.ts) or a legume.
   hydrate: boolean;
   vegetable: boolean;
@@ -90,6 +111,8 @@ export function ruleDish(title: string, ingredients: DishIngredients | null = nu
     protein,
     carb,
     meatOrFish: animal && groups.some((group) => group !== "processed_meat" && (isMeat(group) || isFish(group))),
+    meat: groups.some((group) => group !== "processed_meat" && isMeat(group)),
+    fish: groups.some(isFish),
     hydrate: carb !== null || groups.includes("legume") || isStarchyDish(title, ingredients),
     vegetable,
   };
@@ -105,8 +128,13 @@ export type RuleBreakdown = {
   hydrateOffTraining: number;
   // Lunches without a vegetable side.
   noVegetable: number;
+  // Fish at a meal that avoids it (lunch).
+  fish: number;
   total: number;
 };
+
+// «arroz + carne o pescado» or «arroz + carne».
+export const keepsCarb = (rules: MealRules, dish: RuleDish) => (rules.carbWith === "meat" ? dish.meat : dish.meatOrFish);
 
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
@@ -119,7 +147,7 @@ export function ruleBreakdown(rules: MenuRules, week: RuleWeek, trainingWeekdays
       if (short) missing[`${meal}.${protein}`] = short;
     }
     for (const [carb, days] of Object.entries(rules[meal].carbs)) {
-      const short = Math.max(0, (days ?? 0) - dishes.filter((dish) => dish.carb === carb && dish.meatOrFish).length);
+      const short = Math.max(0, (days ?? 0) - dishes.filter((dish) => dish.carb === carb && keepsCarb(rules[meal], dish)).length);
       if (short) missing[`${meal}.${carb}`] = short;
     }
   }
@@ -128,7 +156,8 @@ export function ruleBreakdown(rules: MenuRules, week: RuleWeek, trainingWeekdays
     ? sum((["lunch", "dinner"] as const).map((meal) => week[meal].filter((dish, day) => dish?.hydrate && !training.has(day + 1)).length))
     : 0;
   const noVegetable = rules.lunch.vegetableSide ? week.lunch.filter((dish) => dish && !dish.vegetable).length : 0;
-  return { missing, hydrateOffTraining, noVegetable, total: sum(Object.values(missing)) + hydrateOffTraining + noVegetable };
+  const fish = sum((["lunch", "dinner"] as const).map((meal) => (rules[meal].avoidFish ? week[meal].filter((dish) => dish?.fish).length : 0)));
+  return { missing, hydrateOffTraining, noVegetable, fish, total: sum(Object.values(missing)) + hydrateOffTraining + noVegetable + fish };
 }
 
 export const ruleViolations = (rules: MenuRules, week: RuleWeek, trainingWeekdays: number[]) => ruleBreakdown(rules, week, trainingWeekdays).total;

@@ -1,7 +1,7 @@
 {
-  "source": "Selección de Sergio en la página Recetas prioritarias (2026-10-22)",
-  "updatedAt": "2026-10-22T19:29:14.904Z",
-  "count": 188,
+  "source": "Selección de Sergio en la página Recetas prioritarias (2026-10-22) + recetas IB wellness (2026-10-26)",
+  "updatedAt": "2026-10-26T18:00:00.000Z",
+  "count": 244,
   "recipes": [
     {
       "id": "nutri-c22",
@@ -754,6 +754,230 @@
     {
       "id": "web-wraps-de-atun-aguacate-y-tomate-lunch",
       "name": "Wraps de atún, aguacate y tomate"
+    },
+    {
+      "id": "ibw-b3",
+      "name": "Ensalada de arroz con canónigos, zanahoria, aguacate, frutos secos, tomate y atún"
+    },
+    {
+      "id": "ibw-b8",
+      "name": "Hervido de judías verdes con zanahoria, patata y cebolla"
+    },
+    {
+      "id": "ibw-b9",
+      "name": "Ensalada templada de salmón y gulas con canónigos, zanahoria y maíz"
+    },
+    {
+      "id": "ibw-b10",
+      "name": "Espaguetis integrales con gambas, brócoli, zanahoria y semillas de sésamo"
+    },
+    {
+      "id": "ibw-b11",
+      "name": "Ensalada de legumbres con tomate, pimiento y cebolleta"
+    },
+    {
+      "id": "ibw-b12",
+      "name": "Salteado de pollo con huevo, calabacín, champiñones y cebolla"
+    },
+    {
+      "id": "ibw-b13",
+      "name": "Macarrones a la boloñesa con tomate natural y parmesano"
+    },
+    {
+      "id": "ibw-b18",
+      "name": "Salteado de pollo con huevo duro, calabacín, champiñones y cebolla"
+    },
+    {
+      "id": "ibw-b19",
+      "name": "Lomo al ajillo con batata al horno"
+    },
+    {
+      "id": "ibw-b20",
+      "name": "Garbanzos salteados con jamón, brócoli y frutos secos"
+    },
+    {
+      "id": "ibw-b21",
+      "name": "Caballa con patatas gajo al horno"
+    },
+    {
+      "id": "ibw-b22",
+      "name": "Crema de calabacín, puerro y zanahoria"
+    },
+    {
+      "id": "ibw-b28",
+      "name": "Arroz con albóndigas de pollo caseras al horno"
+    },
+    {
+      "id": "ibw-b29",
+      "name": "Ensalada de pasta con champiñón crudo, aguacate, espárragos blancos, tomate y canónigos"
+    },
+    {
+      "id": "ibw-b30",
+      "name": "Ensalada de quinoa con huevos revueltos, cebolla, pepino y canónigos"
+    },
+    {
+      "id": "ibw-b32",
+      "name": "Atún a la plancha con ensalada de tomate y pepino"
+    },
+    {
+      "id": "ibw-b33",
+      "name": "Arroz integral con espinacas salteadas, gambas al ajillo y parmesano"
+    },
+    {
+      "id": "ibw-b34",
+      "name": "Pollo al ajillo con batata al horno"
+    },
+    {
+      "id": "ibw-b35",
+      "name": "Quinoa a la boloñesa con tomate natural y cebolla"
+    },
+    {
+      "id": "ibw-b36",
+      "name": "Dorada a la plancha con salmorejo casero"
+    },
+    {
+      "id": "ibw-b37",
+      "name": "Ensalada de legumbres con canónigos, berenjena, tomate, queso de oveja y frutos secos"
+    },
+    {
+      "id": "ibw-b38",
+      "name": "Espinacas rehogadas con ajo y chuletas de pavo a la plancha"
+    },
+    {
+      "id": "ibw-b43",
+      "name": "Garbanzos en vinagreta con sepia al ajillo"
+    },
+    {
+      "id": "ibw-b44",
+      "name": "Ensalada variada con huevo cocido"
+    },
+    {
+      "id": "ibw-b45",
+      "name": "Judías verdes con tomate y ajo y pollo asado"
+    },
+    {
+      "id": "ibw-b46",
+      "name": "Ensalada de pasta con atún al natural"
+    },
+    {
+      "id": "ibw-b47",
+      "name": "Ternera a la jardinera con patata"
+    },
+    {
+      "id": "ibw-c3",
+      "name": "Tortilla de calabacín con pollo a la plancha"
+    },
+    {
+      "id": "ibw-c8",
+      "name": "Lubina al horno con ensalada de aguacate y tomate"
+    },
+    {
+      "id": "ibw-c9",
+      "name": "Tortilla a la francesa con espinacas rehogadas"
+    },
+    {
+      "id": "ibw-c10",
+      "name": "Pavo a la plancha con boniato, espárragos verdes, calabacín y alcachofas"
+    },
+    {
+      "id": "ibw-c11",
+      "name": "Hamburguesas caseras de ternera con ensalada"
+    },
+    {
+      "id": "ibw-c12",
+      "name": "Merluza a la plancha especiada con puré de calabaza"
+    },
+    {
+      "id": "ibw-c13",
+      "name": "Emperador a la plancha con ensalada de tomate y pepino"
+    },
+    {
+      "id": "ibw-c18",
+      "name": "Tortilla de espárragos verdes"
+    },
+    {
+      "id": "ibw-c19",
+      "name": "Ensalada de pollo con canónigos, frutos secos, maíz y huevo a la plancha"
+    },
+    {
+      "id": "ibw-c21",
+      "name": "Salmón a la plancha con ensalada verde"
+    },
+    {
+      "id": "ibw-c22",
+      "name": "Parrillada de verduras con solomillos de pavo"
+    },
+    {
+      "id": "ibw-c23",
+      "name": "Picadillo de gambas con pimiento rojo y tomate"
+    },
+    {
+      "id": "ibw-c28",
+      "name": "Ensalada de canónigos con pepino, aguacate, queso fresco, almendras y huevo pochado"
+    },
+    {
+      "id": "ibw-c29",
+      "name": "Contramuslos de pollo con piña a la plancha y ensalada de rúcula y cherrys"
+    },
+    {
+      "id": "ibw-c30",
+      "name": "Lubina con zanahoria braseada al horno"
+    },
+    {
+      "id": "ibw-c31",
+      "name": "Revuelto de huevos con champiñones y espinacas"
+    },
+    {
+      "id": "ibw-c32",
+      "name": "Bocaditos de patata y calabacín con pollo a la plancha"
+    },
+    {
+      "id": "ibw-c33",
+      "name": "Tortilla de verduras"
+    },
+    {
+      "id": "ibw-c38",
+      "name": "Espárragos verdes enrollados en pavo a la plancha con ensalada de atún y tomate"
+    },
+    {
+      "id": "ibw-c39",
+      "name": "Ensalada de canónigos, aguacate, frutos secos, atún, huevo a la plancha, pepino y tomate"
+    },
+    {
+      "id": "ibw-c40",
+      "name": "Creps de huevo rellenos de pavo, queso fresco y espinacas"
+    },
+    {
+      "id": "ibw-c41",
+      "name": "Salmón con mostaza y miel y patata al horno con especias"
+    },
+    {
+      "id": "ibw-c42",
+      "name": "Ternera a la plancha con gazpacho"
+    },
+    {
+      "id": "ibw-c43",
+      "name": "Merluza a la plancha con perejil y menestra de trigueros con setas"
+    },
+    {
+      "id": "ibw-c48",
+      "name": "Tortilla francesa con cebolla y gazpacho"
+    },
+    {
+      "id": "ibw-c49",
+      "name": "Bacalao a la plancha y ensalada de tomate y cebolla"
+    },
+    {
+      "id": "ibw-c50",
+      "name": "Revuelto de trigueros y champiñones con jamón"
+    },
+    {
+      "id": "ibw-c51",
+      "name": "Pavo a la plancha y gazpacho"
+    },
+    {
+      "id": "ibw-c52",
+      "name": "Revuelto de gulas y gambas con calabacín a la plancha"
     }
   ]
 }

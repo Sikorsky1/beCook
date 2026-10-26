@@ -854,7 +854,13 @@ Informe: `analisis/analisis-nutricional-becook.md` (biblioteca del proyecto). Te
 | Migración | `20261019120000_nutrition_plans` (tabla nueva con RLS) en preview y producción |
 | PR | [#31](https://github.com/Sikorsky1/beCook/pull/31) (primera versión, sustituida) y [#32](https://github.com/Sikorsky1/beCook/pull/32) |
 
-## Reglas semanales de comidas y cenas (2026-10-24, pendiente de producción)
+## Comidas sin pescado (2026-10-26)
+| Elemento | Resultado |
+|---|---|
+| Cambio | Las comidas evitan el pescado (cada comida con pescado cuenta como regla incumplida): las cuatro comidas con hidrato van con carne, desaparecen las de pescado azul y blanco, y las comidas sin regla de carne pueden ser vegetarianas. Cenas sin cambios. También en la semana del plan, por encima de lo que diga el PDF |
+| Migración | Ninguna |
+
+## Reglas semanales de comidas y cenas ✅ (2026-10-24, en producción con el PR #36)
 | Elemento | Resultado |
 |---|---|
 | Cambio | Crear menú y la semana del plan siguen las reglas del plan de la nutricionista (`menu-rules.ts`): comidas con un día de legumbre, arroz, pasta y patata con carne o pescado; carne roja 1, carne blanca 2, pescado azul 2, pescado blanco 2, siempre con verdura; cenas de pescado blanco 2, huevo 2, carne blanca 2; hidratos solo en días de entreno. Si no caben todas, la semana que incumple menos. Sustituyen a AESAN salvo en perfiles vegetarianos y veganos |
@@ -941,3 +947,4 @@ Informe: `analisis/analisis-nutricional-becook.md` (biblioteca del proyecto). Te
 | D9 | Crear menú sin «¿Qué te apetece esta semana?»: el menú siempre sale del catálogo (IA solo si no llena la semana). La ficha de Semana muestra la receta del catálogo (`src/data/recipe-cards/catalog-recipes.json`, 2 personas, sin revisar) y solo incompatibilidades seguras en etiquetas cortas | 2026-10-15 |
 | D10 | Análisis nutricional: Crear menú sigue las frecuencias AESAN 2022 con máximos de carne que nunca se relajan; objetivos de hábito en lugar de peso; el plan de la nutricionista mantiene sus propias categorías | 2026-10-17 |
 | D11 | Reglas semanales del plan de la nutricionista por encima de AESAN y del tipo de menú; la semana que incumple menos reglas (Sergio) | 2026-10-24 |
+| D12 | Comidas sin pescado: hidratos con carne y el resto de comidas puede ser vegetariano (Sergio) | 2026-10-26 |
