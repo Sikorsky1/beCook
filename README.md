@@ -1,5 +1,7 @@
 # beCook
 
+https://github.com/user-attachments/assets/a1b5f4a9-3cba-4fcd-9e7b-008d5fcd0460
+
 Aplicación Next.js, TypeScript y Supabase.
 
 ## Desarrollo local seguro
